@@ -19,7 +19,6 @@ interface OpenShift {
   duration_hours: number;
   care_type_code: string;
   pay_rate: number | null;
-  ai_match_score: number | null;
   special_instructions: string | null;
   clients: {
     first_name: string;
@@ -105,13 +104,6 @@ const AvailableShifts = () => {
     return code.split('_').map(word => 
       word.charAt(0).toUpperCase() + word.slice(1)
     ).join(' ');
-  };
-
-  const getMatchScoreColor = (score: number | null) => {
-    if (!score) return "bg-muted";
-    if (score >= 80) return "bg-green-500/10 text-green-600 border-green-500/20";
-    if (score >= 60) return "bg-yellow-500/10 text-yellow-600 border-yellow-500/20";
-    return "bg-orange-500/10 text-orange-600 border-orange-500/20";
   };
 
   const filteredShifts = shifts.filter(shift => {
@@ -206,11 +198,6 @@ const AvailableShifts = () => {
                         <h3 className="text-xl font-semibold">
                           {shift.clients.first_name} {shift.clients.last_name}
                         </h3>
-                        {shift.ai_match_score && (
-                          <Badge className={getMatchScoreColor(shift.ai_match_score)}>
-                            {shift.ai_match_score}% Match
-                          </Badge>
-                        )}
                       </div>
                       <Badge variant="outline" className="mb-3">
                         {getCareTypeLabel(shift.care_type_code)}
