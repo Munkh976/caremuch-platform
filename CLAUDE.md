@@ -54,7 +54,7 @@ CareMuch uses a phased provider approach. These are not in conflict — they are
 **Phase 1 prototype — Lovable AI Gateway (current):**
 - The Phase 1 Knowledge Agent / RAG prototype uses the Lovable AI Gateway (`ai.gateway.lovable.dev`) for both chat completion and embeddings.
 - This is acceptable ONLY because Phase 1 RAG is PHI-free by architecture (see "Phase 1 RAG = PHI-FREE") and uses controlled seed content, not real agency uploads.
-- The existing `match-caregiver` function already uses the Lovable Gateway for a non-PHI use; that is fine and stays as-is.
+- The existing `match-caregiver` function matches on structured, coded fields only (`client_care_needs`/`caregiver_skills` via `care_types.code`, `service_zipcodes`, `caregiver_availability`, `reliability_score`/`caregiver_performance`) via a deterministic weighted scorer — no LLM call, no Lovable dependency, and it never reads `clients.medical_conditions`, `care_requirements`, or any client identity field.
 - Lovable is NOT BAA-covered. `phiAllowed` MUST be `false` for all Lovable providers, read from an explicit env var, defaulting to false. Enforced in code, not convention.
 
 **Production target — Azure / Microsoft Foundry (not yet provisioned):**

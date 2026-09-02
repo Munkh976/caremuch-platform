@@ -67,3 +67,38 @@ That decision changes the shape of the fix:
 
 **Deliberately out of scope for now** — tracked here to fix as its own scoped task,
 separate from the Phase 0/Phase 1 multi-agent architecture work.
+
+## match-caregiver has no real proximity signal (zip-in-list only, not distance)
+
+**Status:** Known limitation as of the PHI-removal fix to `match-caregiver`
+(2026-09-01). Not a regression — the previous LLM-based version's `distance_miles`
+field was never a real calculation either (see below); this just makes the gap
+explicit instead of papering over it with a hallucinated number.
+
+**Symptom:** `serviceAreaScore` in `supabase/functions/match-caregiver/index.ts` is
+binary — it only checks whether the client's zip code is present in the caregiver's
+`service_zipcodes` list. Two caregivers who both serve a zip score identically on
+this factor regardless of whether one lives 2 miles away and the other 20.
+
+**Root cause:** No coordinate data exists anywhere in the schema for caregivers or
+clients — only zip/city/state/address text fields (confirmed by repo-wide grep for
+`latitude`/`longitude`/`geocode`, zero matches). The prior LLM-based matcher had the
+same underlying gap: it asked the model to output a `distance_miles` number, but
+never supplied caregiver location data in the prompt for it to compute from — that
+field was a hallucinated guess, not a real calculation, and has been removed
+rather than replaced.
+
+**What a real fix requires (increasing effort/cost):**
+1. Zip-centroid lookup table + haversine distance — no new user-entered data, only
+   zip-level accuracy.
+2. Geocode caregiver/client addresses to real `latitude`/`longitude` columns +
+   haversine distance — needs schema changes and a geocoding step on save.
+3. Real drive-time/distance via a routing API (Google/Mapbox/OSRM) — most accurate,
+   introduces an external dependency and cost.
+
+Each option also needs its own falloff curve (how much a mile of distance should
+cost in the match score) and a decision on where it sits in the existing weighted
+formula (`WEIGHTS` in `match-caregiver/index.ts`).
+
+**Deliberately out of scope for now** — tracked here as a scoped follow-up, separate
+from the PHI-removal fix that prompted this note.
