@@ -102,3 +102,56 @@ formula (`WEIGHTS` in `match-caregiver/index.ts`).
 
 **Deliberately out of scope for now** — tracked here as a scoped follow-up, separate
 from the PHI-removal fix that prompted this note.
+
+## SECURITY: batch-create-users looks like unsafe leftover dev tooling
+
+**Status:** Found while auditing user-provisioning paths for the `my_agency_id()`
+isolation invariant (2026-09-02). Not fixed — flagged for a security review, not
+addressed as part of that work.
+
+**Symptom / risk:** `supabase/functions/batch-create-users/index.ts`:
+- Has **no caller authentication or role check at all** — it doesn't read the
+  `Authorization` header or call `get_user_role`, unlike every other admin-facing
+  Edge Function in this repo (`create-user`, `enable-client-login`,
+  `approve-caregiver-registration` all require `system_admin`/`agency_admin`/`manager`).
+- **Deletes every auth user** except a hardcoded preserved list (`munkh.mn@gmail.com`
+  plus any `system_admin`), then recreates all clients/caregivers under a single
+  **hardcoded** `agencyId` (`56fbfe38-...`).
+- Uses a **hardcoded default password** (`"123456"`) for every recreated account.
+
+This reads as a one-off dev/reset script (mass-wipe-and-reseed a single demo agency),
+not a safe production provisioning path. If it's reachable in a deployed environment
+with its current lack of auth, anyone who can invoke it can delete every user account
+in the project and reset all client/caregiver credentials to a known password.
+
+**Action needed:** audit whether this function is deployed to any non-local
+environment and, if so, whether it should exist at all in its current form — either
+remove it, gate it behind the same admin auth check every other provisioning function
+has, or restrict it to a local/dev-only deployment path.
+
+**Deliberately out of scope for now** — tracked here as its own security-review task,
+separate from the isolation-invariant fixes (`3468eb1`, `8ce68bd`) that surfaced it.
+
+## AddUser.tsx leaves new staff with profiles.agency_id = NULL
+
+**Status:** Found in the same audit (2026-09-02). Lower priority, orthogonal to the
+knowledge-base isolation work.
+
+**Symptom:** `src/pages/AddUser.tsx` creates staff accounts (system_admin, agency_admin,
+manager, scheduler, hr_staff) via a direct client-side `supabase.auth.signUp()` call
+(line 66), passing only `full_name` in the signup metadata — never `agency_id`. The
+`user_roles` insert that follows (line 82-85) also omits `agency_id`. Since
+`handle_new_user()` only sets `profiles.agency_id` from
+`raw_user_meta_data->>'agency_id'` (defaulting to `NULL` when absent), any staff member
+created through this page ends up with `profiles.agency_id = NULL` and a `user_roles`
+row with no `agency_id` — breaking `current_agency_id()` (and therefore `my_agency_id()`)
+for that account, and likely most agency-scoped RLS policies.
+
+**Not the same bug class as the caregiver/client provisioning gaps** fixed in `3468eb1`
+and `8ce68bd` — those were cross-agency *reassignment* risks; this is a plain missing
+value with no caregiver/client row to disagree with. `supabase/functions/create-user`
+already does this correctly (sets `agency_id` on both `profiles` and `user_roles` from
+the caller's own agency) — `AddUser.tsx` looks like an older, uncoordinated path that
+predates it.
+
+**Deliberately out of scope for now** — tracked here as a scoped follow-up.
