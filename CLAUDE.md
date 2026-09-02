@@ -14,6 +14,13 @@ CareMuch is a multi-agent AI platform for home-care agencies. Add the AI layer a
 - ML where appropriate, especially retention
 - Phased AI boundary: Lovable AI Gateway for the Phase 1 PHI-free prototype; Azure / Microsoft Foundry with Azure-hosted OpenAI models as the production/PHI-capable target (see "AI provider strategy")
 
+## Current reality (do not assume the target architecture exists yet)
+- The "AI screening" chat is a DETERMINISTIC scripted flow engine
+  (conversation_flows → flow_nodes → flow_options, weighted ScoreResult, versioned
+  draft/publish). There is NO LLM in it.
+- No LLM, RAG, embeddings/vector store, ML models, or agent/orchestrator layer exist yet.
+- Edge Functions are admin/provisioning/data utilities only, not AI.
+
 ## Explicit exclusion — Smart Scheduling
 **Smart Scheduling / Scheduling Agent is OUT OF SCOPE for this entire architecture version.**
 Do not add a Scheduling Agent, scheduling ML, or scheduling optimization to the target architecture unless separately and explicitly approved. Build the multi-agent base (Orchestrator, Recruiting, Training, Knowledge, Retention) first.
