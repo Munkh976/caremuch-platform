@@ -6,6 +6,9 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Legacy shared-tenant id — same sentinel used in approve-caregiver-registration.
+const LEGACY_SYSTEM_AGENCY_ID = '00000000-0000-0000-0000-000000000000';
+
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
@@ -70,6 +73,15 @@ serve(async (req) => {
       if (createError || !created.user) return json({ error: createError?.message ?? 'Failed to create account' }, 400);
       userId = created.user.id;
       await new Promise((r) => setTimeout(r, 400));
+    }
+
+    // Same guard as approve-caregiver-registration:148 — an existing auth user (matched
+    // by email, which Supabase enforces globally-unique) must not be silently reassigned
+    // to a different agency's profile just because this agency ran client-login enable.
+    const { data: existingProfile } = await admin
+      .from('profiles').select('agency_id').eq('id', userId).maybeSingle();
+    if (existingProfile?.agency_id && ![agencyId, LEGACY_SYSTEM_AGENCY_ID].includes(existingProfile.agency_id)) {
+      return json({ error: 'An account with this email is already linked to another agency' }, 400);
     }
 
     await admin.from('profiles').upsert({
