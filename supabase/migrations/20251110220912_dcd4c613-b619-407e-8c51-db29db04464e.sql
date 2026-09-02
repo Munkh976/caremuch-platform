@@ -1,3 +1,6 @@
+-- Ensure pgcrypto extension is installed in the extensions schema
+CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions;
+
 -- Delete the incorrectly created munkh user
 DELETE FROM public.user_roles WHERE user_id = '56fbfe38-e8eb-40c1-ba27-07428f62ed2e';
 DELETE FROM public.profiles WHERE id = '56fbfe38-e8eb-40c1-ba27-07428f62ed2e';
@@ -27,7 +30,7 @@ BEGIN
     ) VALUES (
         munkh_user_id,
         'munkh.mn@gmail.com',
-        crypt('Password123!', gen_salt('bf')),
+        extensions.crypt('Password123!', extensions.gen_salt('bf')),
         now(),
         'authenticated',
         'authenticated',
@@ -65,7 +68,7 @@ BEGIN
         now()
     );
     
-    -- Create profile (trigger should handle this, but let's be explicit)
+    -- Create profile
     INSERT INTO public.profiles (id, email, full_name, agency_id, created_at, updated_at)
     VALUES (munkh_user_id, 'munkh.mn@gmail.com', 'Munkh', caremuch_agency_id, now(), now())
     ON CONFLICT (id) DO UPDATE SET
