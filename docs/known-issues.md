@@ -155,3 +155,41 @@ the caller's own agency) — `AddUser.tsx` looks like an older, uncoordinated pa
 predates it.
 
 **Deliberately out of scope for now** — tracked here as a scoped follow-up.
+
+## AUDIT NEEDED: other Lovable-dashboard-authored config may be missing (third instance found)
+
+**Status:** Found while diagnosing why the Conversation Builder showed only one flow
+tab (2026-09-02). Not yet audited systematically — logged so the remaining instances
+get found by audit, not one feature at a time.
+
+**Pattern, confirmed three times now:**
+1. `.lovable/mcp/manifest.json`'s OAuth issuer pointing at a stale project ref
+   (`jipsobxiblzgivjmtwtq`) instead of the current linked project
+   (`rgeldgztadebgvrdhaqa`) — found early this session, file untracked from git in
+   commit `98a8a71`.
+2. `system_modules`/`role_permissions` rows for `conversation_builder` — the sidebar
+   menu entry for the Flow Builder — never existed in any migration, confirmed absent
+   from the live tables, restored as a migration in `20260902150000`.
+3. The `family_intake` `conversation_flows` content itself (the 8-question family
+   intake flow visible in old screenshots of the Lovable-hosted app) — never inserted
+   by any migration, confirmed missing from the live `conversation_flows` table,
+   being restored as its own migration.
+
+**Root cause:** any configuration or content authored directly through Lovable's
+hosted dashboard/editor — not written as a tracked migration — lives only in that
+project's live database. It was never captured in version control, so it had no way
+to survive the move to a different Supabase project ref. The code and schema for all
+three features were always intact; only UI-authored *data* was lost.
+
+**What to audit:** anything else editable through an admin screen that might also have
+been authored this way and could be silently missing or incomplete — other
+`system_modules`/`role_permissions` rows, `virtual_office` branding/settings entered
+through its config UI, `care_types`/`care_needs`/`certifications` catalog entries added
+via an admin screen rather than a migration, notification templates, agency settings,
+or any other conversation flow beyond `caregiver_screening`/`family_intake`.
+
+**Recommended approach:** a systematic audit — for each admin-editable table, compare
+what migrations say should exist against what's actually live — rather than continuing
+to discover gaps reactively, feature by feature.
+
+**Deliberately out of scope for now** — tracked here as its own audit task.
