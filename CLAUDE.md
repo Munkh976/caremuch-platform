@@ -12,7 +12,7 @@ CareMuch is a multi-agent AI platform for home-care agencies. Add the AI layer a
 - Shared controlled Tool Layer
 - Agency-specific RAG using pgvector
 - ML where appropriate, especially retention
-- Phased AI boundary: Lovable AI Gateway for the Phase 1 PHI-free prototype; Azure / Microsoft Foundry with Azure-hosted OpenAI models as the production/PHI-capable target (see "AI provider strategy")
+- Phased AI boundary: Phase 1 shipped with NO external AI provider at all (Postgres full-text search only — see "AI provider strategy"); the provider decision (direct OpenAI/Google, or Azure/Microsoft Foundry as the PHI-capable target) is made in Phase 2, not yet decided
 
 ## Current reality (do not assume the target architecture exists yet)
 - The "AI screening" chat is a DETERMINISTIC scripted flow engine
@@ -48,21 +48,17 @@ User
 ## Core principle
 > LLMs reason; tools enforce; databases remain authoritative; RAG supplies evidence; ML supplies predictions; RLS enforces tenancy; the AI provider boundary controls protected-data processing.
 
-## AI provider strategy (Lovable now, Azure target)
-CareMuch uses a phased provider approach. These are not in conflict — they are sequenced, and the provider abstraction is what makes the transition a config + re-embed rather than a rewrite.
+## AI provider strategy (undecided — Phase 2 is where this gets decided)
+**Phase 1 shipped with ZERO external AI providers.** The original plan (this section used to say "Lovable AI Gateway for Phase 1") was deliberately superseded mid-build: Lovable Cloud turned out to be disconnected from the live project (`LOVABLE_API_KEY` absent from the linked project's secrets — reconnecting it would have reintroduced a dependency right after removing the app's only other Lovable AI call, `match-caregiver`, for a PHI leak). Phase 1 was rebuilt as Postgres full-text search only (`tsvector`/`ts_rank`, no LLM, no embeddings) specifically to validate retrieval, isolation, and the confidence-gate architecture before taking on any provider/BAA/PHI decision at all. Full writeup: `docs/phase-1-fts-results.md`.
 
-**Phase 1 prototype — Lovable AI Gateway (current):**
-- The Phase 1 Knowledge Agent / RAG prototype uses the Lovable AI Gateway (`ai.gateway.lovable.dev`) for both chat completion and embeddings.
-- This is acceptable ONLY because Phase 1 RAG is PHI-free by architecture (see "Phase 1 RAG = PHI-FREE") and uses controlled seed content, not real agency uploads.
-- The existing `match-caregiver` function matches on structured, coded fields only (`client_care_needs`/`caregiver_skills` via `care_types.code`, `service_zipcodes`, `caregiver_availability`, `reliability_score`/`caregiver_performance`) via a deterministic weighted scorer — no LLM call, no Lovable dependency, and it never reads `clients.medical_conditions`, `care_requirements`, or any client identity field.
-- Lovable is NOT BAA-covered. `phiAllowed` MUST be `false` for all Lovable providers, read from an explicit env var, defaulting to false. Enforced in code, not convention.
+- The existing `match-caregiver` function matches on structured, coded fields only (`client_care_needs`/`caregiver_skills` via `care_types.code`, `service_zipcodes`, `caregiver_availability`, `reliability_score`/`caregiver_performance`) via a deterministic weighted scorer — no LLM call, no provider dependency of any kind, and it never reads `clients.medical_conditions`, `care_requirements`, or any client identity field.
 
-**Production target — Azure / Microsoft Foundry (not yet provisioned):**
-- Azure-hosted OpenAI models are the intended production AI boundary and the PHI-capable path.
-- Azure is NOT set up yet. Until it is, any task requiring a BAA-covered provider (real document ingestion, any PHI, production launch) is BLOCKED, not worked around.
-- Do NOT provision Azure or migrate the AI boundary as part of Phase 1 unless explicitly approved — it front-loads procurement/BAA work that Phase 1's PHI-free content does not require.
+**Phase 2 is where the provider decision actually gets made — it is NOT yet decided.** Candidates: a direct provider (OpenAI/Google) for continued PHI-free embeddings work, or Azure / Microsoft Foundry directly if the PHI timeline moves up. Whichever is chosen:
+- Must go through the provider abstraction below (`LLMProvider`/`EmbeddingProvider`), never a hard-coded gateway call.
+- A non-Azure provider is NOT BAA-covered. `phiAllowed` MUST be `false` for it, read from an explicit env var, defaulting to false, enforced in code — not convention.
+- Azure/Microsoft Foundry remains the only PHI-capable path under consideration; provisioning it is still gated on an explicit PHI-flow decision (see the hard gate below), not something to front-load speculatively.
 
-Do NOT claim the application is HIPAA compliant because a provider offers a BAA. Legal/compliance review remains required regardless of provider. Keep Lovable as the application-development platform.
+Do NOT claim the application is HIPAA compliant because a provider offers a BAA. Legal/compliance review remains required regardless of provider.
 
 ## HIPAA / PHI boundary hard gate
 Before ANY of the following, STOP and re-decide the provider, and provision Azure + a signed BAA if the answer is "PHI may flow":
@@ -216,18 +212,24 @@ Before changing code:
 ## Implementation order
 **Phase 0: architecture preparation — DONE.** Completed and in git history: `ai_match_score` column dropped (was always NULL), `callLLM` provider seam added, `.env`/`config.toml` cleanup + `.env` untracked, Edge Functions deployed to the dev project, demo data seeded under agency 56fbfe38, caregiver-shifts RLS gap documented in `docs/known-issues.md` (deferred, pending a product decision).
 
-Upcoming:
-- Phase 1A: compliance / data boundary (PHI-free guardrail enforced in code + schema).
-- Phase 1B: AI provider foundation (Lovable providers behind the abstraction; Azure deferred until a PHI phase requires it).
-- Phase 1C: embedding smoke test against the real (Lovable) endpoint — inspect actual vector length, record model/version/dimension. BLOCKER until done: dimension must not be assumed.
-- Phase 1D: minimal seeded RAG (`knowledge_documents`, `knowledge_chunks`, pgvector, `vector(N)` with N from 1C).
-- Phase 1E: RAG evaluation (30–50 labeled questions; tune the gate empirically).
-- Phase 1F: Knowledge Agent (retrieval → evidence gate → grounded answer OR refuse; NO general-LLM fallback during first validation).
-- Phase 1G: real document ingestion — GATED on the HIPAA/PHI re-decision above.
-- Phase 2: Orchestrator.
-- Phase 3: Recruiting + Training Agents.
-- Phase 4: Retention Agent + retention ML.
-- Phase 5: Agent Builder.
+**Phase 1: FTS-first knowledge base + unified public assistant — DONE.** Built and proven with zero external AI provider (see "AI provider strategy" above for why the original Lovable-embeddings plan was superseded):
+- Schema: `knowledge_documents`/`knowledge_chunks`, bilingual (`en`/`es`) via a `language` column + composite FK making chunk/document language mismatch structurally impossible, staff-only RLS, `my_agency_id()` (wraps `current_agency_id()`, adds caregiver/client fallback, then an explicit `_agency_id` override for anonymous public callers).
+- Retrieval: `search_agency_knowledge()` — OR-based `tsquery` (not `plainto_tsquery`'s AND), sanitized against `to_tsquery` syntax errors, explicit agency scoping for public/anonymous access.
+- A unified public assistant on an agency's own page (`/a/:slug`): a router ("How can I help you today?") to caregiver screening, family intake, or a new knowledge Q&A surface, with a persistent "Start over."
+- Proven live: correct retrieval and refusal in both languages, tenant isolation, and anonymous-visitor isolation (the `_agency_id` fix was required — `my_agency_id()` alone resolves to `NULL` for a logged-out visitor).
+- **The FTS ceiling is now quantified, not just predicted** (`docs/phase-1-fts-results.md`): a live false positive ("How do I set up direct deposit?" matched a Medication Reminder chunk at rank 0.0405 — an English-stemmer collision, "directly" → "direct") sits *above* the highest safe threshold (0.04, the lowest confirmed genuine-hit rank), while real paraphrases ("call-off policy" vs. "can't make it to my shift"; "how much PTO" vs. "how many hours of PTO") false-refuse below it. No single τ resolves both — proof, not prediction, that closing this gap needs semantic (embedding) retrieval, not keyword threshold tuning.
+- Also fixed along the way: a `family_intake` conversation flow and a `conversation_builder` menu entry lost in a project-reference switch (restored as migrations, not live-dashboard edits, so they survive the next move), a cross-agency reassignment gap in three provisioning Edge Functions, and a single-word-name crash in `flow_session_submit_intake`.
+
+**Phase 2: make the AI provider / HIPAA decision — NOT YET DECIDED.** This is the actual, real decision Phase 1's FTS-first approach was built to defer safely:
+- Choose the provider (direct OpenAI/Google for continued PHI-free work, or Azure/Microsoft Foundry if the PHI timeline moves up) and build it behind the provider abstraction below.
+- Embedding smoke test against whichever provider is chosen — inspect actual vector length, record model/version/dimension. BLOCKER until done: dimension must not be assumed.
+- Swap `search_agency_knowledge()`'s ranking internals to vector similarity on the same schema/isolation foundation (no schema redesign needed — this was designed in from the start).
+- Run the formal 30–50 labeled-question eval (answerable / ambiguous / unanswerable, both languages) to validate a real τ — Phase 1's 0.04 is still probe-derived, not eval-validated.
+- Known deferred items to fold in here, all logged in `docs/known-issues.md`: reconciling `FamilyIntakeSurface.tsx` with `ConversationSurface.tsx` (missing dynamic-catalog question support, and a free-text field that's silently discarded on a `single_select`-with-options node — both from the single-full-name-field design that also needed a workaround for `family_contacts.last_name`), a knowledge-document management UI for agency staff, and real file-upload ingestion (Phase 1G, still gated on the HIPAA/PHI re-decision below).
+- Phase 3: Orchestrator.
+- Phase 4: Recruiting + Training Agents.
+- Phase 5: Retention Agent + retention ML.
+- Phase 6: Agent Builder.
 
 ## Architecture readiness standard
 Before implementation, confirm:
@@ -235,7 +237,7 @@ Before implementation, confirm:
 - database mapped
 - RLS understood
 - PHI/non-PHI boundary defined
-- AI provider boundary defined (Lovable now / Azure target)
+- AI provider boundary defined (Phase 2 decision — not yet made; Phase 1 used none)
 - embedding dimension not assumed
 - RAG schema/guardrails defined
 - tool authorization defined
