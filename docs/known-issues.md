@@ -193,3 +193,18 @@ what migrations say should exist against what's actually live — rather than co
 to discover gaps reactively, feature by feature.
 
 **Deliberately out of scope for now** — tracked here as its own audit task.
+
+## FamilyIntakeSurface.tsx lacks dynamic-catalog question support
+
+**Status:** Found 2026-09-03 while restoring the `family_intake` conversation flow.
+
+`FamilyIntakeSurface.tsx` lacks the dynamic-catalog question support
+(`isDynamicSource`/`DynamicQuestion`) that `ConversationSurface.tsx` has — so family
+intake can't use live `care_types`-sourced questions yet. Q2 ("What kind of help is
+needed?") is seeded as a static snapshot of `care_types` as a workaround. Reconcile
+during the UX redesign (the two surface components should share dynamic-question
+capability). Also: family-intake `dynamic_item_ids` → `care_requests` wiring was not
+fully traced — verify if/when dynamic questions are enabled for family intake.
+
+**Deliberately out of scope for now** — belongs in the planned UX/UI redesign, not a
+one-off patch to the migration that restores this flow's content.
