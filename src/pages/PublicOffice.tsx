@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { Loader2 } from "lucide-react";
+import { Loader2, MessageCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { ConversationSurface } from "@/components/chat/ConversationSurface";
 import { FamilyIntakeSurface } from "@/components/chat/FamilyIntakeSurface";
+import { KnowledgeQaSurface } from "@/components/chat/KnowledgeQaSurface";
+import { AssistantRouter } from "@/components/chat/AssistantRouter";
+import { AssistantShell } from "@/components/chat/AssistantShell";
 import { PublicOffice as PublicOfficeData } from "@/components/public-office/types";
 import {
   CareersSection,
@@ -19,7 +22,7 @@ import {
   TestimonialsSection,
 } from "@/components/public-office/OfficeSections";
 
-type Mode = "apply" | "care";
+type Mode = "router" | "apply" | "care" | "knowledge";
 
 /** Fades a hex colour into a soft tint used for section backgrounds. */
 function softTint(hex: string) {
@@ -104,6 +107,16 @@ export default function PublicOffice({ initialMode }: { initialMode?: Mode }) {
     setMode(null);
     if (initialMode) navigate(`/a/${office.slug}`, { replace: true });
   };
+  const startOver = () => setMode("router");
+
+  const dialogTitle =
+    mode === "apply"
+      ? "Caregiver application"
+      : mode === "care"
+        ? "Request care"
+        : mode === "knowledge"
+          ? "Ask a question"
+          : "How can I help you today?";
 
   return (
     <div style={style} className="min-h-screen bg-background">
@@ -119,30 +132,48 @@ export default function PublicOffice({ initialMode }: { initialMode?: Mode }) {
         <OfficeFooter office={office} onRequestCare={() => setMode("care")} />
       </main>
 
+      {mode === null && (
+        <button
+          type="button"
+          onClick={() => setMode("router")}
+          className="fixed bottom-6 right-6 z-40 flex items-center gap-2 rounded-full px-5 py-3 text-sm font-semibold text-white shadow-lg transition-transform hover:scale-105"
+          style={{ backgroundColor: "var(--office-primary)" }}
+        >
+          <MessageCircle className="h-4 w-4" />
+          Chat with us
+        </button>
+      )}
+
       <Dialog open={mode !== null} onOpenChange={(open) => (open ? null : closeDialog())}>
         <DialogContent className="max-w-2xl overflow-hidden p-0">
-          <DialogTitle className="sr-only">
-            {mode === "apply" ? "Caregiver application" : "Request care"}
-          </DialogTitle>
+          <DialogTitle className="sr-only">{dialogTitle}</DialogTitle>
           <div className="max-h-[80vh] overflow-y-auto">
-            {mode === "apply" && (
-              <ConversationSurface
-                audience="caregiver_screening"
-                agencyName={name}
-                embedded
-                agencyId={office.agency_id}
-                virtualOfficeId={office.virtual_office_id}
-                onExit={closeDialog}
-              />
-            )}
-            {mode === "care" && (
-              <FamilyIntakeSurface
-                embedded
-                agencyId={office.agency_id}
-                virtualOfficeId={office.virtual_office_id}
-                onExit={closeDialog}
-              />
-            )}
+            <AssistantShell agencyName={name} showStartOver={mode !== "router"} onStartOver={startOver}>
+              {mode === "router" && (
+                <AssistantRouter onSelect={(target) => setMode(target)} />
+              )}
+              {mode === "apply" && (
+                <ConversationSurface
+                  audience="caregiver_screening"
+                  agencyName={name}
+                  embedded
+                  agencyId={office.agency_id}
+                  virtualOfficeId={office.virtual_office_id}
+                  onExit={closeDialog}
+                />
+              )}
+              {mode === "care" && (
+                <FamilyIntakeSurface
+                  embedded
+                  agencyId={office.agency_id}
+                  virtualOfficeId={office.virtual_office_id}
+                  onExit={closeDialog}
+                />
+              )}
+              {mode === "knowledge" && (
+                <KnowledgeQaSurface agencyName={name} agencyId={office.agency_id} embedded />
+              )}
+            </AssistantShell>
           </div>
         </DialogContent>
       </Dialog>

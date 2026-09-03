@@ -10,7 +10,32 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "13.0.5"
+    PostgrestVersion: "14.5"
+  }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
   public: {
     Tables: {
@@ -1980,6 +2005,107 @@ export type Database = {
           },
         ]
       }
+      knowledge_chunks: {
+        Row: {
+          chunk_index: number
+          content: string
+          created_at: string
+          document_id: string
+          id: string
+          is_demo: boolean
+          language: string
+          search_vector: unknown
+        }
+        Insert: {
+          chunk_index: number
+          content: string
+          created_at?: string
+          document_id: string
+          id?: string
+          is_demo?: boolean
+          language: string
+          search_vector?: unknown
+        }
+        Update: {
+          chunk_index?: number
+          content?: string
+          created_at?: string
+          document_id?: string
+          id?: string
+          is_demo?: boolean
+          language?: string
+          search_vector?: unknown
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_chunks_document_id_language_fkey"
+            columns: ["document_id", "language"]
+            isOneToOne: false
+            referencedRelation: "knowledge_documents"
+            referencedColumns: ["id", "language"]
+          },
+        ]
+      }
+      knowledge_documents: {
+        Row: {
+          agency_id: string
+          category: string | null
+          content: string
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          is_demo: boolean
+          language: string
+          title: string
+          updated_at: string
+          virtual_office_id: string | null
+        }
+        Insert: {
+          agency_id: string
+          category?: string | null
+          content: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          is_demo?: boolean
+          language?: string
+          title: string
+          updated_at?: string
+          virtual_office_id?: string | null
+        }
+        Update: {
+          agency_id?: string
+          category?: string | null
+          content?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          is_demo?: boolean
+          language?: string
+          title?: string
+          updated_at?: string
+          virtual_office_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_documents_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agency"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_documents_virtual_office_id_fkey"
+            columns: ["virtual_office_id"]
+            isOneToOne: false
+            referencedRelation: "virtual_office"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       order_services: {
         Row: {
           care_type_code: string
@@ -2457,7 +2583,6 @@ export type Database = {
       shifts: {
         Row: {
           agency_id: string
-          ai_match_score: number | null
           care_request_id: string | null
           care_type_code: string
           caregiver_id: string | null
@@ -2483,7 +2608,6 @@ export type Database = {
         }
         Insert: {
           agency_id: string
-          ai_match_score?: number | null
           care_request_id?: string | null
           care_type_code: string
           caregiver_id?: string | null
@@ -2509,7 +2633,6 @@ export type Database = {
         }
         Update: {
           agency_id?: string
-          ai_match_score?: number | null
           care_request_id?: string | null
           care_type_code?: string
           caregiver_id?: string | null
@@ -3161,6 +3284,10 @@ export type Database = {
         Args: { _agency_id: string }
         Returns: boolean
       }
+      knowledge_document_agency_id: {
+        Args: { _document_id: string }
+        Returns: string
+      }
       log_event: {
         Args: {
           _actor_id?: string
@@ -3175,6 +3302,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      my_agency_id: { Args: never; Returns: string }
       my_caregiver_ids: { Args: never; Returns: string[] }
       my_client_ids: { Args: never; Returns: string[] }
       order_agency_id: { Args: { _order_id: string }; Returns: string }
@@ -3185,6 +3313,21 @@ export type Database = {
       release_shift_assignments: {
         Args: { _reason?: string; _shift_ids: string[] }
         Returns: number
+      }
+      search_agency_knowledge: {
+        Args: {
+          _agency_id?: string
+          _language: string
+          _limit?: number
+          _query: string
+        }
+        Returns: {
+          chunk_id: string
+          content: string
+          document_id: string
+          document_title: string
+          rank: number
+        }[]
       }
       shift_assignment_agency_id: {
         Args: { _shift_id: string }
@@ -3276,12 +3419,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -3305,11 +3448,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -3330,11 +3473,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -3355,11 +3498,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -3372,11 +3515,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -3386,6 +3529,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       app_role: [
