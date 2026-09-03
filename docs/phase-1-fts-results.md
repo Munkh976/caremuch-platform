@@ -81,3 +81,46 @@ limitation, not a bug to chase further within this design. It's the specific,
 quantifiable gap embeddings are meant to close in Phase 2 — the formal eval (§ above)
 should measure how often this actually occurs in practice, giving a real number for how
 much lift embeddings need to deliver to be worth the added provider/PHI complexity.
+
+## Live evidence (2026-09-03): the predicted limitation, now observed in production
+
+The first real end-user testing on the unified public assistant (`/a/kind-care`)
+produced concrete examples of exactly the failure mode predicted above — not a
+hypothetical anymore:
+
+**False positive (wrong answer shown as confident):** *"How do I set up direct
+deposit?"* returned the Medication Reminder Guidelines chunk as a cited answer. Root
+cause: that chunk's text says caregivers must never handle medication bottles
+"**directly**" — the English stemmer reduces "directly" → "direct," the same stem as
+the "direct" in "direct deposit." Two semantically unrelated words collapsed to an
+identical root, and — because it was the only chunk with any lexical overlap at all,
+and a short chunk with a single matched term scores disproportionately high under
+`ts_rank`'s density weighting — it passed τ = 0.03 as if it were a real match. A wrong
+confident answer is worse than a refusal; this is now the highest-priority live finding.
+
+**False refusals (real answers, real paraphrases, no shared vocabulary):**
+- *"call-off policy"* refuses; the same underlying question phrased as *"can't make it
+  to my shift"* answers correctly from the same document.
+- *"how much PTO"* refuses; *"how many hours of PTO"* answers correctly.
+
+**Why this is the Phase 2 case, not a tuning bug:** these three examples together prove
+— empirically, not just architecturally — that a single keyword-rank threshold cannot
+separate "coincidental stem overlap with no real topical connection" (direct/directly)
+from "genuine question about the right topic, phrased with different words than the
+document" (call-off policy vs. can't make my shift). Raising τ to fix the false positive
+makes the false refusals worse; lowering it to catch more paraphrases lets more false
+positives like the medication chunk through. There is no single number that solves both,
+because the underlying problem isn't miscalibration — `ts_rank` has no representation of
+*meaning*, only shared lexemes. This is precisely the lift embeddings are meant to
+provide, now with three real, named examples instead of a predicted category.
+
+**Interim mitigation, pending investigation:** raising τ from 0.03 to 0.04 (the lowest
+confirmed genuine-hit rank from the original probe) is the safest available adjustment —
+it cannot regress any already-validated answer. Whether it's sufficient to also exclude
+the direct-deposit false positive depends on that chunk's actual rank, not yet confirmed
+against the live database.
+
+**Language isolation confirmed working correctly under live testing, not a bug:** early
+apparent "failures" were Spanish-language questions asked while in English mode,
+correctly refused per the language filter's design — switching to Spanish mode produced
+correct, confident answers to the same questions. No issue found here.
