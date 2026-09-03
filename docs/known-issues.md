@@ -240,3 +240,18 @@ contact's name is displayed, no schema change. Also fixed alongside it: `submitI
 now returns the real error message instead of a bare boolean, so `FamilyIntakeSurface`
 can surface the actual Postgres error in its toast instead of a generic one — this bug
 was only diagnosable by reading the browser console before that fix.
+
+## FUTURE PROJECT (out of scope): CareMuch platform marketing site rebuild
+
+**Status:** Logged 2026-09-03 as an explicit scope boundary while designing the unified
+public assistant for an agency's own page (`/a/:slug`, e.g. `/a/kind-care`).
+
+The unified-assistant work (router + caregiver screening + family intake + knowledge
+Q&A) is scoped to a single agency's public page (`PublicOffice.tsx`). The separate
+CareMuch platform marketing site (the top-level `/` landing page and its own copy/design,
+distinct from any individual agency's branded page) is a different, larger piece of work
+— not touched, not designed, not scheduled as part of this phase.
+
+**Deliberately out of scope for now** — tracked here as its own future project to pick
+up separately, so it isn't conflated with or accidentally scope-crept into the
+per-agency assistant work.
