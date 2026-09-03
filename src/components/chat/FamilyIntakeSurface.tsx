@@ -101,15 +101,15 @@ export function FamilyIntakeSurface({
       return;
     }
     setSubmitting(true);
-    const ok = await flowState.submitIntake({
+    const result = await flowState.submitIntake({
       name: parsed.data.name,
       phone: parsed.data.phone,
       email: parsed.data.email || null,
       preference: parsed.data.preference,
     });
     setSubmitting(false);
-    if (!ok) {
-      toast.error("We could not send your request. Please try again.");
+    if (!result.ok) {
+      toast.error(result.error || "We could not send your request. Please try again.");
       return;
     }
     setSubmitted({ name: parsed.data.name, preference: parsed.data.preference });

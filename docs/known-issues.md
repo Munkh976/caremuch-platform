@@ -220,3 +220,23 @@ These two gaps (dynamic-catalog support, and this one) both live in the same
 component and cluster together — the UX redesign reconciling `FamilyIntakeSurface`
 with `ConversationSurface` (which already handles both correctly) would fix both at
 once, which is why neither is being patched individually now.
+
+**Single-full-name-field gap (fixed as an interim workaround, real fix deferred):**
+`FamilyIntakeSurface`'s contact form captures one "Full name" text field and
+`flow_session_submit_intake` splits it programmatically into `first_name`/`last_name`
+for `family_contacts`. A single-word name (no space) made `last_name` compute to
+`NULL`, violating `family_contacts.last_name NOT NULL` and surfacing as a generic
+"We could not send your request" toast with the real Postgres error only visible in
+the console. Root cause is the single-field design itself — `CaregiverRegistration.tsx`
+avoids this entirely with separate `firstName`/`lastName` inputs, which is the correct
+long-term fix and belongs in the UX redesign alongside the other two
+`FamilyIntakeSurface` gaps above. `family_contacts.last_name` was deliberately left
+`NOT NULL` (not loosened) — it's a codebase-wide convention shared by
+`caregivers`/`clients`/`caregiver_registrations`, and `FamilyDialog.tsx`'s `Contact`
+interface already assumes it's always a real string. Interim fix applied
+(`20260903130000`): the RPC falls back to `''` instead of `NULL` when no last name is
+derivable — satisfies the constraint, renders as a harmless trailing space wherever a
+contact's name is displayed, no schema change. Also fixed alongside it: `submitIntake`
+now returns the real error message instead of a bare boolean, so `FamilyIntakeSurface`
+can surface the actual Postgres error in its toast instead of a generic one — this bug
+was only diagnosable by reading the browser console before that fix.

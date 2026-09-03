@@ -277,9 +277,9 @@ export function useConversationFlow(
       email?: string | null;
       preference: string;
     }) => {
-      if (!flow) return false;
+      if (!flow) return { ok: false as const, error: "No conversation loaded." };
       const session = sessionRef.current ?? (await ensureSession(flow.id));
-      if (!session) return false;
+      if (!session) return { ok: false as const, error: "Could not start a session." };
       const { error: submitError } = await supabase.rpc("flow_session_submit_intake", {
         p_session_id: session.id,
         p_token: session.token,
@@ -292,9 +292,9 @@ export function useConversationFlow(
       });
       if (submitError) {
         console.error("Could not submit intake", submitError);
-        return false;
+        return { ok: false as const, error: submitError.message };
       }
-      return true;
+      return { ok: true as const, error: null };
     },
     [flow, ensureSession, agencyId, virtualOfficeId]
   );
