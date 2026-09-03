@@ -208,3 +208,15 @@ fully traced — verify if/when dynamic questions are enabled for family intake.
 
 **Deliberately out of scope for now** — belongs in the planned UX/UI redesign, not a
 one-off patch to the migration that restores this flow's content.
+
+**Q7-shape gap:** a `single_select` node with `options` AND `allow_free_text` discards
+the free text — tapping an option submits immediately without reading the textarea
+(`onPick` doesn't pass `freeText`). The "anything else" note can't save as-is. One-line
+fix (`onPick` pass `freeText` through), deferred to the UX redesign's
+`FamilyIntakeSurface` reconciliation. Family intake Q7 is seeded with this known
+limitation; the 5 concern options work, the optional note doesn't save yet.
+
+These two gaps (dynamic-catalog support, and this one) both live in the same
+component and cluster together — the UX redesign reconciling `FamilyIntakeSurface`
+with `ConversationSurface` (which already handles both correctly) would fix both at
+once, which is why neither is being patched individually now.
