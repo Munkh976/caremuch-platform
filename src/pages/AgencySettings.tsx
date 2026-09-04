@@ -8,9 +8,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Building2, Save } from "lucide-react";
+import { Building2, Save, Loader2 } from "lucide-react";
 import { US_STATES } from "@/constants/usStates";
 import { agencyFormSchema } from "@/lib/validation";
+
+interface BackfillResult {
+  scope: string;
+  agency_total_chunks: number;
+  agency_null_candidates_at_start: number;
+  embedded_this_run: number;
+  batch_count: number;
+  agency_remaining_null: number;
+  errors: { chunk_id: string; message: string }[];
+}
 
 interface AgencyData {
   id: string;
@@ -33,6 +43,9 @@ const AgencySettings = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [agencyData, setAgencyData] = useState<AgencyData | null>(null);
+  const [backfillLoading, setBackfillLoading] = useState(false);
+  const [backfillResult, setBackfillResult] = useState<BackfillResult | null>(null);
+  const [backfillError, setBackfillError] = useState<string | null>(null);
 
   useEffect(() => {
     checkAuth();
@@ -133,6 +146,33 @@ const AgencySettings = () => {
   const updateField = (field: keyof AgencyData, value: any) => {
     if (!agencyData) return;
     setAgencyData({ ...agencyData, [field]: value });
+  };
+
+  // Reuses the same invoke + error-unwrap pattern as AdminUtilities.tsx's
+  // handleLinkExistingAccounts. This UI gate (the page's own checkAuth guard,
+  // system_admin/agency_admin) is convenience only -- backfill-knowledge-embeddings
+  // enforces 401-anon/403-wrong-role itself, server-side, regardless.
+  const handleRunKnowledgeBackfill = async () => {
+    setBackfillLoading(true);
+    setBackfillResult(null);
+    setBackfillError(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("backfill-knowledge-embeddings");
+      if (error) {
+        const bodyText = await (error as any)?.context?.text?.().catch(() => null);
+        throw new Error(bodyText || error.message);
+      }
+      if ((data as any)?.error) {
+        throw new Error((data as any).error);
+      }
+      setBackfillResult(data as BackfillResult);
+      toast.success(`Embedded ${(data as BackfillResult).embedded_this_run} chunk(s) this run`);
+    } catch (err: any) {
+      setBackfillError(err.message || "Failed to run knowledge base backfill");
+      toast.error(err.message || "Failed to run knowledge base backfill");
+    } finally {
+      setBackfillLoading(false);
+    }
   };
 
   if (loading) {
@@ -320,6 +360,48 @@ const AgencySettings = () => {
                 />
               </div>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Knowledge Base */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Knowledge Base</CardTitle>
+            <CardDescription>
+              Embed knowledge base chunks that don't yet have a vector embedding. Safe to
+              run repeatedly -- already-embedded chunks are skipped.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Button onClick={handleRunKnowledgeBackfill} disabled={backfillLoading}>
+              {backfillLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Run Embedding Backfill
+            </Button>
+
+            {backfillError && (
+              <p className="text-sm text-red-600">{backfillError}</p>
+            )}
+
+            {backfillResult && (
+              <div className="rounded-md border bg-muted p-4 text-sm space-y-1">
+                <p className="text-muted-foreground">{backfillResult.scope}</p>
+                <p>Total chunks (your agency): {backfillResult.agency_total_chunks}</p>
+                <p>Missing embedding at start: {backfillResult.agency_null_candidates_at_start}</p>
+                <p>Embedded this run: {backfillResult.embedded_this_run}</p>
+                <p>Batches processed: {backfillResult.batch_count}</p>
+                <p>Still missing embedding: {backfillResult.agency_remaining_null}</p>
+                {backfillResult.errors?.length > 0 && (
+                  <div>
+                    <p className="font-semibold text-red-600 mt-2">Errors:</p>
+                    <ul className="list-disc list-inside">
+                      {backfillResult.errors.map((e, i) => (
+                        <li key={i}>{e.chunk_id}: {e.message}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
