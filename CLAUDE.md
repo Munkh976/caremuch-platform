@@ -86,7 +86,7 @@ Agency Documents
       -> REJECT
       -> ALLOW
           -> Chunk
-          -> Embeddings (Phase 1: Lovable; target: Azure)
+          -> Embeddings (provider TBD — Phase 2 provider decision, not yet made)
           -> pgvector
           -> Knowledge Agent
           -> Evidence / Grounding Gate
@@ -109,22 +109,22 @@ All new AI work goes through provider interfaces, never a hard-coded gateway cal
 - `EmbeddingProvider` — embeddings, returning the actual model + dimension
 
 Rules:
-- Provider is selected by env/config (`LLM_PROVIDER`, `EMBEDDING_PROVIDER`), so swapping Lovable → Azure later is a configuration change, not a code change.
-- The existing `_shared/callLLM.ts` remains a backward-compatible shim over the Lovable provider so `match-caregiver` needs zero changes. New code calls the provider interface directly.
+- Provider is selected by env/config (`LLM_PROVIDER`, `EMBEDDING_PROVIDER`), so swapping providers later is a configuration change, not a code change.
+- `match-caregiver` has no provider dependency of any kind — it was made fully deterministic (`886710f`) and imports nothing from any AI provider. The old `_shared/callLLM.ts` Lovable-Gateway shim it once used has been deleted as dead code (zero importers). The Phase 2 `LLMProvider`/`EmbeddingProvider` seam is being built fresh, not extended from any prior shim. New code calls the provider interface directly.
 - Every provider carries an explicit `phiAllowed` flag (default false). An `assertPhiSafe(provider, context)` guard MUST be invoked — defined AND called, not just defined — in any code path that could route person-identifiable content through a provider. In Phase 1 it should never trip (RAG is PHI-free), but it must be wired in so it becomes load-bearing the moment a later phase attempts PHI.
-- Lovable and Azure providers must be able to coexist during migration.
+- The chosen provider and any future replacement must be able to coexist during migration.
 
 ## Embedding model/dimension
 Never guess the vector dimension.
 
 Required sequence:
-1. Configure the embedding endpoint (Phase 1: Lovable; target: Azure).
+1. Configure the embedding endpoint (provider TBD — Phase 2 provider decision, not yet made).
 2. Run a real smoke test.
 3. Inspect returned vector length.
 4. Record model/version/dimension.
 5. Only then create `vector(N)` migration and index.
 
-Note: switching embedding provider/model later (Lovable → Azure) changes the dimension and requires re-embedding the knowledge base — a data migration, not a schema redesign. Record the model+dimension explicitly so this is unambiguous.
+Note: switching embedding provider/model later changes the dimension and requires re-embedding the knowledge base — a data migration, not a schema redesign. Record the model+dimension explicitly so this is unambiguous.
 
 ## RAG confidence
 `0.75` is only an initial hypothesis. Tune it with ~30–50 labeled questions covering answerable, ambiguous, out-of-domain, and misleading cases.
