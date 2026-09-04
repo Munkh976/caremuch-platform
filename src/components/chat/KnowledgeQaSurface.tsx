@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Loader2, Send } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { KNOWLEDGE_CONFIDENCE_THRESHOLD } from "@/lib/knowledgeQaConfig";
 
 export interface KnowledgeQaSurfaceProps {
   agencyName: string;
@@ -39,29 +38,38 @@ export function KnowledgeQaSurface({ agencyName, agencyId, embedded = false }: K
     setAsking(true);
     setDraft("");
 
-    const { data, error } = await supabase.rpc("search_agency_knowledge", {
-      _query: question,
-      _language: language,
-      _agency_id: agencyId,
+    const { data, error } = await supabase.functions.invoke("search-knowledge", {
+      body: { query: question, language, agency_id: agencyId },
     });
 
     setAsking(false);
 
-    if (error) {
-      console.error("Knowledge search failed", error);
+    if (error || !data || (data as { error?: string }).error) {
+      console.error("Knowledge search failed", error || (data as { error?: string })?.error);
       setTurns((prev) => [...prev, { question, result: { kind: "refuse" } }]);
       return;
     }
 
-    const top = (data ?? [])[0] as { content: string; document_title: string; rank: number } | undefined;
-    if (!top || top.rank < KNOWLEDGE_CONFIDENCE_THRESHOLD) {
+    // Refusal is gated on grounded/content only -- document_title is a display label,
+    // not a confidence signal, so a chunk with an empty-string title (schema allows
+    // NOT NULL '' even though every seeded title is non-empty) must not cause a false
+    // refusal. Falls back to a generic label at render time instead.
+    const result = data as { grounded: boolean; content: string | null; document_title: string | null };
+    if (!result.grounded || !result.content) {
       setTurns((prev) => [...prev, { question, result: { kind: "refuse" } }]);
       return;
     }
 
     setTurns((prev) => [
       ...prev,
-      { question, result: { kind: "answer", content: top.content, documentTitle: top.document_title } },
+      {
+        question,
+        result: {
+          kind: "answer",
+          content: result.content,
+          documentTitle: result.document_title || "the knowledge base",
+        },
+      },
     ]);
   };
 
