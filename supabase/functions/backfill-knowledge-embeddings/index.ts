@@ -47,7 +47,15 @@ serve(async (req) => {
       }
     );
 
-    const { data: { user: caller }, error: authError } = await supabase.auth.getUser();
+    // Explicit token, not the no-arg form -- matches create-user's proven pattern at
+    // this same pinned supabase-js@2.7.1. getUser() with no argument falls back to the
+    // client's own internal session state (empty here: persistSession is false and
+    // nothing was ever passed through setSession()), NOT global.headers.Authorization
+    // -- so it always returned AuthSessionMissingError regardless of a valid forwarded
+    // token. getUser(token) takes an independent path straight to /auth/v1/user with
+    // that specific bearer token.
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user: caller }, error: authError } = await supabase.auth.getUser(token);
     if (authError || !caller) {
       return new Response(
         JSON.stringify({ error: 'Unauthorized' }),
