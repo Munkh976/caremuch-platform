@@ -265,3 +265,33 @@ distinct from any individual agency's branded page) is a different, larger piece
 **Deliberately out of scope for now** — tracked here as its own future project to pick
 up separately, so it isn't conflated with or accidentally scope-crept into the
 per-agency assistant work.
+
+## DEFERRED: knowledge base embedding backfill has no global cross-agency path
+
+**Status:** Logged 2026-09-04 while building `backfill-knowledge-embeddings` (Phase 2
+Tranche C part 3b). Deliberate design choice, not a bug — deferred because no need for
+it exists yet.
+
+**Design:** `backfill-knowledge-embeddings` authenticates as the calling staff member's
+own session (their JWT forwarded through, not `service_role`) and relies entirely on the
+existing staff-only, agency-scoped RLS policy on `knowledge_chunks` (`20260902120000`)
+as the tenancy boundary. This is the correct least-privilege choice for a routine,
+per-agency operation: it can't write outside the caller's own agency even if the
+function's own filtering logic has a bug, because RLS enforces that regardless.
+
+**Consequence:** there is no single invocation that backfills *every* agency's chunks at
+once — it must be run once per agency, by that agency's own staff. Today that's a
+non-issue (only agency `56fbfe38` has knowledge base content), but it becomes relevant
+the moment there are many agencies with real content and a reason to re-embed all of
+them at once — most likely a future embedding model/provider change (e.g. the OpenAI →
+Azure swap), which would invalidate every agency's existing vectors simultaneously.
+
+**What a global path would require:** a separate, more privileged admin function,
+mirroring `purge_demo_data()`'s existing pattern (`SECURITY DEFINER`, explicit
+`system_admin`-only role gate) rather than RLS-scoped-as-caller — deliberately crossing
+the per-agency RLS boundary under an explicit, audited gate, not a silent `service_role`
+bypass.
+
+**Deliberately out of scope for now** — no multi-agency knowledge content exists yet to
+motivate building it; tracked here so the need is recognized instead of rediscovered
+when the model/provider eventually changes.
