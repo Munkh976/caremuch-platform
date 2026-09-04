@@ -156,13 +156,13 @@ predates it.
 
 **Deliberately out of scope for now** — tracked here as a scoped follow-up.
 
-## AUDIT NEEDED: other Lovable-dashboard-authored config may be missing (third instance found)
+## AUDIT NEEDED: other Lovable-dashboard-authored config may be missing (fourth instance found)
 
 **Status:** Found while diagnosing why the Conversation Builder showed only one flow
 tab (2026-09-02). Not yet audited systematically — logged so the remaining instances
 get found by audit, not one feature at a time.
 
-**Pattern, confirmed three times now:**
+**Pattern, confirmed four times now:**
 1. `.lovable/mcp/manifest.json`'s OAuth issuer pointing at a stale project ref
    (`jipsobxiblzgivjmtwtq`) instead of the current linked project
    (`rgeldgztadebgvrdhaqa`) — found early this session, file untracked from git in
@@ -174,12 +174,22 @@ get found by audit, not one feature at a time.
    intake flow visible in old screenshots of the Lovable-hosted app) — never inserted
    by any migration, confirmed missing from the live `conversation_flows` table,
    being restored as its own migration.
+4. `supabase/functions/mcp/index.ts:165` — the same stale project ref
+   (`jipsobxiblzgivjmtwtq`) hardcoded into the bundled MCP OAuth issuer URL
+   (`https://${projectRef}.supabase.co/auth/v1`), baked in at Vite-plugin bundle
+   time and never updated when the project moved to `rgeldgztadebgvrdhaqa` — found
+   during the Phase 2 readiness pass (2026-09-03) while inspecting why this file
+   kept self-mangling. Not yet fixed; logged here alongside instance 1 since it's
+   the same stale ref, just baked into a second, generated location.
 
 **Root cause:** any configuration or content authored directly through Lovable's
 hosted dashboard/editor — not written as a tracked migration — lives only in that
 project's live database. It was never captured in version control, so it had no way
-to survive the move to a different Supabase project ref. The code and schema for all
-three features were always intact; only UI-authored *data* was lost.
+to survive the move to a different Supabase project ref. The code and schema for
+features 2 and 3 were always intact; only UI-authored *data* was lost. Instances 1
+and 4 are a related but distinct sub-case: not lost data, but a project ref value
+baked into generated/bundled output at authoring time, never re-derived after the
+project moved.
 
 **What to audit:** anything else editable through an admin screen that might also have
 been authored this way and could be silently missing or incomplete — other
