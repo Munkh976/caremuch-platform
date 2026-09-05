@@ -361,3 +361,62 @@ authored content in mixed formats, arriving uncontrolled.
 **Deliberately out of scope for now** — Phase 1G work, not started; tracked here so the
 scope is recognized as three separate problems (parsing, guard, provider decision) before
 anyone starts by just building a file picker.
+
+## SEMANTIC_MATCH_THRESHOLD (0.40) is proof-of-concept, derived on private-policy placeholder content
+
+**Status:** Logged 2026-09-05 after the Phase 2 Tranche C part 3d eval
+(docs/phase2-rag-eval-analysis.md).
+
+The 38-question eval that set `SEMANTIC_MATCH_THRESHOLD` ran entirely against the seed
+corpus (Attendance/Call-Off, PTO, Dementia SOP, Medication Guidelines) — hand-authored
+placeholder content proving the retrieval mechanism, not the public `/a/:slug` agent's
+real corpus (which will be FAQ/services/careers content, per the CareMuch Phase 2 RAG
+Architecture Decision doc). This threshold should not be assumed to transfer.
+`rag-eval-harness` is kept in the repo specifically to re-run this eval and re-derive τ
+once real public content is seeded.
+
+**Deliberately out of scope for now** — no public corpus exists yet to re-derive against.
+
+## PRE-PRODUCTION GATE: no knowledge-authorization scope exists — search-knowledge serves private content to anonymous visitors
+
+**Status:** Logged 2026-09-05 during Phase 2 Tranche C part 3d review, after reading the
+CareMuch Phase 2 RAG Architecture Decision doc's §1–§3 and §6. This is a REQUIRED
+PRE-PRODUCTION GATE, not a settled decision and not a deferred nice-to-have — tracked
+here so it is resolved before the public agent ever serves a real agency.
+
+**Current state:** `search-knowledge`/`match_agency_knowledge` enforce agency isolation
+only (Gate 1: which agency's knowledge). No knowledge-authorization gate exists in any
+form (the architecture doc's own further distinction: which knowledge *within* that
+agency the caller may see). The entire 32-chunk seed corpus — which the architecture
+doc's §2 classifies as CAREGIVER-scope, private content (PTO, call-off, dementia SOP,
+medication) — is served to any anonymous `/a/:slug` visitor with no restriction
+whatsoever. Per the doc's §1 ("How many PTO hours do caregivers receive? ... MUST REFUSE
+for an anonymous visitor"), this is presently in violation of the architecture decision,
+not a hypothetical future gap.
+
+**Why this hasn't caused real harm so far:** the seed corpus is dev/placeholder content
+used to prove the retrieval mechanism (docs/phase2-rag-eval-analysis.md §8) — there are
+no real users, and no real agency's actual private content is exposed. **This is
+acceptable ONLY under those conditions.**
+
+**Planned mechanism (not yet built, not yet decided as final):** separate corpora per
+surface — the public `/a/:slug` agent ingests only public FAQ/services/careers content;
+private caregiver-policy content is ingested only for the authenticated caregiver coach
+(Phase 4). This would be a structural alternative to the architecture doc's §6 per-chunk
+PUBLIC/CAREGIVER/STAFF-ADMIN classification, intended to satisfy the same §1–§3
+requirement (knowledge authorization enforced server-side) by a different mechanism
+(separation at ingestion rather than a scope column checked at query time). Which of the
+two actually gets built is an open question — only that one of them must be, before
+production.
+
+**REQUIRED PRE-PRODUCTION GATE:** before the public agent ever serves a real agency's
+real content, either (a) the public corpus must be structurally public-only
+(separate-corpora plan), or (b) §6's per-chunk/per-document scope classification must be
+built and enforced in `match_agency_knowledge`. Shipping real agency content through the
+current anonymous `search-knowledge` path with neither in place would mean any private
+policy document an agency uploads becomes visible to anonymous visitors purely because
+it's semantically similar to their question — exactly the failure the architecture doc's
+§6 warns against.
+
+**Tracked as a pre-production requirement, not deferred/out-of-scope** — must be resolved
+before Phase 1G real document ingestion for the public agent, not just "someday."
