@@ -70,9 +70,15 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: 'Missing agency_id' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
+    // Phase 3 Tranche 3A: both RPCs' anon EXECUTE grant was revoked (20260905090000)
+    // -- this internal diagnostic authenticates with service_role for the same reason
+    // search-knowledge does: anon/authenticated can no longer reach these functions
+    // at all. _surfaces: ['caregiver'] below (not ['public']) because the seed corpus
+    // is 100% caregiver-classified -- this harness evaluates that corpus, it does not
+    // simulate the public-only retrieval path search-knowledge enforces.
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? ''
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
     // FTS path: search_agency_knowledge has no built-in threshold -- always returns its
@@ -82,6 +88,7 @@ serve(async (req) => {
       _language: language,
       _limit: EVAL_LIMIT,
       _agency_id: agency_id,
+      _surfaces: ['caregiver'],
     });
     if (ftsError) throw ftsError;
 
@@ -100,6 +107,7 @@ serve(async (req) => {
       _limit: EVAL_LIMIT,
       _match_threshold: 0,
       _agency_id: agency_id,
+      _surfaces: ['caregiver'],
     });
     if (semanticError) throw semanticError;
 

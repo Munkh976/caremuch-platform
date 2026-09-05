@@ -43,20 +43,27 @@ serve(async (req) => {
     const { embeddings } = await provider.embed(query);
     const queryEmbedding = embeddings[0];
 
-    // No caller identity to resolve -- genuinely anonymous visitors have no session at
-    // all, and match_agency_knowledge is already agency-scoped via the explicit
-    // _agency_id parameter (mirrors search_agency_knowledge's anon design,
-    // 20260903140000) -- a plain anon client is correct and sufficient here.
+    // Phase 3 Tranche 3A: match_agency_knowledge's anon EXECUTE grant was revoked
+    // (20260905090000) -- it is no longer reachable with the anon key at all, by
+    // design (Step 0 of that tranche empirically proved a direct anon RPC call could
+    // bypass this Edge Function entirely). This function is now the ONLY path to it,
+    // authenticating with service_role for that reason -- not to resolve caller
+    // identity (there still is none for a genuinely anonymous visitor), purely to
+    // reach a function anon/authenticated can no longer call directly.
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? ''
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
+    // _surfaces is hardcoded here, never read from the request body -- the public
+    // path may only ever see 'public' content. The browser must never be able to
+    // select 'caregiver' by supplying a parameter; this function doesn't look for one.
     const { data, error } = await supabase.rpc('match_agency_knowledge', {
       _query_embedding: queryEmbedding,
       _language: language,
       _match_threshold: SEMANTIC_MATCH_THRESHOLD,
       _agency_id: agency_id,
+      _surfaces: ['public'],
     });
 
     if (error) throw error;
