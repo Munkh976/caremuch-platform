@@ -135,6 +135,17 @@ Use:
 
 Do not enable general LLM fallback during the first RAG validation because fallback can hide retrieval failures.
 
+**Empirically proven, Phase 2 Tranche C part 3d eval (docs/phase2-rag-eval-analysis.md):**
+cosine similarity alone cannot separate answerable from misleading/unanswerable questions
+-- the two score distributions structurally overlap (deliberately-adjacent content, e.g.
+PTO vs. call-off-pay questions, scores as high as or higher than genuine answers). The
+retrieval relevance gate (τ) and the answerability/evidence gate above are NOT the same
+mechanism and cannot be collapsed into one cosine threshold -- Gate 3 (LLM-based
+answerability) is architecturally required for clean refusal, and is not yet built.
+Until it exists, some semantically-adjacent misleading questions will pass τ and be
+shown as confident answers in production -- a known, tracked limitation, not a
+configuration bug (see known-issues.md).
+
 ## Agents
 ### Knowledge Agent
 Agency-specific Q&A using RAG + structured agency data. Never invent agency policy.
