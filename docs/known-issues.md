@@ -295,3 +295,30 @@ bypass.
 **Deliberately out of scope for now** — no multi-agency knowledge content exists yet to
 motivate building it; tracked here so the need is recognized instead of rediscovered
 when the model/provider eventually changes.
+
+## Semantic retrieval (3c) live-testing observations — inputs for the eval sub-tranche
+
+**Status:** Logged 2026-09-04 during live testing of `search-knowledge` (Phase 2 Tranche C
+part 3c, the FTS → cosine-similarity swap). Not bugs — observations to feed the formal
+30-50 question eval that comes next, so they're recognized as eval inputs instead of
+rediscovered mid-eval.
+
+**Top-1 retrieval is phrasing-brittle when two chunks score close.** "can't make it to my
+shift" correctly grounds to the Attendance/Call-Off Policy (the ideal document). The
+same underlying intent phrased as "can't make my shift" instead surfaces a PTO chunk as
+top-1 — a near-miss, not a refusal. `search-knowledge`/`match_agency_knowledge` already
+fetch `_limit` (default 5) ranked rows and discard everything but index 0 — a candidate
+case for surfacing top-k instead of top-1-only once there's a UI/UX reason to (see the
+disambiguation-UX analysis below), since the plumbing for it already exists.
+
+**The Call-Off vs. PTO-mentions-call-off pair is a good ambiguous/near-miss eval
+question** — worth including explicitly in the 30-50 question eval set as a case
+designed to probe this exact top-1-vs-top-k boundary, not just answerable/unanswerable
+extremes.
+
+**`SEMANTIC_MATCH_THRESHOLD` (0.3) remains provisional and untested against a real
+refusal case.** Every live UI test so far has been a genuinely answerable question; no
+live test has yet exercised the semantic path's refusal behavior (an out-of-domain or
+unanswerable question scored against real content). The eval must include unanswerable
+cases specifically to validate the threshold does what it's meant to, not just that
+answerable cases pass.
