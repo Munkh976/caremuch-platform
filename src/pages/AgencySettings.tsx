@@ -22,6 +22,14 @@ interface BackfillResult {
   errors: { chunk_id: string; message: string }[];
 }
 
+interface IngestResult {
+  document_id: string;
+  ingestion_status: string;
+  chunk_count?: number;
+  ingestion_error?: string;
+  error?: string;
+}
+
 interface AgencyData {
   id: string;
   agency_name: string;
@@ -146,6 +154,64 @@ const AgencySettings = () => {
   const updateField = (field: keyof AgencyData, value: any) => {
     if (!agencyData) return;
     setAgencyData({ ...agencyData, [field]: value });
+  };
+
+  // Phase 3 Tranche 3B: STAFF-ONLY TEST HARNESS for the ingestion mechanism, not a
+  // real agency-facing upload surface -- mechanism-only phase, synthetic files only.
+  // surface defaults to 'caregiver' (the safe direction, matching 3A) but is always
+  // sent explicitly; the ingest function itself has no default and would reject an
+  // omitted value.
+  const [ingestFile, setIngestFile] = useState<File | null>(null);
+  const [ingestTitle, setIngestTitle] = useState("");
+  const [ingestSurface, setIngestSurface] = useState<"caregiver" | "public">("caregiver");
+  const [ingestLanguage, setIngestLanguage] = useState<"en" | "es">("en");
+  const [ingestLoading, setIngestLoading] = useState(false);
+  const [ingestResult, setIngestResult] = useState<IngestResult | null>(null);
+  const [ingestError, setIngestError] = useState<string | null>(null);
+
+  const handleIngestDocument = async () => {
+    if (!ingestFile || !agencyData || !ingestTitle.trim()) return;
+    setIngestLoading(true);
+    setIngestResult(null);
+    setIngestError(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
+
+      const storagePath = `${agencyData.id}/${crypto.randomUUID()}/${ingestFile.name}`;
+      const { error: uploadError } = await supabase.storage
+        .from("knowledge-uploads")
+        .upload(storagePath, ingestFile);
+      if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
+
+      const { data, error } = await supabase.functions.invoke("ingest-knowledge-document", {
+        body: {
+          storage_path: storagePath,
+          filename: ingestFile.name,
+          surface: ingestSurface,
+          language: ingestLanguage,
+          title: ingestTitle.trim(),
+        },
+      });
+      if (error) {
+        const bodyText = await (error as any)?.context?.text?.().catch(() => null);
+        throw new Error(bodyText || error.message);
+      }
+      const result = data as IngestResult;
+      if (result.error) throw new Error(result.error);
+
+      setIngestResult(result);
+      if (result.ingestion_status === "ready") {
+        toast.success(`Ingested ${result.chunk_count} chunk(s)`);
+      } else {
+        toast.error(result.ingestion_error || "Ingestion did not complete");
+      }
+    } catch (err: any) {
+      setIngestError(err.message || "Failed to ingest document");
+      toast.error(err.message || "Failed to ingest document");
+    } finally {
+      setIngestLoading(false);
+    }
   };
 
   // Reuses the same invoke + error-unwrap pattern as AdminUtilities.tsx's
@@ -399,6 +465,82 @@ const AgencySettings = () => {
                       ))}
                     </ul>
                   </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Document Ingestion (Tranche 3B test harness) */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Document Ingestion (Test Harness)</CardTitle>
+            <CardDescription>
+              Mechanism-only test harness for Phase 3 Tranche 3B -- synthetic test
+              files only, not a real agency upload surface yet. PDF, DOCX, or TXT.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="ingest-title">Title</Label>
+                <Input
+                  id="ingest-title"
+                  value={ingestTitle}
+                  onChange={(e) => setIngestTitle(e.target.value)}
+                  placeholder="Test document title"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="ingest-file">File (.pdf, .docx, .txt)</Label>
+                <Input
+                  id="ingest-file"
+                  type="file"
+                  accept=".pdf,.docx,.txt"
+                  onChange={(e) => setIngestFile(e.target.files?.[0] ?? null)}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="ingest-surface">Surface</Label>
+                <Select value={ingestSurface} onValueChange={(v) => setIngestSurface(v as "caregiver" | "public")}>
+                  <SelectTrigger id="ingest-surface">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="caregiver">Caregiver (private)</SelectItem>
+                    <SelectItem value="public">Public</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="ingest-language">Language</Label>
+                <Select value={ingestLanguage} onValueChange={(v) => setIngestLanguage(v as "en" | "es")}>
+                  <SelectTrigger id="ingest-language">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="en">English</SelectItem>
+                    <SelectItem value="es">Español</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <Button onClick={handleIngestDocument} disabled={ingestLoading || !ingestFile || !ingestTitle.trim()}>
+              {ingestLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Ingest Document
+            </Button>
+
+            {ingestError && <p className="text-sm text-red-600">{ingestError}</p>}
+
+            {ingestResult && (
+              <div className="rounded-md border bg-muted p-4 text-sm space-y-1">
+                <p>Document ID: {ingestResult.document_id}</p>
+                <p>Status: {ingestResult.ingestion_status}</p>
+                {ingestResult.chunk_count !== undefined && <p>Chunks: {ingestResult.chunk_count}</p>}
+                {ingestResult.ingestion_error && (
+                  <p className="text-red-600">{ingestResult.ingestion_error}</p>
                 )}
               </div>
             )}

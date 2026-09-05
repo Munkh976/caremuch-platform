@@ -420,3 +420,23 @@ it's semantically similar to their question — exactly the failure the architec
 
 **Tracked as a pre-production requirement, not deferred/out-of-scope** — must be resolved
 before Phase 1G real document ingestion for the public agent, not just "someday."
+
+## No stuck-row reaping for ingest-knowledge-document (Tranche 3B, mechanism only)
+
+**Status:** Logged 2026-09-05 during Tranche 3B implementation. Accepted at mechanism
+stage, not fixed.
+
+`ingest-knowledge-document`'s `ingestion_status` defaults to `'pending'` for new rows
+(correct -- a genuinely new pipeline row starts pending, not ready). If the function
+crashes or times out mid-pipeline (`extracting`/`chunking`/`embedding`), that document
+row is left stuck at whatever step it reached, with no automatic retry or cleanup.
+This is not a content-leak risk -- `knowledge_chunks` rows are only written in one
+batch insert after embedding fully succeeds, so a stuck row has zero chunks and is
+structurally invisible to both retrieval RPCs regardless of status (see the 3B commit
+for the full reasoning) -- but it is an operational gap: a stuck row today requires
+manual cleanup (delete the row, re-upload), not a retry button or a background sweep.
+
+**Deliberately out of scope for now** -- automatic reaping/retry is a job-queue-shaped
+feature, explicitly deferred alongside async processing per 3B's own scope (synchronous,
+single-document Edge Function, "smallest viable"). Revisit when async/queue processing
+is built, likely triggered by a real document exceeding Edge Function timeout limits.
