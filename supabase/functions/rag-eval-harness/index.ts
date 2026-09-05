@@ -21,9 +21,36 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Generous relative to the ~16 chunks per language this agency currently has -- wide
-// enough to see most of the ranked list for top-k/ambiguity analysis, not just top-1.
-const EVAL_LIMIT = 10;
+// Deliberately far above this agency's real chunk count (~16 per language) so nothing
+// is ever truncated before per-document aggregation below -- this must return literally
+// every chunk, not a top-k sample, or a labeled expected/near-miss document could fall
+// off the edge and be misreported as absent when it was just unseen.
+const EVAL_LIMIT = 100;
+
+interface RawChunkResult {
+  document_title: string;
+  chunk_id: string;
+  content: string;
+  score: number;
+}
+
+/** Collapses chunk-level results to one row per DOCUMENT (its best/max-scoring chunk),
+ *  sorted descending. A document has 4 chunks; what the ambiguity/near-miss analysis
+ *  cares about is document-level competition, not which specific chunk won -- and
+ *  returning every document (never just a top-k slice) means a labeled expected_document
+ *  or near_miss_document can always be looked up, even if it ranks last. */
+function collapseToDocumentBest(chunks: RawChunkResult[]) {
+  const bestByDocument = new Map<string, RawChunkResult>();
+  for (const chunk of chunks) {
+    const existing = bestByDocument.get(chunk.document_title);
+    if (!existing || chunk.score > existing.score) {
+      bestByDocument.set(chunk.document_title, chunk);
+    }
+  }
+  return Array.from(bestByDocument.values())
+    .sort((a, b) => b.score - a.score)
+    .map((r) => ({ document_title: r.document_title, score: r.score, best_chunk_id: r.chunk_id }));
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -76,20 +103,30 @@ serve(async (req) => {
     });
     if (semanticError) throw semanticError;
 
+    const ftsChunks: RawChunkResult[] = (ftsData ?? []).map((r: any) => ({
+      document_title: r.document_title,
+      chunk_id: r.chunk_id,
+      content: r.content,
+      score: r.rank,
+    }));
+    const semanticChunks: RawChunkResult[] = (semanticData ?? []).map((r: any) => ({
+      document_title: r.document_title,
+      chunk_id: r.chunk_id,
+      content: r.content,
+      score: r.similarity,
+    }));
+
     return new Response(
       JSON.stringify({
-        fts_results: (ftsData ?? []).map((r: any) => ({
-          document_title: r.document_title,
-          chunk_id: r.chunk_id,
-          content: r.content,
-          rank: r.rank,
-        })),
-        semantic_results: (semanticData ?? []).map((r: any) => ({
-          document_title: r.document_title,
-          chunk_id: r.chunk_id,
-          content: r.content,
-          similarity: r.similarity,
-        })),
+        // Per-document, every document ranked (never truncated) -- the primary output
+        // for eval analysis: labeled expected_document/near_miss_document lookups and
+        // the ambiguity score-gap both read from here.
+        fts_documents: collapseToDocumentBest(ftsChunks),
+        semantic_documents: collapseToDocumentBest(semanticChunks),
+        // Raw chunk-level results kept for transparency/debugging -- not the primary
+        // analysis unit, per review.
+        fts_chunk_results: ftsChunks.map(({ document_title, chunk_id, content, score }) => ({ document_title, chunk_id, content, rank: score })),
+        semantic_chunk_results: semanticChunks.map(({ document_title, chunk_id, content, score }) => ({ document_title, chunk_id, content, similarity: score })),
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
