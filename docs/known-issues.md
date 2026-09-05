@@ -322,3 +322,42 @@ live test has yet exercised the semantic path's refusal behavior (an out-of-doma
 unanswerable question scored against real content). The eval must include unanswerable
 cases specifically to validate the threshold does what it's meant to, not just that
 answerable cases pass.
+
+## FUTURE PHASE 1G: manager document upload is not just a file uploader
+
+**Status:** Logged 2026-09-04 while reviewing the Phase 2 Tranche C part 3d eval question
+set, scoping ahead to Phase 1G per CLAUDE.md's roadmap ("Phase 1G (real agency document
+ingestion — the first time uncontrolled real content enters the pipeline)").
+
+**What's being asked for:** a manager-facing upload path for real agency knowledge —
+FAQ Q&A content (Excel/Word/plain text), policies, safety rules, holiday calendars, and
+retention/referral/bonus/salary documents. Unlike the current 32-chunk seed corpus (hand-
+written, deliberately PHI-free, uniform plain-text paragraphs), this is real, manager-
+authored content in mixed formats, arriving uncontrolled.
+
+**Three separate blockers, not one uploader feature:**
+1. **Multi-format parsing.** Excel Q&A pairs, Word policy documents, plain text, and
+   presumably PDF are structurally different — a tabular FAQ spreadsheet needs different
+   extraction/chunking logic than prose policy text. No parsing strategy exists yet for
+   any format beyond the plain-text `content` field the seed migration hand-wrote.
+2. **The PHI/PII ingestion guard CLAUDE.md's hard gate mandates.** This is explicitly
+   the trigger CLAUDE.md names for the HIPAA/PHI boundary hard gate — the seed corpus is
+   PHI-free by construction (hand-authored, reviewed), but a real manager-uploaded
+   salary document, holiday calendar, or retention note could contain real PHI/PII by
+   accident (an employee SSN in a salary doc, a client name slipped into a retention
+   note) with nothing currently stopping it. The guard from CLAUDE.md's "Phase 1 RAG =
+   PHI-FREE" diagram (PHI/PII Guard → REJECT/ALLOW, before chunking) does not exist in
+   code yet — only the schema-level guarantee (no `client_id` path) exists, and that only
+   protects against a structural PHI channel, not content accidentally typed into an
+   otherwise-legitimate document.
+3. **The provider/BAA question this forces.** The current `EmbeddingProvider` is
+   OpenAI-direct with `phiAllowed: false`, hard-enforced (Phase 2 Tranche C part 3a). If
+   real uploaded documents could carry PHI, embedding them through OpenAI-direct would
+   violate the hard gate outright. Shipping this feature requires either (a) a guard
+   reliable enough to give real confidence content is PHI-free before it ever reaches
+   `provider.embed()`, or (b) provisioning Azure + a signed BAA first, per CLAUDE.md's
+   explicit gate — not something to decide implicitly by just building the upload UI.
+
+**Deliberately out of scope for now** — Phase 1G work, not started; tracked here so the
+scope is recognized as three separate problems (parsing, guard, provider decision) before
+anyone starts by just building a file picker.
