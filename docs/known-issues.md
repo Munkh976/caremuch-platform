@@ -479,3 +479,13 @@ manual cleanup (delete the row, re-upload), not a retry button or a background s
 feature, explicitly deferred alongside async processing per 3B's own scope (synchronous,
 single-document Edge Function, "smallest viable"). Revisit when async/queue processing
 is built, likely triggered by a real document exceeding Edge Function timeout limits.
+
+## Guard-blocked ingestion leaves an orphaned storage object
+
+**Status:** Discovered during Tranche 3E manual UI validation, 2026-09-06. Benign
+today, not fixed.
+
+`ingest-knowledge-document` uploads the raw file to `knowledge-uploads` before the 3C
+guard runs, so a guard-blocked file's bytes remain in storage even though it never
+becomes chunks/embeddings. Benign now (staff-only bucket RLS), but the eventual real
+(non-test-harness) upload UI should delete the storage object on a guard block.
