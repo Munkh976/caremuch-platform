@@ -12,7 +12,7 @@ CareMuch is a multi-agent AI platform for home-care agencies. Add the AI layer a
 - Shared controlled Tool Layer
 - Agency-specific RAG using pgvector
 - ML where appropriate, especially retention
-- Phased AI boundary: Phase 1 shipped with NO external AI provider at all (Postgres full-text search only — see "AI provider strategy"); the provider decision (direct OpenAI/Google, or Azure/Microsoft Foundry as the PHI-capable target) is made in Phase 2, not yet decided
+- Phased AI boundary: Phase 1 shipped with NO external AI provider at all (Postgres full-text search only — see "AI provider strategy"); the embedding provider (OpenAI-direct) was decided in Phase 2; the PHI-capable path (OpenAI BAA+ZDR or Azure — see the Tranche 3D decision record) remains deferred until a real PHI flow is slated
 
 ## Current reality (do not assume the target architecture exists yet)
 - The "AI screening" chat is a DETERMINISTIC scripted flow engine
@@ -48,25 +48,26 @@ User
 ## Core principle
 > LLMs reason; tools enforce; databases remain authoritative; RAG supplies evidence; ML supplies predictions; RLS enforces tenancy; the AI provider boundary controls protected-data processing.
 
-## AI provider strategy (undecided — Phase 2 is where this gets decided)
+## AI provider strategy (embedding provider decided: OpenAI-direct — see Phase 3 Tranche 3D)
 **Phase 1 shipped with ZERO external AI providers.** The original plan (this section used to say "Lovable AI Gateway for Phase 1") was deliberately superseded mid-build: Lovable Cloud turned out to be disconnected from the live project (`LOVABLE_API_KEY` absent from the linked project's secrets — reconnecting it would have reintroduced a dependency right after removing the app's only other Lovable AI call, `match-caregiver`, for a PHI leak). Phase 1 was rebuilt as Postgres full-text search only (`tsvector`/`ts_rank`, no LLM, no embeddings) specifically to validate retrieval, isolation, and the confidence-gate architecture before taking on any provider/BAA/PHI decision at all. Full writeup: `docs/phase-1-fts-results.md`.
 
 - The existing `match-caregiver` function matches on structured, coded fields only (`client_care_needs`/`caregiver_skills` via `care_types.code`, `service_zipcodes`, `caregiver_availability`, `reliability_score`/`caregiver_performance`) via a deterministic weighted scorer — no LLM call, no provider dependency of any kind, and it never reads `clients.medical_conditions`, `care_requirements`, or any client identity field.
 
-**Phase 2 is where the provider decision actually gets made — it is NOT yet decided.** Candidates: a direct provider (OpenAI/Google) for continued PHI-free embeddings work, or Azure / Microsoft Foundry directly if the PHI timeline moves up. Whichever is chosen:
-- Must go through the provider abstraction below (`LLMProvider`/`EmbeddingProvider`), never a hard-coded gateway call.
-- A non-Azure provider is NOT BAA-covered. `phiAllowed` MUST be `false` for it, read from an explicit env var, defaulting to false, enforced in code — not convention.
-- Azure/Microsoft Foundry remains the only PHI-capable path under consideration; provisioning it is still gated on an explicit PHI-flow decision (see the hard gate below), not something to front-load speculatively.
+**Phase 2 decided the embedding provider: OpenAI-direct (`text-embedding-3-small`, 1536-dim), `phiAllowed=false`, hard-enforced in code — re-verified live in Phase 3 Tranche 3D** (`docs/phase-3-tranche-3d-provider-decision.md`). No real agency content flows through it until Tranche 3C's PHI/PII guard exists.
+- Goes through the provider abstraction below (`EmbeddingProvider`), never a hard-coded gateway call.
+- `phiAllowed` is `false` for it, read from an explicit env var, defaulting to false, enforced in code — not convention.
+- **The eventual PHI-capable path is deferred, not decided, and is NOT Azure-only:** it is either (a) an OpenAI BAA with Zero Data Retention enabled per call — same model, no re-embedding migration — or (b) Azure OpenAI, a genuine provider switch carrying a re-embed + possible `vector(N)` migration. See the Tranche 3D decision record for the full comparison; provisioning either is still gated on an explicit PHI-flow decision (see the hard gate below), not something to front-load speculatively.
+- The LLM provider decision (for Phase 4's Gate 3 answerability) remains genuinely undecided — `LLMProvider` has no implementation anywhere in this codebase yet, aspirational text only below. Whichever PHI path is eventually chosen for embeddings does not automatically cover the separate LLM call Phase 4 will add.
 
 Do NOT claim the application is HIPAA compliant because a provider offers a BAA. Legal/compliance review remains required regardless of provider.
 
 ## HIPAA / PHI boundary hard gate
-Before ANY of the following, STOP and re-decide the provider, and provision Azure + a signed BAA if the answer is "PHI may flow":
+Before ANY of the following, STOP and provision the chosen PHI-capable path — OpenAI BAA with Zero Data Retention enabled per call, or Azure OpenAI (see the Tranche 3D decision record for the comparison) — with a signed BAA, if the answer is "PHI may flow":
 - Phase 1G (real agency document ingestion — the first time uncontrolled real content enters the pipeline)
 - Any phase that sends client / family / elderly data to an LLM or embedding provider (Retention, and any future client-facing agent)
 - Any production launch handling real PHI
 
-Lovable cannot carry PHI. This gate is not optional and cannot be satisfied by "we already picked Lovable." Crossing it without Azure + BAA + compliance sign-off is a violation, not a shortcut.
+Lovable cannot carry PHI. This gate is not optional and cannot be satisfied by "we already picked Lovable." Crossing it without a provisioned PHI-capable path (OpenAI BAA+ZDR or Azure) + compliance sign-off is a violation, not a shortcut.
 
 ## Phase 1 RAG = PHI-FREE
 Phase 1 RAG may contain only agency knowledge:
@@ -232,7 +233,7 @@ Before changing code:
 - Also fixed along the way: a `family_intake` conversation flow and a `conversation_builder` menu entry lost in a project-reference switch (restored as migrations, not live-dashboard edits, so they survive the next move), a cross-agency reassignment gap in three provisioning Edge Functions, and a single-word-name crash in `flow_session_submit_intake`.
 
 **Phase 2: make the AI provider / HIPAA decision — NOT YET DECIDED.** This is the actual, real decision Phase 1's FTS-first approach was built to defer safely:
-- Choose the provider (direct OpenAI/Google for continued PHI-free work, or Azure/Microsoft Foundry if the PHI timeline moves up) and build it behind the provider abstraction below.
+- Choose the embedding provider (decided: OpenAI-direct, Phase 2 Tranche C part 3a) and build it behind the provider abstraction below. The separate PHI-capable path, when needed, is OpenAI BAA+ZDR or Azure — see the Tranche 3D decision record — not Azure-only.
 - Embedding smoke test against whichever provider is chosen — inspect actual vector length, record model/version/dimension. BLOCKER until done: dimension must not be assumed.
 - Swap `search_agency_knowledge()`'s ranking internals to vector similarity on the same schema/isolation foundation (no schema redesign needed — this was designed in from the start).
 - Run the formal 30–50 labeled-question eval (answerable / ambiguous / unanswerable, both languages) to validate a real τ — Phase 1's 0.04 is still probe-derived, not eval-validated.
