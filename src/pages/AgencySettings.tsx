@@ -8,9 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Building2, Save, Loader2 } from "lucide-react";
 import { US_STATES } from "@/constants/usStates";
 import { agencyFormSchema } from "@/lib/validation";
+import { PHI_ATTESTATION_STRING } from "@/lib/phiAttestation";
 
 interface BackfillResult {
   scope: string;
@@ -168,9 +170,13 @@ const AgencySettings = () => {
   const [ingestLoading, setIngestLoading] = useState(false);
   const [ingestResult, setIngestResult] = useState<IngestResult | null>(null);
   const [ingestError, setIngestError] = useState<string | null>(null);
+  // Phase 3 Tranche 3C: server-enforced, exact-string attestation. This checkbox is
+  // UI convenience only -- ingest-knowledge-document validates the literal string
+  // itself before any Storage access, independent of whatever this checkbox sends.
+  const [ingestAttested, setIngestAttested] = useState(false);
 
   const handleIngestDocument = async () => {
-    if (!ingestFile || !agencyData || !ingestTitle.trim()) return;
+    if (!ingestFile || !agencyData || !ingestTitle.trim() || !ingestAttested) return;
     setIngestLoading(true);
     setIngestResult(null);
     setIngestError(null);
@@ -191,6 +197,7 @@ const AgencySettings = () => {
           surface: ingestSurface,
           language: ingestLanguage,
           title: ingestTitle.trim(),
+          phi_attestation: PHI_ATTESTATION_STRING,
         },
       });
       if (error) {
@@ -527,7 +534,18 @@ const AgencySettings = () => {
                 </Select>
               </div>
             </div>
-            <Button onClick={handleIngestDocument} disabled={ingestLoading || !ingestFile || !ingestTitle.trim()}>
+            <div className="flex items-start gap-2">
+              <Checkbox
+                id="ingest-attestation"
+                checked={ingestAttested}
+                onCheckedChange={(checked) => setIngestAttested(checked === true)}
+              />
+              <Label htmlFor="ingest-attestation" className="font-normal leading-snug">
+                {PHI_ATTESTATION_STRING} (required -- the server independently verifies
+                this exact statement before processing any file.)
+              </Label>
+            </div>
+            <Button onClick={handleIngestDocument} disabled={ingestLoading || !ingestFile || !ingestTitle.trim() || !ingestAttested}>
               {ingestLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Ingest Document
             </Button>

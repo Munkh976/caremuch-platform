@@ -1,11 +1,12 @@
-// Phase 3 Tranche 3B (mechanism only): synchronous, single-document ingestion
-// pipeline. Validate -> extract -> normalize -> [3C GUARD INSERTS HERE, not built] ->
-// chunk -> embed -> store. SYNTHETIC TEST CONTENT ONLY in this tranche -- real agency
-// document ingestion (Phase 1G) stays blocked until 3C (PHI/PII guard) and 3D
-// (provider/BAA decision) both exist, per CLAUDE.md's hard gate. Nothing in this file
-// assumes content is already PHI-safe; it hardcodes requiresPhi: false because every
-// caller in this tranche is a human-authored synthetic test file, exactly like every
-// other existing requiresPhi: false call site in this codebase.
+// Phase 3 Tranche 3B (mechanism only) + Tranche 3C (PHI/PII guard): synchronous,
+// single-document ingestion pipeline. Validate -> attest -> extract -> normalize ->
+// PHI/PII GUARD -> chunk -> embed -> store. SYNTHETIC TEST CONTENT ONLY in this
+// tranche -- real agency document ingestion (Phase 1G) stays blocked until 3D's
+// provider/BAA decision reopens, per CLAUDE.md's hard gate; 3C's guard existing does
+// NOT by itself authorize real content. Nothing in this file assumes content is
+// already PHI-safe; it hardcodes requiresPhi: false because every caller in this
+// tranche is a human-authored synthetic test file, exactly like every other existing
+// requiresPhi: false call site in this codebase.
 //
 // Auth: caller's own JWT, NOT service_role -- staff already have direct INSERT/UPDATE
 // rights on knowledge_documents/knowledge_chunks via existing RLS
@@ -19,6 +20,7 @@ import { extractText, getDocumentProxy } from "npm:unpdf@0.11.0";
 import mammoth from "npm:mammoth@1.7.2";
 import { getEmbeddingProvider } from "../_shared/getEmbeddingProvider.ts";
 import { assertPhiSafe } from "../_shared/embeddingProvider.ts";
+import { detectStructuredPhi, isValidAttestation } from "../_shared/phiGuard.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -105,7 +107,7 @@ serve(async (req) => {
     }
     const agencyId = callerProfile.agency_id;
 
-    const { storage_path, filename, surface, language, title, replace_document_id } = await req.json();
+    const { storage_path, filename, surface, language, title, replace_document_id, phi_attestation } = await req.json();
 
     if (!storage_path || typeof storage_path !== 'string') {
       return new Response(JSON.stringify({ error: 'Missing storage_path' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
@@ -121,6 +123,18 @@ serve(async (req) => {
     }
     if (!title || typeof title !== 'string') {
       return new Response(JSON.stringify({ error: 'Missing title' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    // Tranche 3C, Layer 2: server-enforced human attestation. Checked BEFORE any
+    // Storage access or document row is created -- a missing/wrong attestation must
+    // reject the request outright, not just get recorded alongside a row that was
+    // already created. Exact-string match only, no default, no partial credit --
+    // this is the ingestion-side control for name/context PHI that Layer 1's
+    // structured regexes cannot detect (see phiGuard.ts).
+    if (!isValidAttestation(phi_attestation)) {
+      return new Response(
+        JSON.stringify({ error: 'Missing or invalid phi_attestation -- ingestion requires an exact attestation string confirming the document contains no client, patient, family, or elderly-identifying information.' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     const ext = (filename ?? '').split('.').pop()?.toLowerCase();
@@ -177,11 +191,21 @@ serve(async (req) => {
       return new Response(JSON.stringify({ document_id: documentId, ingestion_status: 'failed', ingestion_error: msg }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // ---- [3C PHI/PII GUARD INSERTS HERE] ----
-    // Not built. When it exists: inspect `normalized` here, and feed its finding into
-    // the requiresPhi value passed to assertPhiSafe() below (detected/uncertain PHI ->
-    // true; clean -> false) instead of the hardcoded false this tranche uses. No other
-    // change to this pipeline is needed for 3C to slot in.
+    // ---- Tranche 3C, Layer 1: deterministic structured-PII guard ----
+    // Inspects title + filename + normalized body as ONE combined blob, BEFORE
+    // chunking -- catches a structured pattern (e.g. a formatted SSN) that would
+    // otherwise straddle exactly where the chunker splits it. Fails closed: any
+    // non-SAFE state (PHI_DETECTED/ERROR/UNPROCESSABLE) blocks ingestion. A SAFE
+    // result means only "no structured identifier pattern matched" -- it is not,
+    // and must never be treated as, proof the document contains no PHI (name/context
+    // PHI is out of reach for a deterministic regex; the attestation check above is
+    // the control for that gap, not this one).
+    const guardResult = detectStructuredPhi(`${title}\n${filename ?? ''}\n${normalized}`);
+    if (guardResult.state !== 'SAFE') {
+      const msg = `PHI/PII guard blocked ingestion: ${guardResult.reason ?? guardResult.state}`;
+      await supabase.from('knowledge_documents').update({ ingestion_status: 'failed', ingestion_error: msg }).eq('id', documentId);
+      return new Response(JSON.stringify({ document_id: documentId, ingestion_status: 'failed', ingestion_error: msg }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
 
     // ---- chunking ----
     await supabase.from('knowledge_documents').update({ ingestion_status: 'chunking' }).eq('id', documentId);
@@ -194,9 +218,13 @@ serve(async (req) => {
     await supabase.from('knowledge_documents').update({ ingestion_status: 'embedding' }).eq('id', documentId);
     const provider = getEmbeddingProvider();
     // requiresPhi: false -- mechanism-only phase, every file here is a synthetic test
-    // fixture authored by a developer, not real agency content. See the 3C insertion
-    // point comment above for what changes once the guard exists.
-    assertPhiSafe(provider, { requiresPhi: false, description: 'knowledge document ingestion (synthetic test content, Tranche 3B)' });
+    // fixture authored by a developer, not real agency content. The 3C guard above
+    // has already run by this point (blocking would have returned earlier); this
+    // stays hardcoded false rather than deriving from the guard's SAFE result,
+    // because a passing guard is not the same claim as "content is PHI-free" (see
+    // the guard's own comment) -- real content is still blocked by the separate 3D
+    // provider gate regardless of what this flag says.
+    assertPhiSafe(provider, { requiresPhi: false, description: 'knowledge document ingestion (synthetic test content, Tranche 3B/3C)' });
     const { embeddings } = await provider.embed(chunks);
 
     if (embeddings.length !== chunks.length) {

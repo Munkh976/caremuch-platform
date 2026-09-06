@@ -421,6 +421,45 @@ it's semantically similar to their question — exactly the failure the architec
 **Tracked as a pre-production requirement, not deferred/out-of-scope** — must be resolved
 before Phase 1G real document ingestion for the public agent, not just "someday."
 
+## Query-path PHI/PII residual risk accepted only until Tranche 3G's retrieval-mode re-measurement
+
+**Status:** Logged 2026-09-06 while building the Tranche 3C PHI/PII guard. Deliberate,
+time-boxed accepted risk, not a bug and not a permanent posture.
+
+**What the guard covers, and what it doesn't:** `search-knowledge`'s Layer 1 guard
+(`supabase/functions/_shared/phiGuard.ts`) blocks any anonymous query containing a
+detectable structured identifier (SSN/phone/email/DOB-shaped pattern) before it can
+reach either retrieval mode, with a refusal indistinguishable from an ordinary
+"not grounded" response. It cannot detect name/context PHI in a query (e.g. "Is Jane
+Smith on the schedule Tuesday?") -- no reliable detector for that exists under the
+project's fixed no-LLM constraint, and there is no server-enforced attestation
+mechanism possible on this path the way there is for staff-driven ingestion (an
+anonymous visitor cannot be made to attest to anything).
+
+**Why this is accepted rather than blocking:** the public corpus this surface serves
+is PHI-free by design (Phase 1 RAG scope), and `phiAllowed` stays `false` with no BAA
+underneath this path (Tranche 3D) -- so a visitor typing a name into a question does
+not cause PHI to be *stored* as agency knowledge, only to pass through the embedding
+provider as part of the query itself. This is the same category of exposure the
+Tranche 3C plan's Conditional-A decision explicitly named and time-boxed, not a newly
+discovered gap.
+
+**Expires at Tranche 3G, not on a BAA timeline:** `search-knowledge` exposes a
+policy-controlled `retrieval_mode` seam (`KNOWLEDGE_RETRIEVAL_MODE` env var, `FTS` or
+`VECTOR`, defaulting to `VECTOR`) specifically so this can be revisited on evidence.
+At Tranche 3G, before real anonymous traffic hits real public content, both modes
+must be re-measured against the *actual* public corpus using `rag-eval-harness` (not
+the caregiver seed corpus `SEMANTIC_MATCH_THRESHOLD` was derived from -- see that
+entry above). If FTS separates answerable from noise cleanly on that corpus, switching
+`retrieval_mode` to `FTS` closes this exposure structurally (no query text ever
+reaches an external provider) at no code change. This acceptance is NOT contingent on
+BAA/provider status -- it is a corpus-quality measurement, independent of the
+Tranche 3D provider decision.
+
+**Deliberately time-boxed, not deferred indefinitely** -- tracked here so the 3G gate
+is not skipped once real public content makes this a live question rather than a
+theoretical one.
+
 ## No stuck-row reaping for ingest-knowledge-document (Tranche 3B, mechanism only)
 
 **Status:** Logged 2026-09-05 during Tranche 3B implementation. Accepted at mechanism

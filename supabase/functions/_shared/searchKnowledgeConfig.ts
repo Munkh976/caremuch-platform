@@ -27,3 +27,23 @@
  * the FTS value over, they are not the same unit.
  */
 export const SEMANTIC_MATCH_THRESHOLD = 0.40;
+
+/**
+ * Phase 3 Tranche 3C: the anonymous query path's retrieval-mode seam, per the
+ * Conditional-A decision (Tranche 3C plan §3). VECTOR (semantic/cosine) is the
+ * default -- FTS is wired and callable (search_agency_knowledge already carries the
+ * same required _surfaces parameter and anon/authenticated EXECUTE revocation as
+ * match_agency_knowledge, both from the same 3A migration -- confirmed, not a 3C
+ * build item), but is NOT tuned: no FTS confidence threshold has been derived
+ * against the real public corpus. Switching this to 'FTS' before that re-measurement
+ * (mandatory at Tranche 3G, using rag-eval-harness against real public content, not
+ * the caregiver seed corpus this file's SEMANTIC_MATCH_THRESHOLD was derived from)
+ * would ship an untuned retrieval path -- do not flip this outside that gate.
+ *
+ * The PHI/PII guard (_shared/phiGuard.ts) runs identically before EITHER mode --
+ * switching retrieval mode never removes the guard requirement.
+ */
+export type RetrievalMode = "FTS" | "VECTOR";
+
+export const RETRIEVAL_MODE: RetrievalMode =
+  Deno.env.get("KNOWLEDGE_RETRIEVAL_MODE") === "FTS" ? "FTS" : "VECTOR";
