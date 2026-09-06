@@ -154,6 +154,15 @@ serve(async (req) => {
         category: 'ingested',
         content: '',
         surface,
+        // Tranche 3E: public-surface documents land INACTIVE from creation, never via
+        // a follow-up UPDATE. search-knowledge/KnowledgeQaSurface/PublicOffice have
+        // been live since Phase 1, and is_active is the only filter (confirmed the
+        // sole one, both RPCs re-checked) between a newly-ingested row and real
+        // anonymous traffic on /a/:slug -- staging at INSERT time means there is
+        // never a live window to close after the fact. Caregiver-surface ingestion is
+        // unaffected (is_active=true, unchanged from 3B/3C) -- caregiver content
+        // isn't anonymously reachable regardless of this flag.
+        is_active: surface === 'public' ? false : true,
         source_storage_path: storage_path,
         file_format: fileFormat,
         ingestion_status: 'pending',
