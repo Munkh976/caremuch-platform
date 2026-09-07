@@ -22,7 +22,7 @@ export function OfficeHeader({ office, onRequestCare, onApply }: SectionProps) {
             <img
               src={office.branding.logo_url}
               alt={`${displayName(office)} logo`}
-              className="h-9 w-9 rounded-lg object-cover"
+              className="h-9 w-auto max-w-[180px] object-contain"
               loading="lazy"
             />
           ) : (
