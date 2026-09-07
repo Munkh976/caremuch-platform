@@ -59,7 +59,7 @@ export default function PublicOffice({ initialMode }: { initialMode?: Mode }) {
   useEffect(() => {
     if (!office) return;
     const previous = document.title;
-    document.title = `${name} | In-home care`;
+    document.title = name;
     const meta = document.querySelector('meta[name="description"]');
     const previousDesc = meta?.getAttribute("content") ?? "";
     meta?.setAttribute(
