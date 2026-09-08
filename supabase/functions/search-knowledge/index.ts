@@ -2,8 +2,11 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { getEmbeddingProvider } from "../_shared/getEmbeddingProvider.ts";
 import { assertPhiSafe } from "../_shared/embeddingProvider.ts";
-import { SEMANTIC_MATCH_THRESHOLD, RETRIEVAL_MODE } from "../_shared/searchKnowledgeConfig.ts";
+import { SEMANTIC_MATCH_THRESHOLD, RETRIEVAL_MODE, ANSWER_MODE, GATE3_MATCH_THRESHOLD, GATE3_TOP_K } from "../_shared/searchKnowledgeConfig.ts";
 import { detectStructuredPhi } from "../_shared/phiGuard.ts";
+import { getLlmProvider } from "../_shared/getLlmProvider.ts";
+import { assertLlmPhiSafe } from "../_shared/llmProvider.ts";
+import { composeGate3Answer, Gate3Chunk } from "../_shared/gate3Answer.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -64,9 +67,65 @@ serve(async (req) => {
     // _surfaces is hardcoded here, never read from the request body -- the public
     // path may only ever see 'public' content. The browser must never be able to
     // select 'caregiver' by supplying a parameter; this function doesn't look for one.
-    // This applies identically to both retrieval modes below.
+    // This applies identically to both retrieval modes below, and to both answer
+    // modes (Gate 3's retrieval call, added below, reuses this exact same hardcoded
+    // scoping -- no new path to caregiver content exists anywhere in this file).
     let data: { content: string; document_title: string; similarity?: number; rank?: number }[] | null;
     let error: { message: string } | null;
+
+    // Phase 3 Gate 3 toggle (docs/phase-3g-light-and-gate3-plan.md): ANSWER_MODE
+    // defaults to 'RETRIEVAL', identical behavior to before this file was touched.
+    // Only when KNOWLEDGE_ANSWER_MODE='LLM' is explicitly set does this branch run,
+    // and even then it uses its OWN threshold (GATE3_MATCH_THRESHOLD) -- it never
+    // reads or changes SEMANTIC_MATCH_THRESHOLD, which still governs the RETRIEVAL
+    // branch below exactly as it always has.
+    if (ANSWER_MODE === 'LLM') {
+      const provider = getEmbeddingProvider();
+      assertPhiSafe(provider, { requiresPhi: false, description: 'search-knowledge (Gate 3) query embedding' });
+      const { embeddings } = await provider.embed(query);
+      const queryEmbedding = embeddings[0];
+
+      if (RETRIEVAL_MODE === 'FTS') {
+        ({ data, error } = await supabase.rpc('search_agency_knowledge', {
+          _query: query,
+          _language: language,
+          _limit: GATE3_TOP_K,
+          _agency_id: agency_id,
+          _surfaces: ['public'],
+        }));
+      } else {
+        ({ data, error } = await supabase.rpc('match_agency_knowledge', {
+          _query_embedding: queryEmbedding,
+          _language: language,
+          _limit: GATE3_TOP_K,
+          _match_threshold: GATE3_MATCH_THRESHOLD,
+          _agency_id: agency_id,
+          _surfaces: ['public'],
+        }));
+      }
+      if (error) throw error;
+
+      const chunks: Gate3Chunk[] = (data ?? []).map((d) => ({ document_title: d.document_title, content: d.content }));
+
+      const llmProvider = getLlmProvider();
+      assertLlmPhiSafe(llmProvider, { requiresPhi: false, description: 'search-knowledge (Gate 3) answer composition' });
+      const gate3Result = await composeGate3Answer(llmProvider, query, chunks);
+
+      return new Response(
+        JSON.stringify({
+          grounded: gate3Result.answerable,
+          content: gate3Result.content,
+          // From the LLM's own "From:" citation, NOT chunks[0] -- the model can (and
+          // in testing did) draw its composed answer from a lower-ranked retrieved
+          // chunk than the top-scoring one, so the top-of-retrieval chunk is not a
+          // reliable stand-in for what was actually cited.
+          document_title: gate3Result.sourceTitle,
+          top_similarity: (data ?? [])[0]?.similarity ?? (data ?? [])[0]?.rank ?? null,
+          gate3_model: gate3Result.model,
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     if (RETRIEVAL_MODE === 'FTS') {
       // Tranche 3C retrieval-mode seam: wired and callable, NOT the active default.

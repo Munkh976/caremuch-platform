@@ -47,3 +47,35 @@ export type RetrievalMode = "FTS" | "VECTOR";
 
 export const RETRIEVAL_MODE: RetrievalMode =
   Deno.env.get("KNOWLEDGE_RETRIEVAL_MODE") === "FTS" ? "FTS" : "VECTOR";
+
+/**
+ * Gate 3 (LLM answerability) toggle, built pre-demo per docs/phase-3g-light-and-
+ * gate3-plan.md. Defaults to 'RETRIEVAL' -- the existing top-1, tau-gated,
+ * no-LLM behavior -- so this file changing at all, and even this function
+ * redeploying, is a no-op for the live demo unless KNOWLEDGE_ANSWER_MODE is
+ * explicitly set to 'LLM' as a deployed secret. Same "no default that can be
+ * forgotten silently, but the SAFE direction" discipline as every other toggle
+ * in this codebase (3A's surface default, 3C's retrieval-mode default).
+ */
+export type AnswerMode = "RETRIEVAL" | "LLM";
+
+export const ANSWER_MODE: AnswerMode =
+  Deno.env.get("KNOWLEDGE_ANSWER_MODE") === "LLM" ? "LLM" : "RETRIEVAL";
+
+/**
+ * DELIBERATELY LOOSE, DELIBERATELY SEPARATE from SEMANTIC_MATCH_THRESHOLD (0.40).
+ * Per the sequencing decision in docs/phase-3g-light-and-gate3-plan.md: Gate 3 is
+ * being built before formal 3G-light tau recalibration, on the reasoning that the
+ * LLM -- not this number -- makes the real answerable/refuse judgment. This value's
+ * only job is "don't waste an LLM call on obvious noise," not "be the confidence
+ * gate" -- that job now belongs to the LLM. NOT validated against any eval; a
+ * provisional value to unblock the demo, explicitly flagged for real 3G-light
+ * recalibration afterward. Never applied to the existing retrieval-only path --
+ * SEMANTIC_MATCH_THRESHOLD above is completely unchanged and still governs that
+ * path exactly as it did before this file was touched.
+ */
+export const GATE3_MATCH_THRESHOLD = 0.15;
+
+/** Top-k passed to the LLM when ANSWER_MODE === 'LLM'. Existing retrieval-only path
+ *  is unaffected -- it still only ever reads index 0 of whatever comes back. */
+export const GATE3_TOP_K = 5;
