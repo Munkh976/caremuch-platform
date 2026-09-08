@@ -489,3 +489,42 @@ today, not fixed.
 guard runs, so a guard-blocked file's bytes remain in storage even though it never
 becomes chunks/embeddings. Benign now (staff-only bucket RLS), but the eventual real
 (non-test-harness) upload UI should delete the storage object on a guard block.
+
+## Duplicate agency-settings module codes (`settings` + `agency_settings`)
+
+**Status:** Found during the nav UX polish pass, 2026-09-08. Cosmetic/data-debt, not fixed.
+
+`system_modules` has two separate rows for the same feature -- `settings` (category
+`administration`) and `agency_settings` (category `configuration`) -- both routing to
+`/agency-settings`, both granted to `agency_admin`. The existing path-based de-dup in
+`AppLayout.tsx` already prevents a visible duplicate sidebar entry, so this has no
+current user-facing effect -- but the two module_codes should eventually be
+consolidated into one.
+
+## `pending_notifications` RLS is not agency-scoped -- cross-references the M1 tracking
+
+**Status:** Found while adding the Notification Outbox sidebar badge (UX polish batch
+1b), 2026-09-08. Confirms and upgrades an item already listed as unverified (⚠️) in
+`docs/multitenant-saas-architecture-plan.md`'s Step 1 tenancy map -- now confirmed 🔴.
+
+`pending_notifications`'s SELECT policy is role-only (`has_role(system_admin) OR
+has_role(agency_admin) OR has_role(manager)`), with **no `agency_id` comparison at
+all** -- the same class of gap already tracked for `agency`/`profiles`/`user_roles`/
+`conversation_sessions`/`conversation_answers` under Phase M1 (see the multi-tenant
+plan). Today, with one agency in the system, this is invisible; the moment a second
+real agency exists, any of those three roles in Agency B could read Agency A's
+pending notification queue (recipient names/emails, message bodies) through this
+table's own RLS.
+
+**The Notification Outbox sidebar badge added in this batch does NOT fix this --
+it works around it for the badge specifically.** The badge's count query adds an
+explicit `.eq('agency_id', ...)` filter at the query level (see
+`useMenuBadgeCounts.ts`), so the NUMBER shown is correctly scoped to the current
+user's own agency. But the underlying RLS gap is untouched: **the Notification
+Outbox page itself, and any other future direct query against this table, still has
+no structural barrier against reading another agency's rows.** The badge fix corrects
+what one number displays; it does not close the leak. Fixing the leak itself is
+explicitly Phase M1 scope -- deferred to before any second real agency/non-CareMuch
+agency-admin login is onboarded, and only provable with a real two-tenant isolation
+test, per the multi-tenant plan's own done-definition for M1. Not in scope for this
+badge batch, and deliberately not touched here.

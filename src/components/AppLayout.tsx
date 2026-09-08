@@ -28,6 +28,7 @@ import {
 import { toast } from "sonner";
 import { usePermissions } from "@/hooks/usePermissions";
 import { usePendingApprovals } from "@/hooks/usePendingApprovals";
+import { useMenuBadgeCounts } from "@/hooks/useMenuBadgeCounts";
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -39,6 +40,7 @@ export const AppLayout = ({ children }: AppLayoutProps) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const { permissions, userRole, loading } = usePermissions();
   const { pendingCount } = usePendingApprovals();
+  const menuBadgeCounts = useMenuBadgeCounts();
 
   const isSystemAdmin = userRole === "system_admin";
 
@@ -93,26 +95,74 @@ export const AppLayout = ({ children }: AppLayoutProps) => {
   // so they must not appear as separate sidebar entries.
   const MERGED_INTO_SCHEDULE = ["shifts", "quick_assign", "auto_schedule", "live_operations"];
 
+  // UX polish pass (menu structure/labels only -- see AppLayout.tsx's own comments
+  // for why these live here rather than as a system_modules data change): menu
+  // labels and categories come from the system_modules table, which has no
+  // sort_order column at all, and no label-override mechanism existed before this.
+  // These two maps are a presentation-only layer -- they change what's RENDERED,
+  // never what's stored. system_modules itself, role_permissions, and every route/
+  // table/component are untouched.
+  //
+  // "orders"/"settings" module_codes keep their existing DB module_name
+  // ("Order Management"/"Settings") -- only the on-screen label changes here.
+  const LABEL_OVERRIDES: Record<string, string> = {
+    orders: "Care Plan",
+    settings: "Agency Settings",
+  };
+
+  // "virtual_offices" is category "configuration" in system_modules today --
+  // rendered under Administration here per the requested move, without changing
+  // the stored category value.
+  const CATEGORY_OVERRIDES: Record<string, string> = {
+    virtual_offices: "administration",
+  };
+
+  // Explicit within-category display order. Anything in a listed category but NOT
+  // named here keeps its natural (DB-return) order, appended after the named items
+  // -- this list only needs to cover items whose position was actually requested.
+  const CATEGORY_ITEM_ORDER: Record<string, string[]> = {
+    operations: [
+      "dashboard", "client_inquiries", "clients", "caregiver_approvals", "caregivers",
+      "orders", "schedule", "time_off", "shift_trades", "notifications_outbox",
+    ],
+    administration: ["virtual_offices", "settings"],
+  };
+
   const readable = permissions
     .filter(p => p.route && p.can_read)
     .filter(p => (isSystemAdmin ? p.category === "platform" : p.category !== "platform"));
 
   const hasSchedule = readable.some(p => p.module_code === "schedule");
 
+  // Action-queue "needs attention" badges, extending the exact mechanism the
+  // caregiver_approvals badge already used (a lightweight head-count per menu,
+  // fired once on mount -- see usePendingApprovals.ts / useMenuBadgeCounts.ts).
+  // Deliberately NOT added to browse screens (clients, caregivers, schedule) --
+  // a badge there would be clutter, not signal, per the approved batch scope.
+  const BADGE_COUNTS: Record<string, number> = {
+    caregiver_approvals: pendingCount,
+    client_inquiries: menuBadgeCounts.clientInquiries,
+    orders: menuBadgeCounts.carePlan,
+    time_off: menuBadgeCounts.timeOff,
+    shift_trades: menuBadgeCounts.shiftTrades,
+    notifications_outbox: menuBadgeCounts.notificationOutbox,
+  };
+
   const dynamicMenuItems = readable
     .filter(p => !(hasSchedule && MERGED_INTO_SCHEDULE.includes(p.module_code)))
     .map(p => ({
-      label: p.module_code === "schedule" ? "Schedule" : p.module_name,
+      label: p.module_code === "schedule" ? "Schedule" : (LABEL_OVERRIDES[p.module_code] ?? p.module_name),
       icon: iconMap[p.module_code] || FileText,
       path: p.route!,
-      category: p.category,
-      badge: p.module_code === "caregiver_approvals" ? pendingCount : 0,
+      category: CATEGORY_OVERRIDES[p.module_code] ?? p.category,
+      badge: BADGE_COUNTS[p.module_code] ?? 0,
+      sortKey: p.module_code,
     }))
     // de-duplicate any remaining entries that resolve to the same destination
     .filter((item, i, arr) => arr.findIndex(o => o.path === item.path) === i);
 
   // Add dashboard as first item based on role
-  const menuItems = userRole === "system_admin" 
+  const menuItems = userRole === "system_admin"
     ? [
         {
           label: "Platform Overview",
@@ -120,6 +170,7 @@ export const AppLayout = ({ children }: AppLayoutProps) => {
           path: "/system-admin",
           category: "platform",
           badge: 0,
+          sortKey: "platform_overview",
         },
         ...dynamicMenuItems,
       ]
@@ -128,12 +179,16 @@ export const AppLayout = ({ children }: AppLayoutProps) => {
     : userRole === "client"
     ? dynamicMenuItems // Clients use their own dashboard from permissions
     : [
+        // Folded into "operations" (was its own "dashboard" category/section) so it
+        // renders as the first item inside Operations, per the requested order --
+        // not as a separate section above it.
         {
           label: "Dashboard",
           icon: LayoutDashboard,
           path: "/dashboard",
-          category: "dashboard",
+          category: "operations",
           badge: 0,
+          sortKey: "dashboard",
         },
         ...dynamicMenuItems,
       ];
@@ -146,6 +201,19 @@ export const AppLayout = ({ children }: AppLayoutProps) => {
     acc[item.category].push(item);
     return acc;
   }, {} as Record<string, typeof menuItems>);
+
+  // Apply the requested within-category order, where one is specified. Items not
+  // named in CATEGORY_ITEM_ORDER for their category keep their existing relative
+  // (DB-return) order and sort after every named item.
+  for (const [category, order] of Object.entries(CATEGORY_ITEM_ORDER)) {
+    const items = grouped[category];
+    if (!items) continue;
+    grouped[category] = [...items].sort((a, b) => {
+      const ai = order.indexOf(a.sortKey);
+      const bi = order.indexOf(b.sortKey);
+      return (ai === -1 ? order.length : ai) - (bi === -1 ? order.length : bi);
+    });
+  }
 
   const categoryOrder = ["platform", "dashboard", "core", "operations", "caregiver", "configuration", "administration", "analytics"];
   const groupedItems = Object.entries(grouped).sort(
