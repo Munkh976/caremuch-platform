@@ -7,10 +7,33 @@ import { Badge } from "@/components/ui/badge";
 import { AppLayout } from "@/components/AppLayout";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { usePendingApprovals } from "@/hooks/usePendingApprovals";
+import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis, ResponsiveContainer, Cell } from "recharts";
 import {
   Clock, AlertTriangle, UserCheck, CalendarDays,
-  Sparkles, ArrowRightLeft, Shield, Plus, ClipboardList, BadgeCheck
+  Sparkles, ArrowRightLeft, Shield, Plus, ClipboardList, BadgeCheck, TrendingUp
 } from "lucide-react";
+
+const SHIFT_STATUS_META: Record<string, { label: string; color: string }> = {
+  open: { label: "Open", color: "hsl(var(--warning))" },
+  unassigned: { label: "Unassigned", color: "hsl(var(--destructive))" },
+  assigned: { label: "Assigned", color: "hsl(var(--primary))" },
+  confirmed: { label: "Confirmed", color: "hsl(199 89% 48%)" },
+  in_progress: { label: "In Progress", color: "hsl(262 60% 55%)" },
+  completed: { label: "Completed", color: "hsl(var(--success))" },
+  cancelled: { label: "Cancelled", color: "hsl(215 15% 60%)" },
+};
+
+const shiftStatusChartConfig: ChartConfig = {
+  count: { label: "Shifts" },
+  ...Object.fromEntries(
+    Object.entries(SHIFT_STATUS_META).map(([key, meta]) => [key, { label: meta.label, color: meta.color }])
+  ),
+};
+
+const utilizationChartConfig: ChartConfig = {
+  count: { label: "Shifts Assigned", color: "hsl(var(--primary))" },
+};
 
 interface Stats {
   activeClients: number;
@@ -43,6 +66,16 @@ interface ActionItem {
   to: string;
 }
 
+interface ShiftStatusDatum {
+  status: string;
+  count: number;
+}
+
+interface CaregiverUtilizationDatum {
+  name: string;
+  count: number;
+}
+
 const iso = (d: Date) => d.toISOString().split("T")[0];
 
 const Dashboard = () => {
@@ -66,6 +99,8 @@ const Dashboard = () => {
   });
   const [urgentRequests, setUrgentRequests] = useState<UrgentRequest[]>([]);
   const [actionItems, setActionItems] = useState<ActionItem[]>([]);
+  const [shiftStatusData, setShiftStatusData] = useState<ShiftStatusDatum[]>([]);
+  const [caregiverUtilizationData, setCaregiverUtilizationData] = useState<CaregiverUtilizationDatum[]>([]);
 
   useEffect(() => {
     checkAuth();
@@ -122,11 +157,11 @@ const Dashboard = () => {
     const in30 = new Date();
     in30.setDate(in30.getDate() + 30);
 
-    const [clientsRes, caregiversRes, weekShiftsRes, ordersRes, timeOffRes, tradesRes, certsRes] =
+    const [clientsRes, caregiversRes, weekShiftsRes, ordersRes, timeOffRes, tradesRes, certsRes, allShiftsRes, assignmentsRes] =
       await Promise.all([
         supabase.from("clients").select("id", { count: "exact", head: true })
           .eq("agency_id", agencyId).eq("is_active", true),
-        supabase.from("caregivers").select("id, is_active").eq("agency_id", agencyId),
+        supabase.from("caregivers").select("id, first_name, last_name, is_active").eq("agency_id", agencyId),
         supabase.from("shifts").select("id, shift_date, status, shift_assignments ( id, status, caregiver_id )")
           .eq("agency_id", agencyId).gte("shift_date", today).lte("shift_date", iso(weekEnd)),
 
@@ -138,6 +173,11 @@ const Dashboard = () => {
           .eq("status", "pending"),
         supabase.from("caregiver_certifications").select("id", { count: "exact", head: true })
           .lte("expiry_date", iso(in30)).gte("expiry_date", today),
+        // All shifts (no date window) for the status-breakdown snapshot chart.
+        supabase.from("shifts").select("id, status").eq("agency_id", agencyId),
+        // All non-cancelled assignments for the caregiver-utilization chart.
+        supabase.from("shift_assignments").select("caregiver_id, status, shifts!inner ( agency_id )")
+          .eq("shifts.agency_id", agencyId).neq("status", "cancelled"),
       ]);
 
     const caregivers = caregiversRes.data || [];
@@ -147,6 +187,33 @@ const Dashboard = () => {
     const todays = weekShifts.filter((s: any) => s.shift_date === today);
     const todayUnassigned = todays.filter((s: any) => !isAssigned(s)).length;
     const weekUnassigned = weekShifts.filter((s: any) => !isAssigned(s)).length;
+
+    // Shift status breakdown — a full-history snapshot, not a windowed count, so
+    // completed/historical shifts show up alongside today's open/assigned ones.
+    const statusCounts = new Map<string, number>();
+    for (const shift of allShiftsRes.data || []) {
+      const status = (shift as any).status || "unknown";
+      statusCounts.set(status, (statusCounts.get(status) || 0) + 1);
+    }
+    setShiftStatusData(
+      Array.from(statusCounts.entries()).map(([status, count]) => ({ status, count }))
+    );
+
+    // Caregiver utilization — every caregiver in the agency, including 0-assignment
+    // ones, so an underutilized caregiver is visible rather than just omitted.
+    const assignmentCounts = new Map<string, number>();
+    for (const assignment of assignmentsRes.data || []) {
+      const caregiverId = (assignment as any).caregiver_id;
+      assignmentCounts.set(caregiverId, (assignmentCounts.get(caregiverId) || 0) + 1);
+    }
+    setCaregiverUtilizationData(
+      caregivers
+        .map((c: any) => ({
+          name: `${c.first_name} ${c.last_name}`.trim(),
+          count: assignmentCounts.get(c.id) || 0,
+        }))
+        .sort((a, b) => b.count - a.count)
+    );
 
 
     setStats({
@@ -295,9 +362,20 @@ const Dashboard = () => {
             <StatCard
               title="Unassigned (7 days)"
               value={stats.weekUnassigned}
-              description={`${stats.coverageRate}% coverage this week`}
+              description="Shifts needing a caregiver"
               icon={AlertTriangle}
               iconColor="text-destructive"
+            />
+          </button>
+          <button type="button" onClick={() => navigate("/schedule?tab=unassigned")} className="text-left">
+            <StatCard
+              title="Coverage This Week"
+              value={`${stats.coverageRate}%`}
+              description="Shifts with a caregiver assigned"
+              icon={TrendingUp}
+              iconColor={
+                stats.coverageRate >= 90 ? "text-success" : stats.coverageRate >= 70 ? "text-warning" : "text-destructive"
+              }
             />
           </button>
           <button type="button" onClick={() => navigate("/order-management")} className="text-left">
@@ -318,6 +396,67 @@ const Dashboard = () => {
               iconColor="text-success"
             />
           </button>
+        </div>
+
+        {/* Charts */}
+        <div className="grid lg:grid-cols-2 gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Shift Status Breakdown</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {shiftStatusData.length === 0 ? (
+                <div className="h-[260px] flex items-center justify-center text-sm text-muted-foreground">
+                  No shifts on record yet
+                </div>
+              ) : (
+                <ChartContainer config={shiftStatusChartConfig} className="h-[260px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={shiftStatusData}>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" vertical={false} />
+                      <XAxis
+                        dataKey="status"
+                        tickFormatter={(value) => SHIFT_STATUS_META[value]?.label || value}
+                        className="text-xs"
+                      />
+                      <YAxis allowDecimals={false} className="text-xs" />
+                      <ChartTooltip content={<ChartTooltipContent nameKey="status" />} />
+                      <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                        {shiftStatusData.map((entry) => (
+                          <Cell key={entry.status} fill={SHIFT_STATUS_META[entry.status]?.color || "hsl(var(--muted-foreground))"} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </ChartContainer>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Caregiver Utilization</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {caregiverUtilizationData.length === 0 ? (
+                <div className="h-[260px] flex items-center justify-center text-sm text-muted-foreground">
+                  No caregivers on record yet
+                </div>
+              ) : (
+                <ChartContainer config={utilizationChartConfig} className="h-[260px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={caregiverUtilizationData} layout="vertical" margin={{ left: 12 }}>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" horizontal={false} />
+                      <XAxis type="number" allowDecimals={false} className="text-xs" />
+                      <YAxis dataKey="name" type="category" width={110} className="text-xs" />
+                      <ChartTooltip content={<ChartTooltipContent />} />
+                      <Bar dataKey="count" fill="var(--color-count)" radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </ChartContainer>
+              )}
+            </CardContent>
+          </Card>
         </div>
 
         {/* Quick Actions */}
