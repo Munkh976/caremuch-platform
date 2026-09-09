@@ -37,9 +37,14 @@ const Clients = () => {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchPhone, setSearchPhone] = useState("");
-  const [searchAge, setSearchAge] = useState("");
-  const [filterLocation, setFilterLocation] = useState<string>("all");
+  const [searchDob, setSearchDob] = useState("");
+  // Mirrors Caregiver Applications' combined "City, state or ZIP" text filter
+  // (CaregiverApprovals.tsx's locationFilter) rather than the dropdown-of-known-
+  // cities this used to be -- covers City, State, and Zip Code in one field, the
+  // same way that page does it.
+  const [filterLocation, setFilterLocation] = useState<string>("");
   const [filterStatus, setFilterStatus] = useState<string>("active");
+  const [filterService, setFilterService] = useState<string>("all");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [deleteClient, setDeleteClient] = useState<any>(null);
   const [editClient, setEditClient] = useState<any>(null);
@@ -540,19 +545,29 @@ const Clients = () => {
         cn.care_types?.name.toLowerCase().includes(searchQuery.toLowerCase())
       );
 
-    const matchesPhone = searchPhone === "" || 
+    const matchesPhone = searchPhone === "" ||
       client.phone?.includes(searchPhone);
 
-    const clientAge = calculateAge(client.date_of_birth);
-    const matchesAge = searchAge === "" || 
-      (clientAge !== null && clientAge.toString() === searchAge);
+    const matchesDob = searchDob === "" || client.date_of_birth === searchDob;
 
-    const matchesLocation = filterLocation === "all" || client.city === filterLocation;
-    const matchesStatus = filterStatus === "all" || 
+    // Mirrors CaregiverApprovals.tsx's locationFilter -- one combined field checked
+    // against city, state, and zip together, not three separate filters.
+    const place = filterLocation.trim().toLowerCase();
+    const matchesLocation =
+      place === "" ||
+      [client.city, client.state, client.zip_code]
+        .filter(Boolean)
+        .some((v: string) => v.toLowerCase().includes(place));
+
+    const matchesService =
+      filterService === "all" ||
+      (client.client_care_needs ?? []).some((cn: any) => cn.care_type_code === filterService);
+
+    const matchesStatus = filterStatus === "all" ||
       (filterStatus === "active" && client.is_active) ||
       (filterStatus === "inactive" && !client.is_active);
 
-    return matchesSearch && matchesPhone && matchesAge && matchesLocation && matchesStatus;
+    return matchesSearch && matchesPhone && matchesDob && matchesLocation && matchesService && matchesStatus;
   });
 
   // Get unique locations
@@ -615,29 +630,38 @@ const Clients = () => {
             />
           </div>
 
-          <div className="relative w-full sm:w-[120px]">
+          <div className="relative w-full sm:w-[160px]">
             <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Age..."
-              type="number"
-              value={searchAge}
-              onChange={(e) => setSearchAge(e.target.value)}
+              placeholder="Date of birth..."
+              type="date"
+              value={searchDob}
+              onChange={(e) => setSearchDob(e.target.value)}
               className="pl-10"
             />
           </div>
 
-          <Select value={filterLocation} onValueChange={setFilterLocation}>
-            <SelectTrigger className="w-full sm:w-[180px]">
-              <MapPin className="h-4 w-4 mr-2" />
-              <SelectValue placeholder="Location" />
+          <div className="relative w-full sm:w-[200px]">
+            <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="City, state or ZIP..."
+              value={filterLocation}
+              onChange={(e) => setFilterLocation(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+
+          <Select value={filterService} onValueChange={setFilterService}>
+            <SelectTrigger className="w-full sm:w-[200px]">
+              <SelectValue placeholder="All Care Services" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Locations</SelectItem>
-              {uniqueLocations.map((location) => (
-                <SelectItem key={location} value={location}>
-                  {location}
-                </SelectItem>
-              ))}
+              <SelectItem value="all">All Care Services</SelectItem>
+              {groupedOptions.flatMap((group) =>
+                group.options.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                ))
+              )}
             </SelectContent>
           </Select>
 
