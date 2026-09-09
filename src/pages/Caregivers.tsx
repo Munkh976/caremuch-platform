@@ -4,12 +4,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Mail, Phone, MapPin, Award, Activity, Search, Upload, Eye, Trash2, Edit, Clock, Lock } from "lucide-react";
+import { Plus, Mail, Phone, MapPin, Award, Activity, Search, Upload, Eye, Trash2, Edit, Clock, Lock, UserPlus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
@@ -28,6 +28,7 @@ const Caregivers = () => {
   const { pendingCount } = usePendingApprovals();
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
   const [caregivers, setCaregivers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -57,6 +58,10 @@ const Caregivers = () => {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [resetPasswordCaregiver, setResetPasswordCaregiver] = useState<any>(null);
+  const [enablingLoginId, setEnablingLoginId] = useState<string | null>(null);
+  const [newCredentials, setNewCredentials] = useState<{ email: string; password: string | null } | null>(null);
+
+  const canManageCaregivers = userRole === 'system_admin' || userRole === 'agency_admin' || userRole === 'manager';
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -74,6 +79,11 @@ const Caregivers = () => {
         .select("*")
         .eq("id", session.user.id)
         .maybeSingle();
+
+      const { data: roleData } = await supabase.rpc('get_user_role', {
+        _user_id: session.user.id
+      });
+      setUserRole(roleData);
 
       if (profileData) {
         setProfile(profileData);
@@ -349,6 +359,28 @@ const Caregivers = () => {
       setResetPasswordCaregiver(null);
     } catch (error: any) {
       toast.error(error.message || "Failed to reset password");
+    }
+  };
+
+  const handleEnableLogin = async (caregiver: any) => {
+    setEnablingLoginId(caregiver.id);
+    try {
+      const { data, error } = await supabase.functions.invoke("enable-caregiver-login", {
+        body: { caregiverId: caregiver.id },
+      });
+      if (error) throw new Error((await (error as any)?.context?.text?.()) || error.message);
+      if ((data as any)?.error) throw new Error((data as any).error);
+
+      setNewCredentials({
+        email: (data as any)?.email ?? caregiver.email,
+        password: (data as any)?.tempPassword ?? null,
+      });
+      toast.success("Login enabled for this caregiver");
+      if (user) fetchCaregivers(user.id);
+    } catch (error: any) {
+      toast.error(error.message || "Failed to enable login");
+    } finally {
+      setEnablingLoginId(null);
     }
   };
 
@@ -893,6 +925,21 @@ const Caregivers = () => {
                             </TooltipTrigger>
                             <TooltipContent>Edit</TooltipContent>
                           </Tooltip>
+                          {!caregiver.user_id && canManageCaregivers && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  disabled={enablingLoginId === caregiver.id}
+                                  onClick={() => handleEnableLogin(caregiver)}
+                                >
+                                  <UserPlus className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Enable login</TooltipContent>
+                            </Tooltip>
+                          )}
                           {caregiver.user_id && (
                             <Tooltip>
                               <TooltipTrigger asChild>
@@ -1071,6 +1118,41 @@ const Caregivers = () => {
             <Button onClick={handleResetPassword}>
               Reset Password
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!newCredentials} onOpenChange={(open) => !open && setNewCredentials(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Caregiver login created</DialogTitle>
+            <DialogDescription>
+              No email is sent yet — this notice is stored in the notification outbox. Share these
+              details with the caregiver directly.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 text-sm">
+            <div>
+              <span className="font-medium">Email: </span>
+              <span className="text-muted-foreground">{newCredentials?.email}</span>
+            </div>
+            <div>
+              <span className="font-medium">Temporary password: </span>
+              <span className="text-muted-foreground">
+                {newCredentials?.password ?? "existing account — password unchanged"}
+              </span>
+            </div>
+          </div>
+          <DialogFooter>
+            {newCredentials?.password && (
+              <Button
+                variant="outline"
+                onClick={() => navigator.clipboard.writeText(newCredentials.password!)}
+              >
+                Copy password
+              </Button>
+            )}
+            <Button onClick={() => setNewCredentials(null)}>Done</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
