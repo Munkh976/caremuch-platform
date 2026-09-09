@@ -528,3 +528,50 @@ explicitly Phase M1 scope -- deferred to before any second real agency/non-CareM
 agency-admin login is onboarded, and only provable with a real two-tenant isolation
 test, per the multi-tenant plan's own done-definition for M1. Not in scope for this
 badge batch, and deliberately not touched here.
+
+## `/assistant` is a generic, office-less surface — inconsistent office attribution on submission
+
+**Status:** Found while investigating 6 unattributed caregiver-application/inquiry
+rows, 2026-09-09. Data fixed (all 6 now correctly attributed to Ripple Effects); the
+structural gap itself is not fixed. Directly relevant to the planned multi-office
+SaaS control-plane work (`docs/multitenant-saas-architecture-plan.md`).
+
+**Root cause:** `ConversationSurface`/`FamilyIntakeSurface` both accept optional
+`agencyId`/`virtualOfficeId` props that default to `null`. The office-scoped public
+page (`PublicOffice.tsx`, `/a/:slug`) correctly passes both through from the visited
+office's own record — confirmed live: a real test submission through
+`/a/ripple-effects` arrived with `agency_id`/`virtual_office_id` already set to
+Ripple Effects, no fix needed. But the older, generic `/assistant` route
+(`src/pages/Assistant.tsx`) renders both surfaces with **no office props at all** —
+it hardcodes `agencyName="Kind Care Services"` as display text only, never an
+`agencyId`. This is a legacy, pre-multi-office surface that was never updated when
+`virtual_office` was introduced.
+
+**The two submission paths handle the resulting `null` differently, and neither
+fully closes the gap:**
+- `caregiver_registrations` (`ResultRegistration.tsx`): inserts `agency_id`/
+  `virtual_office_id` directly from props, no server-side fallback of any kind. A
+  caregiver screened via `/assistant` gets **both fields NULL** — unattributable to
+  any agency or office. (Found 2 such rows, both dated 2026-09-03, predating this
+  session's Ripple Effects work — not from recent testing.)
+- `care_requests` (`flow_session_submit_intake` RPC): has a **partial** fallback —
+  `-- Fall back to the only real agency when the flow is unscoped (legacy /assistant
+  path)` picks the one active real agency when `p_agency_id` is null, so `agency_id`
+  is never actually NULL in practice today. But there is no equivalent fallback for
+  `p_virtual_office_id`, which stays NULL whenever `/assistant` is the entry point.
+  The RPC also sets `source = 'assistant_intake'` in this case (vs. `'public_site'`
+  for the office-scoped path) — this is exactly the `ClientInquiries.tsx` "Assistant"
+  vs. "Public office page" label the source of a report request was asking about.
+
+**Why the agency-level fallback doesn't fully save `care_requests` either:** it
+silently picks "the one active real agency" via `LIMIT 1` with no office. That is
+correct by accident today (only one real agency exists) and will misattribute the
+moment a second real agency's staff use `/assistant` — the SaaS control-plane's
+multi-tenant work should either retire `/assistant` in favor of always requiring an
+office context, or give it its own real (non-guessed) tenant resolution.
+
+**Not fixed here** — this is a code/architecture gap, not a data problem, and touching
+`/assistant`'s routing or the RPC's fallback logic was out of scope for what was asked
+(fix 6 specific rows + report the cause). Revisit alongside the SaaS control-plane
+work, where every submission surface should be required to carry real, non-guessed
+tenant/office context — no silent single-tenant fallback.
