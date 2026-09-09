@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { FLEXIBILITY_OPTIONS } from "@/lib/flexibility";
 import { Clock, Plus, Trash2 } from "lucide-react";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 
 
 interface AvailabilityDialogProps {
@@ -484,15 +485,20 @@ export const AvailabilityDialog = ({ caregiver, isOpen, onClose }: AvailabilityD
                     </>
                   )}
 
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="ml-auto text-destructive"
-                    onClick={() => removeException(index)}
-                    aria-label="Remove exception"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="ml-auto text-destructive"
+                        onClick={() => removeException(index)}
+                        aria-label="Remove exception"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Remove exception</TooltipContent>
+                  </Tooltip>
                 </div>
 
                 <Input

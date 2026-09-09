@@ -27,6 +27,7 @@ import {
   validateFlow,
 } from "@/lib/flowEngine";
 import { AlertTriangle, ExternalLink, Loader2, Plus, Trash2 } from "lucide-react";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { DynamicNodeEditor } from "@/components/flow-builder/DynamicNodeEditor";
 import { isDynamicSource } from "@/lib/dynamicCatalog";
 
@@ -654,14 +655,19 @@ export default function FlowBuilder() {
                                 readOnly={readOnly}
                                 onChange={(e) => patchOption({ label: e.target.value })}
                               />
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                disabled={readOnly}
-                                onClick={() => removeOption(option.id)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    disabled={readOnly}
+                                    onClick={() => removeOption(option.id)}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Remove option</TooltipContent>
+                              </Tooltip>
                             </div>
 
                             <div className="grid gap-2 sm:grid-cols-5">

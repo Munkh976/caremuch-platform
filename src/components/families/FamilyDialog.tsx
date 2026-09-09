@@ -15,6 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Trash2, Plus, Users } from "lucide-react";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { FlexibilityBadge } from "@/components/common/FlexibilityBadge";
 
 interface Contact {
@@ -191,9 +192,14 @@ export const FamilyDialog = ({ familyId, open, onOpenChange, onChanged }: Props)
                         {[c.phone, c.email].filter(Boolean).join(" · ") || "No contact details"}
                       </p>
                     </div>
-                    <Button variant="ghost" size="sm" onClick={() => removeContact(c.id)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="ghost" size="sm" onClick={() => removeContact(c.id)}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Remove contact</TooltipContent>
+                    </Tooltip>
                   </div>
                   <div className="mt-2 flex gap-4">
                     <label className="flex items-center gap-2 text-xs">

@@ -12,6 +12,7 @@ import {
   Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { AlertTriangle, CalendarDays, Loader2, Plus, Trash2 } from "lucide-react";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { format } from "date-fns";
 import { useCareServices } from "@/hooks/useCareServices";
 import {
@@ -299,13 +300,18 @@ export function OrderWizardDialog({ open, onOpenChange, agencyId, clients, order
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium">Service line {i + 1}</span>
                       {lines.length > 1 && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setLines((prev) => prev.filter((_, idx) => idx !== i))}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setLines((prev) => prev.filter((_, idx) => idx !== i))}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Remove line item</TooltipContent>
+                        </Tooltip>
                       )}
                     </div>
 

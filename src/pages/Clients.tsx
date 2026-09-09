@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import ReactSelect from "react-select";
 import { Textarea } from "@/components/ui/textarea";
 import { format } from "date-fns";
@@ -797,61 +798,90 @@ const Clients = () => {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setViewClient(client)}
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setViewClient(client)}
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>View</TooltipContent>
+                          </Tooltip>
                           {canManageClients && (
                             <>
                               {!client.user_id && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  disabled={enablingLoginId === client.id}
-                                  title="Enable login for this client"
-                                  onClick={() => handleEnableLogin(client)}
-                                >
-                                  <UserPlus className="h-4 w-4" />
-                                </Button>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      disabled={enablingLoginId === client.id}
+                                      onClick={() => handleEnableLogin(client)}
+                                    >
+                                      <UserPlus className="h-4 w-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Enable login</TooltipContent>
+                                </Tooltip>
                               )}
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                title="Scheduling preferences & flexibility"
-                                onClick={() => setSchedulingClient(client)}
-                              >
-                                <CalendarClock className="h-4 w-4" />
-                              </Button>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setSchedulingClient(client)}
+                                  >
+                                    <CalendarClock className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Scheduling preferences &amp; flexibility</TooltipContent>
+                              </Tooltip>
 
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleOpenEditDialog(client)}
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  setSelectedClient(client);
-                                  setResetPasswordDialogOpen(true);
-                                }}
-                                disabled={!client.user_id}
-                                title={!client.user_id ? "Client doesn't have a user account" : "Reset password"}
-                              >
-                                <Key className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setDeleteClient(client)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleOpenEditDialog(client)}
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Edit</TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                      setSelectedClient(client);
+                                      setResetPasswordDialogOpen(true);
+                                    }}
+                                    disabled={!client.user_id}
+                                  >
+                                    <Key className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  {!client.user_id ? "Client doesn't have a user account" : "Reset password"}
+                                </TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setDeleteClient(client)}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Delete</TooltipContent>
+                              </Tooltip>
                             </>
                           )}
                         </div>

@@ -18,6 +18,7 @@ import {
 } from "date-fns";
 import { AppLayout } from "@/components/AppLayout";
 import { OrderWizardDialog } from "@/components/orders/OrderWizardDialog";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { useCareServices } from "@/hooks/useCareServices";
 import { DAY_NAMES } from "@/lib/orderScheduling";
 
@@ -347,9 +348,14 @@ const OrderManagement = () => {
                     <>
                       <TableRow key={order.id} className="hover:bg-muted/50">
                         <TableCell>
-                          <Button variant="ghost" size="sm" onClick={() => toggleOrderExpand(order.id)}>
-                            {expandedOrders.has(order.id) ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                          </Button>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button variant="ghost" size="sm" onClick={() => toggleOrderExpand(order.id)}>
+                                {expandedOrders.has(order.id) ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>{expandedOrders.has(order.id) ? "Collapse details" : "Expand details"}</TooltipContent>
+                          </Tooltip>
                         </TableCell>
                         <TableCell className="font-medium">{order.order_number}</TableCell>
                         <TableCell>
@@ -392,27 +398,40 @@ const OrderManagement = () => {
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
-                            <Button variant="ghost" size="sm" onClick={() => toggleOrderExpand(order.id)}>
-                              <Eye className="h-4 w-4" />
-                            </Button>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button variant="ghost" size="sm" onClick={() => toggleOrderExpand(order.id)}>
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>{expandedOrders.has(order.id) ? "Collapse details" : "Expand details"}</TooltipContent>
+                            </Tooltip>
                             {!order.archived_at && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                title="Edit care plan"
-                                onClick={() => { setEditingOrder(order); setWizardOpen(true); }}
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => { setEditingOrder(order); setWizardOpen(true); }}
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Edit care plan</TooltipContent>
+                              </Tooltip>
                             )}
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleArchiveOrder(order)}
-                              title={order.archived_at ? "Restore care plan" : "Archive care plan"}
-                            >
-                              {order.archived_at ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
-                            </Button>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleArchiveOrder(order)}
+                                >
+                                  {order.archived_at ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>{order.archived_at ? "Restore care plan" : "Archive care plan"}</TooltipContent>
+                            </Tooltip>
                           </div>
                         </TableCell>
                       </TableRow>
