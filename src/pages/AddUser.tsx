@@ -20,7 +20,8 @@ import { toast } from "sonner";
 const AddUser = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  const [fullName, setFullName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<string>("scheduler");
@@ -48,8 +49,8 @@ const AddUser = () => {
     e.preventDefault();
 
     // Validation
-    if (!fullName.trim()) {
-      toast.error("Full name is required");
+    if (!firstName.trim() || !lastName.trim()) {
+      toast.error("First and last name are required");
       return;
     }
     if (!email.trim() || !email.includes("@")) {
@@ -63,28 +64,25 @@ const AddUser = () => {
 
     setLoading(true);
     try {
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            full_name: fullName,
-          },
-          emailRedirectTo: `${window.location.origin}/`,
+      // Admin-API pre-confirmed path -- same mechanism as create-user's
+      // client/caregiver paths and enable-client-login/enable-caregiver-login.
+      // Resolves agency_id server-side from the caller's own profile (never
+      // NULL, never client-supplied) and sets email_confirm: true, so the new
+      // user can log in immediately instead of waiting on a confirmation
+      // email that was never guaranteed to be enabled.
+      const { data, error } = await supabase.functions.invoke('create-user', {
+        body: {
+          email,
+          password,
+          firstName,
+          lastName,
+          userType: 'staff',
+          userData: { staffRole: role },
         },
       });
 
-      if (authError) throw authError;
-      if (!authData.user) throw new Error("Failed to create user");
-
-      const { error: roleError } = await supabase
-        .from("user_roles")
-        .insert([{
-          user_id: authData.user.id,
-          role: role as any,
-        }]);
-
-      if (roleError) throw roleError;
+      if (error) throw new Error((await (error as any)?.context?.text?.()) || error.message);
+      if (!data?.success) throw new Error(data?.error || "Failed to create user");
 
       toast.success("User created successfully!");
       navigate("/users");
@@ -122,16 +120,29 @@ const AddUser = () => {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="fullName">Full Name</Label>
-                <Input
-                  id="fullName"
-                  type="text"
-                  placeholder="John Doe"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  required
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="firstName">First Name</Label>
+                  <Input
+                    id="firstName"
+                    type="text"
+                    placeholder="John"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="lastName">Last Name</Label>
+                  <Input
+                    id="lastName"
+                    type="text"
+                    placeholder="Doe"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    required
+                  />
+                </div>
               </div>
 
               <div className="space-y-2">

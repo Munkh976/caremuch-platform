@@ -226,9 +226,7 @@ const Users = () => {
       user.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       "";
     const matchesRole = roleFilter === "all" || user.role === roleFilter;
-    // Exclude caregivers and clients - they're managed in their respective pages
-    const isStaffUser = user.role !== 'caregiver' && user.role !== 'client';
-    return matchesSearch && matchesRole && isStaffUser;
+    return matchesSearch && matchesRole;
   });
 
   if (loading) {
@@ -276,6 +274,8 @@ const Users = () => {
               <SelectItem value="manager">Manager</SelectItem>
               <SelectItem value="scheduler">Scheduler</SelectItem>
               <SelectItem value="hr_staff">HR Staff</SelectItem>
+              <SelectItem value="caregiver">Caregiver</SelectItem>
+              <SelectItem value="client">Client</SelectItem>
             </SelectContent>
           </Select>
         </div>

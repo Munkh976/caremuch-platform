@@ -132,29 +132,51 @@ has, or restrict it to a local/dev-only deployment path.
 **Deliberately out of scope for now** — tracked here as its own security-review task,
 separate from the isolation-invariant fixes (`3468eb1`, `8ce68bd`) that surfaced it.
 
-## AddUser.tsx leaves new staff with profiles.agency_id = NULL
+## RESOLVED: AddUser.tsx leaves new staff with profiles.agency_id = NULL
 
-**Status:** Found in the same audit (2026-09-02). Lower priority, orthogonal to the
-knowledge-base isolation work.
+**Status:** Found 2026-09-02. **Resolved 2026-09-09**, alongside investigating a live bug
+report (a new system user, `will.fitzgerald@gmail.com`, appeared in the list but couldn't
+log in — "waiting for confirmation" — then a retry threw `insert or update on user_roles
+violates FK user_roles_user_id_fkey`).
 
-**Symptom:** `src/pages/AddUser.tsx` creates staff accounts (system_admin, agency_admin,
-manager, scheduler, hr_staff) via a direct client-side `supabase.auth.signUp()` call
-(line 66), passing only `full_name` in the signup metadata — never `agency_id`. The
-`user_roles` insert that follows (line 82-85) also omits `agency_id`. Since
-`handle_new_user()` only sets `profiles.agency_id` from
+**Original symptom:** `src/pages/AddUser.tsx` created staff accounts via a direct
+client-side `supabase.auth.signUp()` call, passing only `full_name` in the signup
+metadata — never `agency_id`. The `user_roles` insert that followed also omitted
+`agency_id`. Since `handle_new_user()` only sets `profiles.agency_id` from
 `raw_user_meta_data->>'agency_id'` (defaulting to `NULL` when absent), any staff member
-created through this page ends up with `profiles.agency_id = NULL` and a `user_roles`
-row with no `agency_id` — breaking `current_agency_id()` (and therefore `my_agency_id()`)
-for that account, and likely most agency-scoped RLS policies.
+created through this page ended up with `profiles.agency_id = NULL`, breaking
+`current_agency_id()` (and therefore `my_agency_id()`) for that account.
 
-**Not the same bug class as the caregiver/client provisioning gaps** fixed in `3468eb1`
-and `8ce68bd` — those were cross-agency *reassignment* risks; this is a plain missing
-value with no caregiver/client row to disagree with. `supabase/functions/create-user`
-already does this correctly (sets `agency_id` on both `profiles` and `user_roles` from
-the caller's own agency) — `AddUser.tsx` looks like an older, uncoordinated path that
-predates it.
+**Root cause turned out to be one thing, not two:** `AddUser.tsx`'s `signUp()` is a
+fundamentally different account-creation mechanism than every other one in the app
+(`create-user`, `enable-client-login`, `enable-caregiver-login`,
+`approve-caregiver-registration`), all of which use the Admin API
+(`auth.admin.createUser({..., email_confirm: true})`). The client-side `signUp()` path:
+(a) respects the project's `mailer_autoconfirm: false` setting, requiring email
+confirmation before login — the literal cause of "waiting for confirmation" — and (b) had
+no reason to ever resolve `agency_id`, since it's a generic auth call with no
+agency-aware wrapper. The FK error on retry was Supabase Auth's documented
+anti-enumeration behavior: calling `signUp()` again against an email with an existing
+*unconfirmed* `auth.users` row can return a response object that doesn't correspond to a
+real, committed row, so the subsequent `user_roles` insert failed against a `user_id`
+that was never actually there. (Confirmed empirically during the investigation: both
+`profiles.id` and `user_roles.user_id` carry `ON DELETE CASCADE` to `auth.users`, and a
+live orphan check found zero orphaned rows anywhere — ruling out a stale leftover row
+from an earlier delete as the cause.)
 
-**Deliberately out of scope for now** — tracked here as a scoped follow-up.
+**Fix:** `AddUser.tsx` now calls `create-user` (`userType: 'staff'`, same Edge Function
+`Clients.tsx`/`Caregivers.tsx` already used) instead of `supabase.auth.signUp()`. This
+closes all three symptoms in one change: pre-confirmed via the Admin API (no more
+confirmation wait), a real committed user before `user_roles` is touched (no more FK
+error), and `agency_id` resolved server-side from the caller's own profile (never NULL,
+never client-supplied) via the same path already proven correct for client/caregiver
+accounts. Also split the single "Full Name" field into separate First/Last Name inputs
+while rebuilding this form, to avoid reintroducing the same single-full-name-field bug
+class already fixed once for family intake (see the `FamilyIntakeSurface.tsx` entry
+above).
+
+**Every account-creation path in the app now uses the same Admin-API pattern** — no
+remaining `supabase.auth.signUp()` call anywhere in staff/caregiver/client provisioning.
 
 ## AUDIT NEEDED: other Lovable-dashboard-authored config may be missing (fourth instance found)
 

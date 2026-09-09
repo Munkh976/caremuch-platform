@@ -344,43 +344,36 @@ const Clients = () => {
       setIsAddDialogOpen(false);
       if (profile) fetchClients(profile.agency_id);
     } else {
-      // Check if email already exists
-      const { data: existingUser } = await supabase
-        .from('profiles')
-        .select('email')
-        .eq('email', formData.email)
-        .maybeSingle();
-
-      if (existingUser) {
-        toast.error("A user with this email already exists");
+      if (!profile) {
+        toast.error("Profile not found");
         return;
       }
 
-      // Create user via edge function
-      const tempPassword = Math.random().toString(36).slice(-12) + "Aa1!";
-      
-      const { data, error } = await supabase.functions.invoke('create-user', {
-        body: {
+      // Creates ONLY the client record -- no login. Login creation happens
+      // exclusively via the deliberate Enable Login action (enable-client-login),
+      // which uses the Admin API's pre-confirmed path. See Bug 3 investigation:
+      // this used to auto-create a login here via create-user with a randomly
+      // generated, never-surfaced password -- a phantom account nobody could
+      // use. One login-creation path, not two.
+      const { data: newClient, error } = await supabase
+        .from("clients")
+        .insert({
+          ...clientData,
           email: formData.email,
-          password: tempPassword,
-          firstName: formData.first_name,
-          lastName: formData.last_name,
-          phone: formData.phone,
-          userType: 'client',
-          userData: clientData,
-        }
-      });
+          agency_id: profile.agency_id,
+        })
+        .select()
+        .single();
 
-      if (error || !data?.success) {
-        const errorMsg = data?.error || error?.message || "Failed to create client";
-        toast.error(errorMsg);
+      if (error || !newClient) {
+        toast.error(error?.message || "Failed to create client");
         return;
       }
 
       // Add care needs
-      if (formData.care_type_codes.length > 0 && data.recordId) {
+      if (formData.care_type_codes.length > 0) {
         const careNeedsData = formData.care_type_codes.map((code, idx) => ({
-          client_id: data.recordId,
+          client_id: newClient.id,
           care_type_code: code,
           priority: idx + 1,
         }));
@@ -390,6 +383,7 @@ const Clients = () => {
 
       toast.success("Client added successfully");
       setIsAddDialogOpen(false);
+      setSearchQuery("");
       if (profile) fetchClients(profile.agency_id);
     }
   };
@@ -537,6 +531,7 @@ const Clients = () => {
     const fullName = `${client.first_name} ${client.last_name}`.toLowerCase();
     const matchesSearch = searchQuery === "" ||
       fullName.includes(searchQuery.toLowerCase()) ||
+      client.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       client.address?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       client.medical_conditions?.some((condition: string) => 
         condition.toLowerCase().includes(searchQuery.toLowerCase())
@@ -954,9 +949,9 @@ const Clients = () => {
                 disabled={isEditMode}
               />
               <p className="text-xs text-muted-foreground">
-                {isEditMode 
-                  ? "Email cannot be changed after account creation" 
-                  : "Required for creating a login account for the client"}
+                {isEditMode
+                  ? "Email cannot be changed after account creation"
+                  : "Contact info -- used if a manager later clicks Enable Login"}
               </p>
             </div>
             <div className="space-y-2">

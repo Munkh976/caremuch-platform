@@ -274,43 +274,39 @@ const Caregivers = () => {
       setIsAddDialogOpen(false);
       if (user) fetchCaregivers(user.id);
     } else {
-      // Check if email already exists
-      const { data: existingUser } = await supabase
-        .from('profiles')
-        .select('email')
-        .eq('email', formData.email)
-        .maybeSingle();
-
-      if (existingUser) {
-        toast.error("A user with this email already exists");
+      if (!profile) {
+        toast.error("Profile not found");
         return;
       }
 
-      // Create user via edge function
-      const tempPassword = Math.random().toString(36).slice(-12) + "Aa1!";
-      
-      const { data, error } = await supabase.functions.invoke('create-user', {
-        body: {
+      // Creates ONLY the caregiver record -- no login. Login creation happens
+      // exclusively via the deliberate Enable Login action (enable-caregiver-login),
+      // which uses the Admin API's pre-confirmed path. See Bug 3 investigation:
+      // this used to auto-create a login here via create-user with a randomly
+      // generated, never-surfaced password -- a phantom account nobody could
+      // use. One login-creation path, not two.
+      const { data: newCaregiver, error } = await supabase
+        .from("caregivers")
+        .insert({
+          ...caregiverData,
+          first_name: formData.first_name,
+          last_name: formData.last_name,
           email: formData.email,
-          password: tempPassword,
-          firstName: formData.first_name,
-          lastName: formData.last_name,
           phone: formData.phone,
-          userType: 'caregiver',
-          userData: caregiverData,
-        }
-      });
+          agency_id: profile.agency_id,
+        })
+        .select()
+        .single();
 
-      if (error || !data?.success) {
-        const errorMsg = data?.error || error?.message || "Failed to create caregiver";
-        toast.error(errorMsg);
+      if (error || !newCaregiver) {
+        toast.error(error?.message || "Failed to create caregiver");
         return;
       }
 
       // Add caregiver skills
-      if (formData.care_type_codes.length > 0 && data.recordId) {
+      if (formData.care_type_codes.length > 0) {
         const skillsData = formData.care_type_codes.map((code) => ({
-          caregiver_id: data.recordId,
+          caregiver_id: newCaregiver.id,
           care_type_code: code,
         }));
         await supabase.from("caregiver_skills").insert(skillsData);
@@ -318,6 +314,7 @@ const Caregivers = () => {
 
       toast.success("Caregiver added successfully");
       setIsAddDialogOpen(false);
+      setSearchQuery("");
       if (user) fetchCaregivers(user.id);
     }
   };
@@ -548,6 +545,11 @@ const Caregivers = () => {
                       value={formData.email}
                       onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     />
+                    {!isEditMode && (
+                      <p className="text-xs text-muted-foreground">
+                        Contact info -- used if a manager later clicks Enable Login
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="phone">Phone *</Label>
