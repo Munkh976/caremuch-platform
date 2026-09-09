@@ -259,7 +259,7 @@ const Reports = () => {
     },
     hours: {
       label: "Hours",
-      color: "hsl(var(--secondary))",
+      color: "hsl(var(--primary))",
     },
   };
 
