@@ -24,6 +24,7 @@ import {
   Building2,
   Inbox,
   Network,
+  BookOpen,
 } from "lucide-react";
 import { toast } from "sonner";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -72,6 +73,7 @@ export const AppLayout = ({ children }: AppLayoutProps) => {
     agency: Settings,
     agency_settings: Building2,
     virtual_offices: Network,
+    knowledge_base: BookOpen,
     auto_schedule: Calendar,
     available_shifts: ClipboardList,
     caregiver_approvals: UserCheck,
@@ -125,7 +127,7 @@ export const AppLayout = ({ children }: AppLayoutProps) => {
       "dashboard", "client_inquiries", "clients", "caregiver_approvals", "caregivers",
       "orders", "schedule", "time_off", "shift_trades", "notifications_outbox",
     ],
-    administration: ["virtual_offices", "settings"],
+    administration: ["virtual_offices", "settings", "knowledge_base"],
   };
 
   const readable = permissions

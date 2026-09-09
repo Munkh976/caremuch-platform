@@ -82,6 +82,7 @@ export const usePermissions = () => {
         agency: "/agency-settings",
         agency_settings: "/agency-settings",
         virtual_offices: "/virtual-offices",
+        knowledge_base: "/knowledge-base",
         auto_schedule: "/schedule?tab=unassigned",
         available_shifts: "/available-shifts",
         caregiver_approvals: "/caregiver-approvals",

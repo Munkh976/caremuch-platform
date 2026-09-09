@@ -40,6 +40,7 @@ import OAuthConsent from "./pages/OAuthConsent";
 import NotificationsOutbox from "./pages/NotificationsOutbox";
 import ClientInquiries from "./pages/ClientInquiries";
 import PublicOffice from "./pages/PublicOffice";
+import KnowledgeBase from "./pages/KnowledgeBase";
 
 const queryClient = new QueryClient();
 
@@ -88,6 +89,7 @@ const App = () => (
           <Route path="/admin-utilities" element={<AdminUtilities />} />
           <Route path="/agency-settings" element={<AgencySettings />} />
           <Route path="/virtual-offices" element={<VirtualOffices />} />
+          <Route path="/knowledge-base" element={<KnowledgeBase />} />
           <Route path="/virtual-offices/:id" element={<VirtualOfficeConfig />} />
           <Route path="/auto-schedule" element={<Navigate to="/schedule?tab=unassigned" replace />} />
           <Route path="/reports" element={<Reports />} />
