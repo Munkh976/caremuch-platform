@@ -8,6 +8,9 @@ export interface KnowledgeQaSurfaceProps {
    * anonymous public visitors with no auth.uid(), so it can never rely on
    * my_agency_id() to resolve the right agency (see 20260903140000). */
   agencyId: string;
+  /** Scopes retrieval to a specific virtual office (public office pages). NULL/absent
+   * preserves today's agency-wide retrieval exactly -- see M-Office plan §3b. */
+  virtualOfficeId?: string | null;
   embedded?: boolean;
 }
 
@@ -25,7 +28,7 @@ interface Turn {
 const REFUSAL_TEXT = (agencyName: string) =>
   `I don't have information on that in ${agencyName}'s knowledge base — you can ask something else, or contact us.`;
 
-export function KnowledgeQaSurface({ agencyName, agencyId, embedded = false }: KnowledgeQaSurfaceProps) {
+export function KnowledgeQaSurface({ agencyName, agencyId, virtualOfficeId = null, embedded = false }: KnowledgeQaSurfaceProps) {
   const shell = embedded ? "h-full min-h-[540px]" : "min-h-screen";
   const [language, setLanguage] = useState<Language | null>(null);
   const [turns, setTurns] = useState<Turn[]>([]);
@@ -39,7 +42,7 @@ export function KnowledgeQaSurface({ agencyName, agencyId, embedded = false }: K
     setDraft("");
 
     const { data, error } = await supabase.functions.invoke("search-knowledge", {
-      body: { query: question, language, agency_id: agencyId },
+      body: { query: question, language, agency_id: agencyId, virtual_office_id: virtualOfficeId },
     });
 
     setAsking(false);

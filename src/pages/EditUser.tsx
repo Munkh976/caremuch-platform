@@ -25,6 +25,7 @@ const EditUser = () => {
   const [userName, setUserName] = useState("");
   const [selectedRole, setSelectedRole] = useState<string>("");
   const [currentRole, setCurrentRole] = useState<string>("");
+  const [targetAgencyId, setTargetAgencyId] = useState<string | null>(null);
 
   useEffect(() => {
     checkAuthAndLoadUser();
@@ -72,6 +73,7 @@ const EditUser = () => {
 
       setUserEmail(profile.email);
       setUserName(profile.full_name || profile.email);
+      setTargetAgencyId(profile.agency_id);
 
       // Fetch user role
       const { data: roleData } = await supabase.rpc('get_user_role', { _user_id: id });
@@ -95,21 +97,27 @@ const EditUser = () => {
 
     setSaving(true);
     try {
+      // Upsert the new role first (agency-scoped to the target user's own agency,
+      // matching how every other user_roles write in this app scopes it), then
+      // remove any other role rows for this user. Ordering matters: doing the
+      // upsert before the delete means a mid-operation failure never leaves the
+      // user with zero roles.
+      const { error: upsertError } = await supabase
+        .from("user_roles")
+        .upsert(
+          { user_id: id, role: selectedRole as any, agency_id: targetAgencyId },
+          { onConflict: "user_id,role" }
+        );
+
+      if (upsertError) throw upsertError;
+
       const { error: deleteError } = await supabase
         .from("user_roles")
         .delete()
-        .eq("user_id", id);
+        .eq("user_id", id)
+        .neq("role", selectedRole);
 
       if (deleteError) throw deleteError;
-
-      const { error: insertError } = await supabase
-        .from("user_roles")
-        .insert([{
-          user_id: id,
-          role: selectedRole as any,
-        }]);
-
-      if (insertError) throw insertError;
 
       toast.success("User role updated successfully!");
       navigate("/users");

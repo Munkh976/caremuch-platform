@@ -40,7 +40,7 @@ Legend: ✅ enforced correctly · ⚠️ column present, not fully re-verified t
 
 | Table | Scope column(s) | Enforced how | SaaS-correct? | Notes |
 |---|---|---|---|---|
-| `agency` | — (is the tenant) | `has_role(system_admin\|agency_admin)`, **no self-row comparison** | 🔴 | "Admins can manage agencies" lets *any* agency's admin manage *any other* agency's row. Root-table leak. |
+| `agency` | — (is the tenant) | ✅ **Fixed 2026-09-13 (M1).** Split into system_admin-unrestricted + `agency_admin AND id=current_agency_id()`. | ✅ | Was: "Admins can manage agencies" let *any* agency's admin manage *any other* agency's row. See `docs/m1-security-gate-plan.md` §3.3. |
 | `care_request_time_windows` | `agency_id`, `virtual_office_id` | ⚠️ not individually re-checked | ⚠️ | Column present; verify body before trusting. |
 | `care_requests` | `agency_id`, `virtual_office_id` | ⚠️ not individually re-checked | ⚠️ | Same. |
 | `care_service_categories` | none | `USING (true)` for read, admin-managed | 🌐 | Paired reference catalog for `care_types`. Correct global. |
@@ -57,9 +57,9 @@ Legend: ✅ enforced correctly · ⚠️ column present, not fully re-verified t
 | `client_orders` | `agency_id` | ✅ `agency_id IN (SELECT agency_id FROM profiles ...)` | ✅ | Confirmed. |
 | `client_time_windows` | `agency_id` | ⚠️ not re-checked | ⚠️ | |
 | `clients` | `agency_id`, `virtual_office_id`, `family_id` | ✅ agency_id-scoped + role-gated | ✅ | Confirmed. |
-| `conversation_answers` | none (via `session_id`) | 🔴 `has_role(...)` only, **no agency comparison anywhere** | 🔴 | Confirmed: any `system_admin`/`agency_admin`/`manager`/`hr_staff`, of ANY agency, can read every agency's screening/intake answers. |
+| `conversation_answers` | none (via `session_id`) | ✅ **Fixed 2026-09-13 (M1).** `system_admin` OR (`is_agency_staff()` AND `EXISTS` join to `conversation_sessions.agency_id = current_agency_id()`). | ✅ | Was: any qualifying role, any agency, read every agency's answers. See M1 doc §3.5. |
 | `conversation_flows` | `agency_id` (column exists, **unused**) | Global by design: `status <> 'draft'` read policy + a **unique partial index `(audience) WHERE status='published'`** with no agency in it | 🔴 (by design, needs decision) | Confirmed at three independent layers this session: RLS, the unique index, and the client-side query. Not a bug — a deliberate single-tenant-per-audience design that the SaaS vision breaks. |
-| `conversation_sessions` | `agency_id` (column exists, **unused in the read policy**) | 🔴 `has_role(...) OR user_id=auth.uid()`, no agency filter | 🔴 | Same class as `conversation_answers` — confirmed. Contains contact PII (name/email/phone) of screening candidates and family-intake submitters. |
+| `conversation_sessions` | `agency_id` | ✅ **Fixed 2026-09-13 (M1).** Both SELECT and UPDATE now require `system_admin` OR (`is_agency_staff()` AND `agency_id=current_agency_id()`) OR (SELECT only) `user_id=auth.uid()`. | ✅ | Was unscoped on both read *and* write (the write side wasn't caught by the original plan). Contains contact PII. NULL-`agency_id` legacy rows are now system_admin-only. See M1 doc §3.4. |
 | `demo_purge_audit` | — | "Platform admins read purge audit" — not fully inspected | ⚠️ | Presumed system_admin-only by name/purpose; not a tenant-data table (platform operational log), low priority to re-verify. |
 | `earnings_lines` | `agency_id` | ⚠️ not re-checked | ⚠️ | |
 | `events` | `agency_id`, `virtual_office_id` | ⚠️ not re-checked | ⚠️ | This is the `log_event()`/audit table CLAUDE.md references. |
@@ -70,8 +70,8 @@ Legend: ✅ enforced correctly · ⚠️ column present, not fully re-verified t
 | `knowledge_chunks` | none (indirect via `document_id`→`knowledge_documents`) | ✅ "Agency staff manage their agency's knowledge chunks" | ✅ | Confirmed (this session's own 3A/3C work). |
 | `knowledge_documents` | `agency_id`, `surface` | ✅ staff-only RLS + surface-scoped RPCs, anon/authenticated EXECUTE revoked on retrieval RPCs | ✅ | Confirmed extensively this session. |
 | `order_services` | (via `order_id`) | Policy dropped/re-created 2026-08-21 alongside an `order_agency_id()` helper — likely modernized, **not individually re-verified** | ⚠️ | |
-| `pending_notifications` | `agency_id` | ⚠️ not re-checked | ⚠️ | |
-| `profiles` | `agency_id` (**the source of `current_agency_id()` itself**) | Self-row policies ✅, but "Admins can view all profiles" = 🔴 `has_role(system_admin\|agency_admin)`, no agency comparison | 🔴 | Any agency's admin can read every user's profile across every agency. |
+| `pending_notifications` | `agency_id` | ✅ **Fixed 2026-09-13 (M1).** All three CRUD policies (SELECT/INSERT/UPDATE) now require `system_admin` OR (`is_agency_staff()` AND `agency_id=current_agency_id()`). | ✅ | Was unscoped on all three, not just SELECT as first flagged in `known-issues.md`. See M1 doc §3.6. |
+| `profiles` | `agency_id` (**the source of `current_agency_id()` itself**) | ✅ **Fixed 2026-09-13 (M1).** Split into system_admin-unrestricted SELECT + `agency_admin AND agency_id=current_agency_id()`. Self-row policies unchanged. | ✅ | Was: any agency's admin read every user's profile across every agency. See M1 doc §3.2. |
 | `role_permissions` | none | read-all authenticated, system_admin-managed | 🌐 | Platform config (role→module permission map). Correct global. |
 | `shift_assignments` | none (via `shift_id`, `shift_assignment_agency_id()` helper) | ✅ `is_agency_staff() AND ... = current_agency_id()`; INSERT/DELETE revoked from `authenticated` entirely (RPC-only) | ✅ | Confirmed, best-designed table in the map. |
 | `shift_ratings` | `agency_id` | ⚠️ not re-checked | ⚠️ | |
@@ -80,9 +80,9 @@ Legend: ✅ enforced correctly · ⚠️ column present, not fully re-verified t
 | `system_modules` | none | read-all authenticated, system_admin-managed | 🌐 | Platform menu registry. Correct global. |
 | `system_roles` | none | not individually re-checked, low risk (role-name lookup) | 🌐 (presumed) | |
 | `time_entries` | `agency_id` | ⚠️ not re-checked | ⚠️ | |
-| `time_off_requests` | `agency_id` | 🔴 (suspected) — the excerpt seen is `has_role(manager\|agency_admin\|scheduler)` with no agency comparison, same *early* pattern as `agency`/`profiles`/`user_roles`, from the **original** 2025-10-30 migration — no evidence found of a later re-scope the way `shifts`/`caregivers` got | 🔴 (suspected, not fully confirmed) | Flagging with lower certainty than the *confirmed* rows above — the exact current policy body needs a direct re-read before treating this as settled, but the pattern match is strong. |
-| `user_roles` | `agency_id` | Self-row read ✅; "Admins can manage all roles" = 🔴 `has_role(system_admin\|agency_admin)`, no agency comparison | 🔴 **most severe** | This is the role-*assignment* table — an agency_admin of Agency A can grant/revoke roles for users in Agency B. Privilege-escalation vector, not just a read leak. |
-| `virtual_office` | `agency_id` | ⚠️ not directly inspected this pass | ⚠️ | Given the pattern found elsewhere, check for the same unscoped-admin-policy shape before trusting the staff-management side (the public `get_public_office()` read path is separately confirmed safe — SECURITY DEFINER, filtered by slug+`is_active`). |
+| `time_off_requests` | `agency_id` | ✅ **Confirmed correct, live read 2026-09-13 (M0).** `(has_role(manager\|agency_admin\|system_admin) AND agency_id=current_agency_id())` for decide/update; `is_agency_staff() AND agency_id=current_agency_id()` for staff view. | ✅ | The original suspicion was based on the 2025-10-30 migration excerpt; a later, unlogged migration already fixed this before M1 started. No fix was needed — removed from M1 scope. |
+| `user_roles` | `agency_id` | ✅ **Fixed 2026-09-13 (M1), hardened.** Split into system_admin-unrestricted + `agency_admin AND agency_id=current_agency_id() AND agency_id=(target user's real profiles.agency_id)`. Self-row read unchanged. | ✅ | Was the role-*assignment* table's privilege-escalation vector — an agency_admin of Agency A could grant/revoke roles for users in Agency B. Proven closed by the two-tenant test's explicit escalation attempts (both rejected). See M1 doc §3.1/§7.3. |
+| `virtual_office` | `agency_id` | ✅ **Confirmed correct, live read 2026-09-13 (M0).** | ✅ | All 4 CRUD policies use `is_agency_staff() AND agency_id=current_agency_id()` (or `system_admin`) — already correct, no fix needed, removed from M1 scope. The public `get_public_office()` read path was already separately confirmed safe (SECURITY DEFINER, filtered by slug+`is_active`). |
 | `caregiver_performance` (view) | `agency_id` | not inspected | ⚠️ | Reporting view; lower priority. |
 
 **Reading this table:** ✅ rows need nothing. 🌐 rows need nothing (they're correctly
@@ -90,6 +90,20 @@ global). ⚠️ rows are the "re-verify before Layer 1 is declared done" list �
 given the column is present and the codebase's general discipline, but not personally
 confirmed this pass, so they shouldn't be assumed. 🔴 rows are real, are where Layer 1's
 actual work is.
+
+> **Update, 2026-09-13:** every ⚠️ row above (the remaining ~14 not individually
+> re-annotated in this table — `care_request_time_windows`, `care_requests`,
+> `caregiver_availability`, `caregiver_availability_exceptions`,
+> `caregiver_certifications`, `caregiver_preferences`, `caregiver_registrations`,
+> `client_time_windows`, `earnings_lines`, `events`, `order_services`,
+> `shift_ratings`, `shift_trades`, `time_entries`, `demo_purge_audit`,
+> `system_roles`, `certifications`' write policy, `caregiver_performance`) was read
+> live and confirmed either ✅ or 🌐 in the M0 pass — zero ⚠️ rows remain anywhere in
+> the schema. One compounding gap was found that wasn't in this table at all
+> (`caregiver_registrations`' NULL-`agency_id` branch) and has been fixed. The complete,
+> current, row-by-row map — including the exact live policy text for every table — is
+> `docs/m1-security-gate-plan.md` §1, which supersedes this table's ⚠️ markers; this
+> table is kept for history rather than duplicated in full here.
 
 ---
 
@@ -222,7 +236,7 @@ wherever possible), dependency (Layer 1 → 2 → 3).
 > exists specifically to close that gap first**, so M1 starts from an exact,
 > known-complete table list, not a hedge.
 
-### Phase M0 — Verification pass: turn every ⚠️ and suspected 🔴 into confirmed
+### Phase M0 — Verification pass: turn every ⚠️ and suspected 🔴 into confirmed — **DONE, 2026-09-13**
 **What:** read the actual current RLS policy body (not the column's presence, not a
 naming-pattern guess) for `time_off_requests`, `virtual_office` (admin/management
 side), and the full ~14-table ⚠️ list from Step 1 (`care_request_time_windows`,
@@ -239,6 +253,19 @@ of this document, just deeper per table.
 table list that becomes M1's actual scope.
 
 ### Phase M1 — Close every confirmed cross-tenant admin-policy gap — **SECURITY GATE, not a roadmap item**
+
+> **STATUS: CLOSED, 2026-09-13.** Full M0 verification (live RLS policy read, not
+> inference) + M1 fix design + applied migration + two-tenant isolation test (25/25
+> checks passed, teardown confirmed clean) are recorded in
+> `docs/m1-security-gate-plan.md`. `time_off_requests` and `virtual_office` (both
+> listed below as suspected/unverified) turned out to already be correctly scoped live
+> and needed no fix. A compounding gap not in this original list was found and closed:
+> `caregiver_registrations`' NULL-`agency_id` rows were cross-tenant-readable by any
+> agency's staff — see the M1 doc §3.7 and `known-issues.md`'s `/assistant` entry.
+> `conversation_flows`/`flow_nodes`/`flow_options` remain open, deliberately deferred
+> to Phase M2 below (unchanged from this document's original scoping — they need a
+> product decision, not a mechanical fix). **M2 onward may now proceed against a real
+> second tenant.**
 > **M1 is a hard prerequisite, not feature work paced by business need.** M2 through
 > M8 below can be sequenced against product priorities and can slip without
 > consequence to anyone currently using the system. M1 cannot: it **must be complete,
@@ -298,6 +325,49 @@ testing of the NULL-fallback path specifically, since that's what keeps existing
 migration.
 **Kind Care stays working:** yes, via the NULL-fallback design — Kind Care's flow
 becomes "the platform default" unless/until it's given its own `agency_id`.
+
+### Phase M-Office — Virtual-office scoping mechanism (Layer 1.5) — **DONE, 2026-09-14**
+
+> **STATUS: CLOSED.** Full verification (live RLS/grant reads) + fail-closed
+> nested-tenancy design + applied migrations + two-office isolation test (22/22
+> checks passed, teardown confirmed clean) are recorded in
+> `docs/m-office-scoping-plan.md`. This is the level-below-M1 proof: `profiles`
+> gained `virtual_office_id` + `office_restricted` (the latter `CHECK`-constrained so
+> "office-restricted with no office" is unrepresentable, not just handled), and the
+> operational core (`caregivers`, `clients`, `families`, `care_requests`,
+> `care_request_time_windows`, `caregiver_registrations`, `virtual_office` itself) plus
+> the knowledge retrieval RPCs got the composed Tier-1/2/3 RLS clause. The literal
+> Ripple/Kind Care knowledge contamination this phase set out to fix is closed. Two
+> real bugs were found and fixed mid-rollout before testing: a stale-overload issue
+> from `CREATE OR REPLACE FUNCTION` not replacing on an added parameter, and — more
+> seriously — those stale overloads briefly carrying default anon/authenticated
+> `EXECUTE` grants that reopened Tranche 3A's closed bypass; both fixed same-day via
+> follow-up migrations, verified via `aclexplode` before testing proceeded.
+> **Deliberately deferred, not part of this phase:** `virtual_office_id` columns on
+> `shifts`/`shift_assignments`/`client_orders`/`order_services`/`time_entries`/
+> `time_off_requests`/`caregiver_availability` (needs new columns, sequenced after this
+> mechanism was proven) and `conversation_flows` per-office scoping (stays M2's own
+> phase, extended in *design* only by this pass). **M6/M7 (Tier 1/2/3 panels) may now
+> proceed against a proven mechanism**, the same gate M1 set for M2 onward.
+>
+> **Backend CLOSED; frontend deploy PENDING.** The DB-side mechanism (migrations, RLS,
+> RPCs) is live and verified. Five frontend files
+> (`KnowledgeQaSurface.tsx`/`PublicOffice.tsx`/`ResultRegistration.tsx`/
+> `CaregiverRegistration.tsx`/`AdminUtilities.tsx`) are committed but not yet deployed
+> — until that normal frontend build/deploy (to Fly) happens, the public pages keep
+> running pre-change code (agency-wide knowledge retrieval, the old direct-insert
+> registration paths). Not broken, just not carrying the fix to production traffic yet;
+> `PublicOffice.tsx` passing the office id through is specifically what activates the
+> knowledge-contamination fix once deployed.
+>
+> **Next office-scoping increment, when needed:** the operational core
+> (`shifts`/`shift_assignments`/`client_orders`/`order_services`/`time_entries`/
+> `time_off_requests`) was explicitly left agency-scoped-only this phase — Tier-3
+> managers cannot yet be confined to their own office's shifts/orders/time entries.
+> That requires its own new-column-plus-backfill design and its own isolation test
+> before a Tier-3 panel can safely expose scheduling/orders, following exactly this
+> phase's discipline (verify live state, design fail-closed, test against a real
+> second office) rather than being assumed to work by extension.
 
 ### Phase M3 — Services junction (`agency_care_types`)
 **What:** exactly Step 4's design.

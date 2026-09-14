@@ -1,5 +1,54 @@
 # Known Issues
 
+## FOOTGUN: `CREATE OR REPLACE FUNCTION` does not replace when you add a parameter — creates a second overload with default grants
+
+**Status:** Hit twice in one session (M-Office, 2026-09-14) before being filed here.
+Not a one-off mistake — a genuine Postgres footgun worth checking for on every future
+migration that changes an RPC signature.
+
+**The mechanism:** `CREATE OR REPLACE FUNCTION` only replaces a function whose
+argument **types** (in order) exactly match an existing one. Adding a new trailing
+parameter — even with a `DEFAULT` — changes the signature, so Postgres creates a
+**second, separate function object** (new `oid`) alongside the original rather than
+replacing it. This produces two distinct problems, not one:
+
+1. **Stale overload lingers**, silently changing which version a given call resolves
+   to depending on whether it passes the new parameter — the "fixed" behavior may not
+   apply to every caller, and nothing errors to tell you.
+2. **The new overload does not inherit the old one's grants.** If the old function had
+   `anon`/`authenticated` `EXECUTE` explicitly `REVOKE`d (as `match_agency_knowledge`/
+   `search_agency_knowledge` did, from Tranche 3A), the new overload gets Postgres's
+   **default** grants instead — which include `EXECUTE` for `PUBLIC` unless the
+   database's default privileges say otherwise. On this project that meant a security
+   regression: anon/authenticated could suddenly call the knowledge RPCs directly
+   again, the exact bypass Tranche 3A closed. This is the more dangerous half — #1 is
+   a correctness bug, #2 is a silently-reopened access-control hole.
+
+**Confirmed** via `SELECT p.oid, pg_get_function_identity_arguments(p.oid), acl.grantee, acl.privilege_type FROM pg_proc p CROSS JOIN LATERAL aclexplode(COALESCE(p.proacl, acldefault('f', p.proowner))) acl WHERE p.proname = '...'` — this is the check to run after *any* migration that changes an RPC signature, not just when something looks wrong.
+
+**A second trap layered on top of the first:** identifying the stale overload to drop
+by matching a hardcoded type-name string (e.g. comparing
+`pg_get_function_identity_arguments(oid)` against a literal containing `vector`)
+is itself unreliable — that function renders extension types (like pgvector's
+`vector`) schema-qualified or not **depending on the calling session's own
+`search_path`**, which differs between an interactive session and `supabase db push`'s
+session. A string match that works when you test it manually can silently no-op (no
+error — just doesn't find a match) when run through the actual migration tool. Match
+on **`pronargs`** (argument count) instead, or another `search_path`-independent
+signal — never a rendered type-name string.
+
+**The rule going forward:** any migration that changes an RPC's parameter list must,
+in the same migration:
+1. Explicitly `DROP FUNCTION` the old signature (matched by `pronargs` or another
+   `search_path`-independent identifier, never a rendered type-name string) —
+   `CREATE OR REPLACE` is not sufficient on its own.
+2. Re-apply any `REVOKE`/`GRANT` the old function had, since the surviving function is
+   a new object with fresh default privileges.
+3. Verify with the `aclexplode` query above before considering the migration done —
+   not just "it applied without error."
+
+
+
 ## Caregivers cannot see open/unassigned shifts (`AvailableShifts` returns 0 rows)
 
 **Status:** Pre-existing, confirmed 2026-08-28. Not related to the `ai_match_score`
@@ -103,11 +152,18 @@ formula (`WEIGHTS` in `match-caregiver/index.ts`).
 **Deliberately out of scope for now** — tracked here as a scoped follow-up, separate
 from the PHI-removal fix that prompted this note.
 
-## SECURITY: batch-create-users looks like unsafe leftover dev tooling
+## RESOLVED: SECURITY: batch-create-users looks like unsafe leftover dev tooling
 
 **Status:** Found while auditing user-provisioning paths for the `my_agency_id()`
-isolation invariant (2026-09-02). Not fixed — flagged for a security review, not
-addressed as part of that work.
+isolation invariant (2026-09-02). **Deleted outright 2026-09-14** as part of
+M-Office (see `docs/m-office-scoping-plan.md` §3e/§7) — confirmed exactly one caller
+in the whole codebase (`AdminUtilities.tsx`'s button, itself only client-side-gated,
+which never helped since the function ignored auth entirely), removed the Edge
+Function (`supabase functions delete`) and the button/handler together. The real
+batch-import need this was never actually a safe implementation of is designed fresh
+in the M-Office plan §3e, not built in this pass.
+
+**Original finding, kept for history:**
 
 **Symptom / risk:** `supabase/functions/batch-create-users/index.ts`:
 - Has **no caller authentication or role check at all** — it doesn't read the
@@ -523,11 +579,17 @@ becomes chunks/embeddings. Benign now (staff-only bucket RLS), but the eventual 
 current user-facing effect -- but the two module_codes should eventually be
 consolidated into one.
 
-## `pending_notifications` RLS is not agency-scoped -- cross-references the M1 tracking
+## RESOLVED: `pending_notifications` RLS is not agency-scoped -- cross-references the M1 tracking
 
 **Status:** Found while adding the Notification Outbox sidebar badge (UX polish batch
-1b), 2026-09-08. Confirms and upgrades an item already listed as unverified (⚠️) in
-`docs/multitenant-saas-architecture-plan.md`'s Step 1 tenancy map -- now confirmed 🔴.
+1b), 2026-09-08. Confirmed 🔴 in the M0 verification pass, then **fixed and verified
+closed as part of M1, 2026-09-13** — see `docs/m1-security-gate-plan.md` §3.6/§7.3.
+All three CRUD policies (SELECT/INSERT/UPDATE, not just SELECT as originally flagged
+below) now require `is_agency_staff() AND agency_id = current_agency_id()` (or
+`system_admin`). Proven via the M1 two-tenant isolation test: Agency B's admin could
+not read or update Agency A's `pending_notifications` rows.
+
+**Original finding (now resolved), kept for history:**
 
 `pending_notifications`'s SELECT policy is role-only (`has_role(system_admin) OR
 has_role(agency_admin) OR has_role(manager)`), with **no `agency_id` comparison at
@@ -551,12 +613,43 @@ agency-admin login is onboarded, and only provable with a real two-tenant isolat
 test, per the multi-tenant plan's own done-definition for M1. Not in scope for this
 badge batch, and deliberately not touched here.
 
-## `/assistant` is a generic, office-less surface — inconsistent office attribution on submission
+## RESOLVED (mechanism): office-scoping — see `docs/m-office-scoping-plan.md`
+
+**Status:** M-Office landed and verified 2026-09-14 (22/22 two-office isolation test
+checks passed, teardown confirmed clean). Closes the office-scoping mechanism gap
+this section and the next one describe. See the plan doc §7 for the full closure
+record, including two mid-implementation bugs found and fixed before testing: a
+`CREATE OR REPLACE FUNCTION`-doesn't-replace-on-added-parameter issue that left
+`match_agency_knowledge`/`search_agency_knowledge` with duplicate overloads, and (more
+seriously) those duplicate overloads briefly carrying default `anon`/`authenticated`
+`EXECUTE` grants that reopened the exact bypass Tranche 3A closed -- caught and fixed
+via a same-day follow-up migration before any live traffic was at risk.
+
+**Deferred to a later phase, not part of this fix:** `virtual_office_id` columns on
+`shifts`/`shift_assignments`/`client_orders`/`order_services`/`time_entries`/
+`time_off_requests`/`caregiver_availability` and related tables -- these need a new
+column (not just an RLS clause) and were deliberately sequenced after the core
+mechanism was proven. `conversation_flows` per-office scoping remains M2's own
+scoped phase.
+
+## RESOLVED: `/assistant` is a generic, office-less surface — inconsistent office attribution on submission
 
 **Status:** Found while investigating 6 unattributed caregiver-application/inquiry
-rows, 2026-09-09. Data fixed (all 6 now correctly attributed to Ripple Effects); the
-structural gap itself is not fixed. Directly relevant to the planned multi-office
-SaaS control-plane work (`docs/multitenant-saas-architecture-plan.md`).
+rows, 2026-09-09. Data fixed then (all 6 attributed to Ripple Effects). **The
+structural gap itself closed 2026-09-14 as part of M-Office** (see
+`docs/m-office-scoping-plan.md` §3d/§7): `flow_session_submit_intake` now falls back
+to the resolved agency's primary active office (reusing the existing `is_primary`
+flag) whenever `p_virtual_office_id` is NULL, exactly mirroring its pre-existing
+agency-level fallback. `caregiver_registrations`' direct-insert callers
+(`ResultRegistration.tsx`, and a third, previously-undocumented path,
+`CaregiverRegistration.tsx` at `/caregiver-registration`) were moved behind one new
+`submit_caregiver_registration` RPC carrying the same fallback chain, so all three
+public submission paths now land with non-NULL `agency_id`/`virtual_office_id` instead
+of two of them silently going unattributed. Verified live: all three paths tested,
+each attributed correctly, and the office-scoped path's own explicit office confirmed
+*preserved* (not overridden by the fallback).
+
+**Original finding, kept for history:**
 
 **Root cause:** `ConversationSurface`/`FamilyIntakeSurface` both accept optional
 `agencyId`/`virtualOfficeId` props that default to `null`. The office-scoped public
@@ -597,3 +690,15 @@ office context, or give it its own real (non-guessed) tenant resolution.
 (fix 6 specific rows + report the cause). Revisit alongside the SaaS control-plane
 work, where every submission surface should be required to carry real, non-guessed
 tenant/office context — no silent single-tenant fallback.
+
+**Partial update (M1, 2026-09-13):** the M0 verification pass found that this gap had
+compounded into a genuine cross-tenant leak — `caregiver_registrations`' staff
+SELECT/UPDATE policies OR'd in `agency_id IS NULL`, so every unattributed registration
+(the rows this entry describes) was visible/editable by **any** agency's staff, not
+just one. That specific cross-tenant read/write is now closed (see
+`docs/m1-security-gate-plan.md` §3.7/§7.3) — NULL-`agency_id` rows are now
+system_admin-only, consistent with the same tightening applied to
+`conversation_sessions`. **The underlying `/assistant` attribution gap itself (why
+these rows end up with `agency_id`/`virtual_office_id` NULL in the first place) is
+still not fixed** — this only closed who can see the resulting NULL rows, not the root
+cause described above.

@@ -60,30 +60,30 @@ const CaregiverRegistration = () => {
       }
 
       const values = parsed.data;
-      const registrationId = crypto.randomUUID();
 
-      const { error: regError } = await supabase
-        .from("caregiver_registrations")
-        .insert({
-          id: registrationId,
-          email: values.email,
-          phone: values.phone,
-          first_name: values.firstName,
-          last_name: values.lastName,
-          address: values.address || null,
-          city: values.city || null,
-          state: values.state || null,
-          zip_code: values.zipCode || null,
-          employment_type: values.employmentType,
-          hourly_rate: values.hourlyRate ? parseFloat(values.hourlyRate) : null,
-          care_type_codes: values.careTypeCodes,
-          status: "pending",
-        });
+      // Goes through submit_caregiver_registration (not a direct insert) --
+      // this route (/caregiver-registration) is a generic, agency-less public page
+      // (same class of gap as /assistant), so the RPC's fallback chain (M-Office
+      // plan §3d/§5) is what attributes the submission to a real agency/office
+      // instead of leaving both NULL.
+      const { data: registrationId, error: regError } = await supabase.rpc("submit_caregiver_registration", {
+        p_first_name: values.firstName,
+        p_last_name: values.lastName,
+        p_phone: values.phone,
+        p_email: values.email,
+        p_care_type_codes: values.careTypeCodes,
+        p_hourly_rate: values.hourlyRate ? parseFloat(values.hourlyRate) : null,
+        p_address: values.address || null,
+        p_city: values.city || null,
+        p_state: values.state || null,
+        p_zip_code: values.zipCode || null,
+        p_employment_type: values.employmentType,
+      });
 
       if (regError) throw regError;
 
       if (screening?.sessionId) {
-        await screening.link(registrationId);
+        await screening.link(registrationId as string);
       }
 
       toast.success("Application submitted successfully. You can sign in after a manager approves your application.");

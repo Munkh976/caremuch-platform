@@ -44,42 +44,6 @@ const AdminUtilities = () => {
   const [importLoading, setImportLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleBatchCreateUsers = async () => {
-    setLoading(true);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session) {
-        throw new Error("Not authenticated");
-      }
-
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/batch-create-users`,
-        {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${session.access_token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({}),
-        }
-      );
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to create users");
-      }
-
-      const result = await response.json();
-      
-      toast.success(result.message);
-    } catch (error: any) {
-      toast.error(error.message || "Failed to create users");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleBulkDeleteData = async () => {
     setLoading(true);
     setDeleteDialogOpen(false);
@@ -285,22 +249,6 @@ const AdminUtilities = () => {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            {/* User Account Creation */}
-            <div className="border-b pb-6">
-              <h3 className="text-lg font-semibold mb-2">Batch Create User Accounts</h3>
-              <p className="text-sm text-muted-foreground mb-4">
-                This will create user accounts with default password "123456" for all clients and caregivers 
-                that don't have user accounts yet. It will also create their profiles and assign appropriate roles.
-              </p>
-              <Button 
-                onClick={handleBatchCreateUsers} 
-                disabled={loading}
-              >
-                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Create User Accounts
-              </Button>
-            </div>
-
             {/* Link existing records to logins */}
             <div className="border-b pb-6">
               <h3 className="text-lg font-semibold mb-2">Link Records to Existing Logins</h3>

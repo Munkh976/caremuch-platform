@@ -50,12 +50,21 @@ serve(async (req) => {
       );
     }
 
-    // Get caller's agency_id from profiles
+    // Get caller's agency_id (and, if the caller is a Tier-3/office-restricted
+    // staff member, their virtual_office_id) from profiles.
     const { data: callerProfile } = await supabaseClient
       .from('profiles')
-      .select('agency_id')
+      .select('agency_id, virtual_office_id, office_restricted')
       .eq('id', caller.id)
       .single();
+
+    // Only propagate the caller's own office onto a new caregiver/client when the
+    // caller is genuinely office-restricted (Tier 3) -- an agency-wide (Tier 2)
+    // caller has no single office to attribute the new record to, so it stays NULL
+    // here exactly as it already does today (see M-Office plan §2.5: assigning a
+    // specific office on a Tier-2 admin's behalf needs an explicit picker, not
+    // built yet).
+    const callerOfficeId = callerProfile?.office_restricted ? callerProfile.virtual_office_id : null;
 
     if (!callerProfile?.agency_id) {
       return new Response(
@@ -113,6 +122,7 @@ serve(async (req) => {
           ...userData,
           user_id: authData.user.id,
           agency_id: callerProfile.agency_id,
+          virtual_office_id: callerOfficeId,
         })
         .select()
         .single();
@@ -138,6 +148,7 @@ serve(async (req) => {
           phone: phone || '',
           user_id: authData.user.id,
           agency_id: callerProfile.agency_id,
+          virtual_office_id: callerOfficeId,
         })
         .select()
         .single();

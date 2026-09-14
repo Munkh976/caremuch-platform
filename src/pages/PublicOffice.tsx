@@ -171,7 +171,7 @@ export default function PublicOffice({ initialMode }: { initialMode?: Mode }) {
                 />
               )}
               {mode === "knowledge" && (
-                <KnowledgeQaSurface agencyName={name} agencyId={office.agency_id} embedded />
+                <KnowledgeQaSurface agencyName={name} agencyId={office.agency_id} virtualOfficeId={office.virtual_office_id} embedded />
               )}
             </AssistantShell>
           </div>

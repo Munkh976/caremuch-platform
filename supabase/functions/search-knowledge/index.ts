@@ -19,7 +19,7 @@ serve(async (req) => {
   }
 
   try {
-    const { query, language, agency_id } = await req.json();
+    const { query, language, agency_id, virtual_office_id } = await req.json();
 
     if (!query || typeof query !== 'string' || !query.trim()) {
       return new Response(JSON.stringify({ error: 'Missing query' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
@@ -92,6 +92,7 @@ serve(async (req) => {
           _limit: GATE3_TOP_K,
           _agency_id: agency_id,
           _surfaces: ['public'],
+          _virtual_office_id: virtual_office_id ?? null,
         }));
       } else {
         ({ data, error } = await supabase.rpc('match_agency_knowledge', {
@@ -101,6 +102,7 @@ serve(async (req) => {
           _match_threshold: GATE3_MATCH_THRESHOLD,
           _agency_id: agency_id,
           _surfaces: ['public'],
+          _virtual_office_id: virtual_office_id ?? null,
         }));
       }
       if (error) throw error;
@@ -135,6 +137,7 @@ serve(async (req) => {
         _language: language,
         _agency_id: agency_id,
         _surfaces: ['public'],
+        _virtual_office_id: virtual_office_id ?? null,
       }));
     } else {
       const provider = getEmbeddingProvider();
@@ -159,6 +162,7 @@ serve(async (req) => {
         _match_threshold: SEMANTIC_MATCH_THRESHOLD,
         _agency_id: agency_id,
         _surfaces: ['public'],
+        _virtual_office_id: virtual_office_id ?? null,
       }));
     }
 

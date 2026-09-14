@@ -50,22 +50,24 @@ export function ResultRegistration({
 
     setSaving(true);
     try {
-      const registrationId = crypto.randomUUID();
       const careTypeCodes = await fetchCareServiceCodes(careServiceItemIds);
-      const { error } = await supabase.from("caregiver_registrations").insert({
-        id: registrationId,
-        first_name: values.firstName.trim(),
-        last_name: "",
-        phone: values.phone.trim(),
-        email: values.email.trim().toLowerCase(),
-        care_type_codes: careTypeCodes,
-        hourly_rate: rate,
-        status: "pending",
-        agency_id: agencyId,
-        virtual_office_id: virtualOfficeId,
-      } as never);
+      // Goes through submit_caregiver_registration (not a direct insert) so the
+      // agency/office fallback chain (M-Office plan §3d/§5) applies uniformly --
+      // this surface already passes agencyId/virtualOfficeId correctly when reached
+      // via /a/:slug, so the fallback is a no-op here; it only matters for the
+      // legacy /assistant path, which renders this same component with both null.
+      const { data: registrationId, error } = await supabase.rpc("submit_caregiver_registration", {
+        p_first_name: values.firstName.trim(),
+        p_last_name: "",
+        p_phone: values.phone.trim(),
+        p_email: values.email.trim().toLowerCase(),
+        p_care_type_codes: careTypeCodes,
+        p_hourly_rate: rate,
+        p_agency_id: agencyId,
+        p_virtual_office_id: virtualOfficeId,
+      });
       if (error) throw error;
-      await onRegistered(registrationId);
+      await onRegistered(registrationId as string);
       setStage("done");
     } catch (error: any) {
       toast.error(error.message ?? "Could not submit your application.");

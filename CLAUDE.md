@@ -220,6 +220,7 @@ Before changing code:
 10. Do not implement future phases prematurely.
 11. Never bypass Supabase RLS for convenience.
 12. Additive evolution, not a rewrite — do not remove working functionality without justification.
+13. Any migration that changes an existing RPC's parameter list must explicitly `DROP FUNCTION` the old signature (matched by `pronargs`, never a rendered type-name string — it's `search_path`-dependent) and re-apply any `REVOKE`/`GRANT` that function had, then verify via `aclexplode(proacl)` before considering it done. `CREATE OR REPLACE FUNCTION` does not replace a function when a parameter is added — it creates a second overload with default (often too-permissive) grants. See `docs/known-issues.md`'s "FOOTGUN" entry — this bit the M-Office migration twice in one session.
 
 ## Implementation order
 **Phase 0: architecture preparation — DONE.** Completed and in git history: `ai_match_score` column dropped (was always NULL), `callLLM` provider seam added, `.env`/`config.toml` cleanup + `.env` untracked, Edge Functions deployed to the dev project, demo data seeded under agency 56fbfe38, caregiver-shifts RLS gap documented in `docs/known-issues.md` (deferred, pending a product decision).
