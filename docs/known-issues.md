@@ -1,5 +1,65 @@
 # Known Issues
 
+## New scheduling rows (shifts/client_orders/time_entries/time_off_requests) land with NULL virtual_office_id
+
+**Status:** Found 2026-09-14 while testing Smart Scheduling Phase 0 (see
+`docs/scheduling-phase0-plan.md` §7.3). Confirmed empirically, not fixed — deliberately
+deferred to Phase 1A's audit rather than patched blind.
+
+Phase 0 added `virtual_office_id` to `shifts`/`client_orders`/`time_entries`/
+`time_off_requests` and backfilled every row that existed at migration time (0 NULL
+remaining, verified). But it added no trigger or other mechanism to populate the
+column on a row inserted *after* the migration — proven by inserting throwaway rows
+without setting it explicitly and observing `NULL` come back, in all three tables
+tested. This is the same class of gap M-Office found and fixed for `create-user`
+(which "never touche[d] `virtual_office_id` at all," the direct cause of the
+`clients`/`caregivers` "unassigned office" symptom) — except here the actual
+write path (wherever the scheduling UI creates these rows today) hasn't been
+identified yet; that's explicitly Phase 1A's job.
+
+**Consequence:** not a security gap — the fail-closed office RLS design means a NULL
+office is invisible only to Tier-3 (office-restricted) managers, never over-exposed.
+It's an availability/workflow gap: new shifts/orders/time-entries/time-off created
+after this migration won't be visible to the office manager who should own them,
+until Phase 1A's audit identifies the real write paths and fixes them (or a
+deliberate interim trigger is added, if that's preferred before Phase 1A lands).
+
+**Deliberately not fixed here** — tracked so Phase 1A treats this as an expected,
+already-known finding rather than rediscovering it.
+
+
+
+## FOOTGUN: `LANGUAGE sql` function bodies are validated at `CREATE` time, not `plpgsql`
+
+**Status:** Hit once (Smart Scheduling Phase 0, 2026-09-14), caught by the first
+migration push failing cleanly (transactional rollback, confirmed via direct
+re-query) rather than silently — filed here so the next `LANGUAGE sql` function
+doesn't need to rediscover it the hard way.
+
+**The mechanism:** a `plpgsql` function body is only *parsed* for syntax at `CREATE`
+time — table/column references inside it aren't resolved until the function actually
+runs, so it's fine to `CREATE` one that references a column that doesn't exist yet, as
+long as the column exists by the time the function is *called*. A `LANGUAGE sql`
+function body has no such deferral — Postgres validates every table/column reference
+in it **at `CREATE FUNCTION` time**, exactly like a plain view or query. Referencing a
+column that doesn't exist *yet* in the migration (even if a later statement in the
+same file adds it) fails the `CREATE FUNCTION` statement immediately.
+
+**Concretely, what happened:** `shift_assignment_virtual_office_id()` (`LANGUAGE sql`,
+mirroring the existing `shift_assignment_agency_id()` pattern) was originally placed
+*before* the `ALTER TABLE shifts ADD COLUMN virtual_office_id` statement it selects
+from, in the same migration. `supabase db push` failed immediately with `column
+"virtual_office_id" does not exist` — not a silent no-op, a hard stop, cleanly rolled
+back. Fixed by moving the `ALTER TABLE` earlier than the function definition.
+
+**The rule going forward:** when a migration adds both a new column and a `LANGUAGE
+sql` helper that reads it (the established pattern for all the `..._agency_id()`/
+`..._virtual_office_id()` one-line lookup helpers in this codebase), the `ALTER TABLE
+ADD COLUMN` must come **before** the `CREATE FUNCTION` in file order, not just before
+the function is ever called. This doesn't apply to `plpgsql` functions — only `sql`.
+Relevant for Phase 1B's eligibility engine if any of its planned helpers are written
+as `LANGUAGE sql`.
+
 ## FOOTGUN: `CREATE OR REPLACE FUNCTION` does not replace when you add a parameter — creates a second overload with default grants
 
 **Status:** Hit twice in one session (M-Office, 2026-09-14) before being filed here.
