@@ -184,6 +184,29 @@ separate from the Phase 0/Phase 1 multi-agent architecture work.
 field was never a real calculation either (see below); this just makes the gap
 explicit instead of papering over it with a hallucinated number.
 
+**Updated 2026-09-15, Smart Scheduling Phase 1B:** `check_assignment_eligibility`'s
+Rule J (service area) was promoted from advisory to **soft** (overridable with a
+manager note) in Phase 1B, but using the *existing* zip-list/boolean check only — no
+distance math was added. The originally-scoped "hard block over 20mi / soft under
+20mi" real-distance threshold was explicitly deferred to Phase 2, on the reasoning
+that the ranking layer below needs a real zip-centroid+haversine distance calculation
+too (closer caregivers should rank higher) — building it once, for both the Rule J
+hard threshold and ranking, is the plan. Do not lose this 20-mile hard-threshold
+requirement when Phase 2 designs the real distance infrastructure — it was a locked
+scope item for Phase 1B's own plan (`docs/scheduling-phase1b-plan.md` §0), only its
+implementation was pushed out, not the requirement itself.
+
+**Also flagged 2026-09-15, tracked as its own Phase 2 design item, not yet
+researched:** the service-area *model* itself is still an open question, separate
+from the distance-threshold question above — is service area a radius from a
+caregiver's home address/city (`service_radius_miles`), an explicit zip list
+(`service_zipcodes`, today's mechanism), a caregiver picking from the agency's own
+structured service-area cities (bounded, not free-text), or some combination (e.g.
+declared cities AND a radius as a secondary factor)? This is linked to the same
+distance-infrastructure decision above (zip-centroid + haversine, or real geocoding)
+since ranking wants real distance regardless of which service-area model is chosen.
+Research the options and recommend during Phase 2 — not decided or started yet.
+
 **Symptom:** `serviceAreaScore` in `supabase/functions/match-caregiver/index.ts` is
 binary — it only checks whether the client's zip code is present in the caregiver's
 `service_zipcodes` list. Two caregivers who both serve a zip score identically on

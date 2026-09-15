@@ -40,6 +40,8 @@ type Proposal = {
   score: number;
   warnings: string[];
   selected: boolean;
+  /** Set only after a commit attempt fails -- the real reason, not just a count. */
+  failureReason?: string;
 };
 
 export const AutoFillDialog = ({
@@ -132,7 +134,7 @@ export const AutoFillDialog = ({
     }
     setCommitting(true);
     let ok = 0;
-    let failed = 0;
+    const failures: Proposal[] = [];
     for (const p of chosen) {
       try {
         await assignShift({
@@ -144,13 +146,24 @@ export const AutoFillDialog = ({
           method: "auto_assigned",
         });
         ok++;
-      } catch (e) {
+      } catch (e: any) {
         console.error(e);
-        failed++;
+        failures.push({ ...p, failureReason: e?.message || "Assignment was refused" });
       }
     }
     setCommitting(false);
-    toast.success(`Auto-filled ${ok} shift${ok === 1 ? "" : "s"}${failed ? `, ${failed} failed` : ""}`);
+    if (failures.length > 0) {
+      // Surface WHY, not just a count -- update the visible table with the real
+      // reasons instead of only closing on a bare "N failed" toast.
+      setProposals((prev) =>
+        prev.map((p) => failures.find((f) => f.shift.id === p.shift.id) ?? p)
+      );
+      toast.error(
+        `Auto-filled ${ok} shift${ok === 1 ? "" : "s"} — ${failures.length} failed, see reasons below`
+      );
+      return;
+    }
+    toast.success(`Auto-filled ${ok} shift${ok === 1 ? "" : "s"}`);
     onOpenChange(false);
     onCommitted();
   };
@@ -222,8 +235,12 @@ export const AutoFillDialog = ({
                       <span className={p.caregiverId ? "" : "text-muted-foreground"}>
                         {p.caregiverName}
                       </span>
-                      {p.warnings.length > 0 && (
-                        <div className="text-xs text-warning">{p.warnings[0]}</div>
+                      {p.failureReason ? (
+                        <div className="text-xs text-destructive">Failed: {p.failureReason}</div>
+                      ) : (
+                        p.warnings.length > 0 && (
+                          <div className="text-xs text-warning">{p.warnings[0]}</div>
+                        )
                       )}
                     </TableCell>
                     <TableCell className="text-right">

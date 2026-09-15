@@ -87,21 +87,17 @@ type ServerIssue = { code: string; label: string; detail: string };
  * same rules the assignment RPC enforces on write. The local implementation
  * below is only a fallback preview when the RPC is unreachable.
  */
-export async function evaluateEligibility(input: EligibilityInput): Promise<EligibilityResult> {
-  const { data, error } = await supabase.rpc("check_assignment_eligibility" as never, {
-    _shift_id: input.shift.id,
-    _caregiver_id: input.caregiverId,
-  } as never);
+type RawEligibilityResult = {
+  hard: ServerIssue[];
+  soft: ServerIssue[];
+  advisory: ServerIssue[];
+  weekly_hours: number;
+  projected_weekly_hours: number;
+};
 
-  if (error || !data) return evaluateEligibilityLocal(input);
-
-  const r = data as unknown as {
-    hard: ServerIssue[];
-    soft: ServerIssue[];
-    advisory: ServerIssue[];
-    weekly_hours: number;
-    projected_weekly_hours: number;
-  };
+/** Shared mapper from the RPC's raw shape to EligibilityResult -- used by both the
+ * single-candidate and bulk paths so the mapping logic exists exactly once. */
+function mapServerResult(r: RawEligibilityResult): EligibilityResult {
   const hard = (r.hard || []).map((i) => ({ ...i, overridable: false }));
   const soft = (r.soft || []).map((i) => ({ ...i, overridable: true }));
   return {
@@ -113,6 +109,41 @@ export async function evaluateEligibility(input: EligibilityInput): Promise<Elig
     weeklyHours: Number(r.weekly_hours ?? 0),
     projectedWeeklyHours: Number(r.projected_weekly_hours ?? 0),
   };
+}
+
+export async function evaluateEligibility(input: EligibilityInput): Promise<EligibilityResult> {
+  const { data, error } = await supabase.rpc("check_assignment_eligibility" as never, {
+    _shift_id: input.shift.id,
+    _caregiver_id: input.caregiverId,
+  } as never);
+
+  if (error || !data) return evaluateEligibilityLocal(input);
+  return mapServerResult(data as unknown as RawEligibilityResult);
+}
+
+/**
+ * Bulk eligibility for a roster against one shift -- used by Manual Assign (to
+ * partition the picker into eligible/blocked) and Smart Assign/Auto-fill (to
+ * exclude hard-blocked candidates before ranking). One RPC round-trip instead of
+ * one per caregiver; reuses the same server-side rules, no duplicated logic.
+ * Returns an empty map (never throws) if the RPC is unreachable -- callers should
+ * treat that as "unknown, don't filter" rather than "everyone blocked."
+ */
+export async function evaluateEligibilityBulk(
+  shiftId: string,
+  caregiverIds: string[]
+): Promise<Map<string, EligibilityResult>> {
+  const map = new Map<string, EligibilityResult>();
+  if (caregiverIds.length === 0) return map;
+  const { data, error } = await supabase.rpc("check_assignment_eligibility_bulk" as never, {
+    _shift_id: shiftId,
+    _caregiver_ids: caregiverIds,
+  } as never);
+  if (error || !data) return map;
+  for (const row of data as unknown as { caregiver_id: string; result: RawEligibilityResult }[]) {
+    map.set(row.caregiver_id, mapServerResult(row.result));
+  }
+  return map;
 }
 
 /** Client-side preview of the same rules; used only as an offline fallback. */

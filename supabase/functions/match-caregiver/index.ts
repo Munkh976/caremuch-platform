@@ -61,7 +61,12 @@ serve(async (req) => {
       .in('code', neededCodes);
     const careTypeNameByCode = new Map((careTypeRows || []).map((t: any) => [t.code, t.name]));
 
-    const { data: caregivers, error: caregiversError } = await supabaseClient
+    // Office-scoped candidate pool (Rule B at the pool level, not just the engine):
+    // a shift's own office is authoritative. A shift with no office yet (a data
+    // gap, not the normal post-Phase-0 case) falls back to agency-wide rather than
+    // silently returning zero candidates -- same NULL-preserves-agency-wide
+    // convention used everywhere else in this project.
+    let caregiverQuery = supabaseClient
       .from('caregivers')
       .select(`
         id, first_name, last_name, email, phone, city, hourly_rate, service_zipcodes, reliability_score,
@@ -70,22 +75,43 @@ serve(async (req) => {
       `)
       .eq('agency_id', shift.agency_id)
       .eq('is_active', true);
+    if (shift.virtual_office_id) {
+      caregiverQuery = caregiverQuery.eq('virtual_office_id', shift.virtual_office_id);
+    }
+    const { data: caregivers, error: caregiversError } = await caregiverQuery;
 
     if (caregiversError) throw caregiversError;
+
+    // Hard eligibility filter BEFORE ranking (Phase 1B) -- the shared engine is the
+    // single source of truth; this never re-implements its rules, only excludes
+    // anyone check_assignment_eligibility marks hard-blocked. Soft/advisory issues
+    // stay visible as warnings below, unchanged.
+    const { data: eligibilityRows, error: eligibilityError } = await supabaseClient
+      .rpc('check_assignment_eligibility_bulk', {
+        _shift_id: shiftId,
+        _caregiver_ids: (caregivers || []).map((c: any) => c.id),
+      });
+    if (eligibilityError) throw eligibilityError;
+    const hardBlockedIds = new Set(
+      (eligibilityRows || [])
+        .filter((row: any) => (row.result?.hard?.length ?? 0) > 0)
+        .map((row: any) => row.caregiver_id)
+    );
+    const eligibleCaregivers = (caregivers || []).filter((c: any) => !hardBlockedIds.has(c.id));
 
     // Ratings come ONLY from the computed source (shift_ratings via caregiver_performance).
     // caregivers.performance_rating is deprecated and must not influence ranking.
     const { data: perfRows } = await supabaseClient
       .from('caregiver_performance')
       .select('caregiver_id, avg_rating, rating_count, completion_rate, on_time_rate')
-      .in('caregiver_id', (caregivers || []).map((c: any) => c.id));
+      .in('caregiver_id', eligibleCaregivers.map((c: any) => c.id));
     const perfById = new Map((perfRows || []).map((p: any) => [p.caregiver_id, p]));
 
     const clientZip = shift.clients?.zip_code ?? null;
     // Date-only strings must be read as UTC to avoid a timezone-shifted day-of-week.
     const shiftDow = new Date(`${shift.shift_date}T00:00:00Z`).getUTCDay();
 
-    const matches = (caregivers || []).map((c: any) => {
+    const matches = eligibleCaregivers.map((c: any) => {
       const keyFactors: string[] = [];
       const warnings: string[] = [];
 

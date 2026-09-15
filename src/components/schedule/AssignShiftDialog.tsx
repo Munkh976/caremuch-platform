@@ -23,13 +23,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { AlertTriangle, CalendarDays, Clock, Loader2, MapPin, User } from "lucide-react";
+import { AlertTriangle, Ban, CalendarDays, Clock, Loader2, MapPin, User } from "lucide-react";
 import {
   assignShift,
   OverrideRequiredError,
   checkAssignmentConflicts,
   durationHours,
 } from "@/lib/shiftAssignment";
+import { evaluateEligibilityBulk, type EligibilityResult } from "@/lib/shiftEligibility";
+import { EligibilityReport } from "@/components/schedule/EligibilityReport";
 
 interface AssignShiftDialogProps {
   open: boolean;
@@ -53,6 +55,7 @@ export const AssignShiftDialog = ({
   onAssigned,
 }: AssignShiftDialogProps) => {
   const [caregivers, setCaregivers] = useState<any[]>([]);
+  const [eligibility, setEligibility] = useState<Map<string, EligibilityResult>>(new Map());
   const [careTypes, setCareTypes] = useState<any[]>([]);
   const [caregiverId, setCaregiverId] = useState<string>("");
   const [careTypeCode, setCareTypeCode] = useState<string>("");
@@ -115,6 +118,13 @@ export const AssignShiftDialog = ({
       );
       setCareTypes(cts || []);
       setLoading(false);
+
+      // Bulk eligibility for the whole roster -- partitions the picker below into
+      // default-eligible vs. search-only-findable-but-disabled. An empty map (RPC
+      // unreachable) means "unknown, don't filter" -- the roster shows unfiltered,
+      // same as before this change; the server-side RPC still enforces at submit time.
+      const eligMap = await evaluateEligibilityBulk(shift.id, (cgs || []).map((c: any) => c.id));
+      setEligibility(eligMap);
     };
     load();
   }, [open, shift, defaultCaregiverId]);
@@ -145,13 +155,46 @@ export const AssignShiftDialog = ({
     };
   }, [open, shift, caregiverId, startTime, endTime, hours]);
 
+  const isEligible = (c: any) => eligibility.get(c.id)?.eligible !== false;
+
+  /**
+   * Default (no search text): only hard-eligible caregivers -- matches
+   * check_assignment_eligibility's own `hard.length === 0` definition of eligible,
+   * regardless of soft flags (a hard-clean, soft-flagged pick still goes through
+   * the existing override flow below). Search: the full RLS-visible roster,
+   * including hard-blocked candidates, so a manager can find and see WHY someone
+   * is blocked -- selecting one disables Assign (see selectedResult below).
+   */
   const filteredCaregivers = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return caregivers;
-    return caregivers.filter((c) =>
-      `${c.first_name} ${c.last_name}`.toLowerCase().includes(q)
-    );
-  }, [caregivers, search]);
+    const base = q
+      ? caregivers.filter((c) => `${c.first_name} ${c.last_name}`.toLowerCase().includes(q))
+      : caregivers.filter(isEligible);
+    // Always keep the currently-selected caregiver visible even if it would
+    // otherwise be filtered out (e.g. a pre-filled AI suggestion or a blocked
+    // pick found via search, then the search box is cleared).
+    if (caregiverId && !base.some((c) => c.id === caregiverId)) {
+      const selected = caregivers.find((c) => c.id === caregiverId);
+      if (selected) return [selected, ...base];
+    }
+    return base;
+  }, [caregivers, search, eligibility, caregiverId]);
+
+  const selectedResult = caregiverId ? eligibility.get(caregiverId) ?? null : null;
+  const hardBlocked = !!selectedResult && !selectedResult.eligible;
+
+  // Proactively surface the override note for a hard-clean, soft-flagged pick,
+  // instead of waiting for the server to reject the first submit attempt. Hard
+  // blocks never get an override prompt (none is possible) -- the dedicated
+  // "cannot be assigned" panel above covers that case instead.
+  useEffect(() => {
+    if (selectedResult && selectedResult.eligible && selectedResult.blockers.length > 0) {
+      setOverridePrompt(selectedResult.blockers.map((b) => b.detail).join(" "));
+    } else {
+      setOverridePrompt(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [caregiverId, selectedResult]);
 
   const handleConfirm = async () => {
     if (!shift) return;
@@ -256,16 +299,34 @@ export const AssignShiftDialog = ({
                     No caregivers found
                   </SelectItem>
                 ) : (
-                  filteredCaregivers.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.first_name} {c.last_name}
-                      {` • ${shortRatingLabel(c.performance)}`}
-                    </SelectItem>
-                  ))
+                  filteredCaregivers.map((c) => {
+                    const blocked = !isEligible(c);
+                    return (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.first_name} {c.last_name}
+                        {blocked ? " • Not eligible" : ` • ${shortRatingLabel(c.performance)}`}
+                      </SelectItem>
+                    );
+                  })
                 )}
               </SelectContent>
             </Select>
+            {!search.trim() && (
+              <p className="text-xs text-muted-foreground">
+                Showing only caregivers eligible for this shift. Search to find anyone else.
+              </p>
+            )}
           </div>
+
+          {hardBlocked && selectedResult && (
+            <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3">
+              <div className="flex items-center gap-2 text-sm font-medium text-destructive mb-2">
+                <Ban className="h-4 w-4" />
+                This caregiver cannot be assigned
+              </div>
+              <EligibilityReport result={selectedResult} />
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label>Care service</Label>
@@ -357,7 +418,7 @@ export const AssignShiftDialog = ({
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
             Cancel
           </Button>
-          <Button onClick={handleConfirm} disabled={saving || !caregiverId || hours <= 0 || (!!overridePrompt && !overrideReason.trim())}>
+          <Button onClick={handleConfirm} disabled={saving || !caregiverId || hours <= 0 || hardBlocked || (!!overridePrompt && !overrideReason.trim())}>
             {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Confirm Assignment
           </Button>
