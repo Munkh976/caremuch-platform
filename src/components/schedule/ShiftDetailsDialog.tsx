@@ -22,6 +22,10 @@ export const ShiftDetailsDialog = ({ shift, open, onOpenChange, onAssign }: Shif
   const careType = shift.care_types || shift.care_type;
   const serviceName = careType?.name || shift.order_title || "Care service";
   const clientName = [client?.first_name, client?.last_name].filter(Boolean).join(" ");
+  // Client phone comes from a caregiver-scoped view that includes clients on browsable
+  // open shifts, not just assigned ones -- don't surface a phone number for a shift the
+  // caregiver hasn't picked up yet.
+  const isOpenShift = shift.status === "open" || shift.status === "unassigned";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -43,7 +47,7 @@ export const ShiftDetailsDialog = ({ shift, open, onOpenChange, onAssign }: Shif
             </div>
             <div className="ml-6">
               <p className="font-medium text-lg">{clientName || "Unknown client"}</p>
-              {client?.phone && (
+              {client?.phone && !isOpenShift && (
                 <p className="text-sm text-muted-foreground">{client.phone}</p>
               )}
             </div>

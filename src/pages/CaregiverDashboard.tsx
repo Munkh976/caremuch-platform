@@ -15,6 +15,7 @@ import {
   fetchOneCaregiverPerformance,
   type CaregiverPerformance,
 } from "@/lib/caregiverPerformance";
+import { fetchCaregiverVisibleClients } from "@/lib/caregiverVisibleClients";
 
 interface Assignment {
   id: string;
@@ -92,20 +93,27 @@ const CaregiverDashboard = () => {
       setProfile(caregiverData);
       setPerformance(await fetchOneCaregiverPerformance(caregiverData.id));
 
-      // Fetch all assignments with shifts
+      // Fetch all assignments with shifts. clients is NOT embedded here -- caregivers have
+      // no RLS SELECT policy on public.clients at all, so a nested embed silently resolves
+      // to null (this was the "Unknown client" bug). Fetch the caregiver-safe, narrow client
+      // view separately via get_caregiver_visible_clients() and merge by client_id.
       const { data: assignmentsData, error: assignmentsError } = await supabase
         .from("shift_assignments")
         .select(`
           *,
-          shifts (
-            *,
-            clients (first_name, last_name, address, city)
-          )
+          shifts (*)
         `)
         .eq("caregiver_id", caregiverData.id);
 
       if (assignmentsError) throw assignmentsError;
-      
+
+      const visibleClients = await fetchCaregiverVisibleClients();
+      for (const a of assignmentsData || []) {
+        if (a.shifts) {
+          (a.shifts as any).clients = visibleClients.get((a.shifts as any).client_id) || null;
+        }
+      }
+
       const now = new Date();
       const startOfWeek = new Date(now);
       startOfWeek.setDate(now.getDate() - now.getDay());
