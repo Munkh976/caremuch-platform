@@ -1,5 +1,169 @@
 # Known Issues
 
+## `shift_trades` RLS is agency-wide, not office-scoped
+
+**Status:** Found 2026-09-16 while designing the caregiver Available Shifts redesign
+(`docs/scheduling-caregiver-board-plan.md` §0.5). Not fixed as part of that redesign --
+the redesign's own `get_caregiver_trade_shifts()` function office-scopes itself
+explicitly rather than trusting this looser RLS, so the caregiver-facing feature isn't
+exposed to this gap. The underlying table policy itself is still loose.
+
+`shift_trades` has no `virtual_office_id` column, unlike `shifts`/`clients`/`caregivers`/
+etc. after Phase 0/M-Office. Its RLS policies (`"Agency staff can view/manage shift
+trades"`) scope by agency only, via a join through `original_caregiver_id`'s agency --
+any authenticated user in the same agency (not just staff, and not office-restricted)
+can read or update any trade row, including one whose original caregiver is in a
+different office. This is the same class of gap M1/M-Office/Phase 0 closed for other
+scheduling tables, just never applied to this one.
+
+**Deliberately out of scope for now** -- logged as its own smaller follow-up. Fixing it
+properly would need a `virtual_office_id` column on `shift_trades` (or a derived one via
+the joined shift) plus updated RLS policies, mirroring the established pattern.
+
+## RESOLVED: a real caregiver account could never complete a trade-board pickup
+
+**Status:** Found 2026-09-16 by the caregiver Available Shifts redesign's own test, before
+ship (`docs/scheduling-caregiver-board-plan.md` §9.1). Fixed same-day via
+`20260916210000_caregiver_pickup_trade_shift.sql`.
+
+`assign_caregiver_to_shift()` (used by the trade-pickup flow) starts with
+`IF NOT public.is_agency_staff(auth.uid()) THEN RAISE EXCEPTION 'Only agency staff can
+assign shifts'`. `is_agency_staff()` only recognizes `system_admin`/`agency_admin`/
+`manager`/`scheduler`/`hr_staff` -- `caregiver` has never been in that list. This means a
+genuine caregiver account clicking "Pick up" on a Trade Board item has never actually
+worked, in either the pre-existing `ShiftTrades.tsx` page or the new Trade Shifts section
+-- it would always hit "Only agency staff can assign shifts". Moot for `ShiftTrades.tsx`
+specifically now that caregivers are routed away from that page (the new route guard), but
+the underlying gap was real and had gone unnoticed, presumably because that page was only
+ever tested by staff/admin accounts.
+
+**Fix:** a dedicated `caregiver_pickup_trade_shift(_trade_id)` RPC, self-scoped from
+`auth.uid()`, mirroring `caregiver_pick_up_shift()`'s existing pattern rather than relaxing
+`assign_caregiver_to_shift()`'s staff-only auth surface (a deliberate choice to keep that
+function's authorization boundary untouched). Includes a claim-then-act race guard
+(`UPDATE shift_trades ... WHERE status='pending'` before touching `shift_assignments`),
+verified live with a genuine two-connection concurrent-claim test: exactly one caller wins,
+the loser gets a clean rejection, no duplicate/corrupted assignment rows.
+
+## FUTURE FEATURE: caregiver-initiated "give up my shift" flow
+
+**Status:** Logged 2026-09-16 while designing the caregiver Available Shifts redesign.
+Not built, not started.
+
+Today, `shift_trades` rows are only ever created by staff-side automation
+(`TimeOffDecisionDialog.tsx`, when a manager approves a caregiver's time-off request and
+that caregiver's now-conflicting shifts are dropped onto the trade board). There is no
+caregiver-facing UI anywhere to voluntarily give up an assigned shift outside of that
+flow, despite `role_permissions` granting the `caregiver` role `can_create` on
+`shift_trades` (a grant that currently has no UI wired to it).
+
+**Deliberately out of scope for now** -- a legitimate future feature, not part of the
+Available Shifts redesign (which only changes how a caregiver *browses and picks up*
+what already exists).
+
+## RESOLVED: caregivers had zero RLS access to `clients` -- "Unknown client" everywhere, and a compounding AvailableShifts regression
+
+**Status:** Found 2026-09-16 investigating a user-reported "Unknown client" bug on a shift
+detail view. Diagnosed as a pure LOGIC gap, not a data problem -- a full chain-consistency
+audit of the demo agency (56fbfe38: 5 clients, 8 orders, 31 shifts, 17 assignments, 6
+caregivers) found **zero** orphaned FKs, zero NULL offices, zero office mismatches anywhere.
+Fixed via `20260916120000_caregiver_visible_client_info.sql`, committed separately
+(`0898363`) from the Available Shifts redesign. Verified live: 19/19 checks, teardown
+confirmed by re-query.
+
+**Root cause:** `public.clients`' RLS policies -- unchanged since they were first created
+(`20251103220124`, 2025-11-03), predating M1/M-Office/Phase 0/Phase 1B entirely -- only ever
+covered staff roles (system_admin/agency_admin/manager/scheduler/hr_staff) and a client's own
+login (`user_id = auth.uid()`). **No policy ever granted a caregiver `SELECT` on any `clients`
+row**, not even the client on their own assigned shift. A caregiver-facing nested PostgREST
+embed (`shifts -> clients`, used by `CaregiverDashboard.tsx` and `AvailableShifts.tsx`)
+silently resolves the embedded relation to `null` when RLS denies it, rather than erroring --
+so `ShiftDetailsDialog.tsx` rendered its own "Unknown client" fallback string. Interestingly
+the reverse direction was built (`Clients view caregivers (agency scope)`) but the caregiver-
+side equivalent apparently never was.
+
+**Compounding discovery, worse than the reported symptom:** `AvailableShifts.tsx` filters
+`if (!shift.clients) return false` before rendering -- meaning this same gap made **every**
+open shift disappear from the caregiver's "Available Shifts" list entirely, not just show
+"Unknown client". This recreates the exact "0 shifts available" symptom this doc's own
+now-superseded "Caregivers cannot see open/unassigned shifts" entry described, via a
+*different* mechanism than the one Phase 1B fixed. **Phase 1B's own E-test only verified the
+raw `shifts`-table RLS policy at the SQL level and did not exercise `AvailableShifts.tsx`'s
+actual client-side filter logic, so it did not catch this** -- worth remembering for future
+phases: a passing SQL-level RLS check does not guarantee the page that depends on it renders
+correctly when a *different* table's RLS blocks a value the page's own client-side logic
+treats as required.
+
+**Why a full-row RLS policy was rejected as the fix:** `clients` carries
+`medical_conditions`/`care_requirements`/`notes` (PHI-adjacent free text). This project
+already established the principle that these fields must not reach a caregiver-facing surface
+(`match-caregiver` excludes them from matching for privacy/safety/legal reasons, see
+CLAUDE.md's AI provider strategy section) -- the same principle applies to caregiver
+client-*visibility*, not just matching. A full-row policy would have fixed the symptom while
+reopening exactly the exposure that principle exists to prevent.
+
+**Why column-level `GRANT` doesn't work here:** every application-level role (caregiver,
+manager, agency_admin, ...) maps to the same Postgres role, `authenticated`, in this project --
+authorization is done entirely via RLS policies referencing `auth.uid()`/helper functions, not
+via distinct database roles per application role. A column-level `GRANT`/`REVOKE` on
+`authenticated` would affect staff too, breaking their legitimate access to the same columns.
+
+**The fix:** a new `SECURITY DEFINER` function, `get_caregiver_visible_clients()`, does its own
+row-filtering (a shift the caller is assigned to, OR an open shift in the caller's own office
+-- mirroring the Phase 1B `AvailableShifts` RLS policy's own scoping shape) and returns ONLY a
+narrow, non-PHI column list: `first_name`, `last_name`, `phone`, `address`, `city`, `state`,
+`zip_code`, `scheduling_flexibility` (a controlled enum -- `continuity`/`balanced`/`flexible`,
+see `src/lib/flexibility.ts` -- confirmed NOT free text before including it). Excluded:
+`email`, `date_of_birth`, `emergency_contact_*`, `care_requirements`, `medical_conditions`,
+`notes`, `scheduling_notes`, `preferred_caregiver_id`, `family_id`, and all internal/audit
+columns. The base `clients` table's RLS/grants are completely untouched, so staff access is
+unaffected by construction. `CaregiverDashboard.tsx` and `AvailableShifts.tsx` now fetch this
+narrow client map separately (`src/lib/caregiverVisibleClients.ts`) and merge it onto shifts
+client-side instead of embedding `clients` in the PostgREST query.
+
+**Phone refinement:** a client's phone number is still returned by the RPC regardless of
+connection reason (assigned vs. browsable-open), but `ShiftDetailsDialog.tsx` only *displays*
+it when the shift is not `open`/`unassigned` -- a caregiver previewing an open shift they
+haven't picked up yet sees name/location but not phone; picking it up (or viewing an assigned
+shift) shows it. Deliberately a display-layer gate, not an RPC change -- phone was judged
+low-risk enough not to warrant denormalizing the RPC by connection-reason.
+
+## Systemic date-only-string parsing bug: `new Date(dateOnlyString)` renders the wrong calendar day west of UTC
+
+**Status:** Found 2026-09-16 alongside the "Unknown client" investigation (the reported shift
+displayed "Sept 15" for a row whose actual `shift_date` is `2026-09-16`). Confirmed systemic,
+NOT fixed in this pass -- more than the "if trivial" one-liner it first looked like.
+
+**The mechanism:** a `date`-typed Postgres column comes back from Supabase as a bare
+`"YYYY-MM-DD"` string. Per the ECMAScript spec, `new Date("2026-09-16")` (no time component)
+parses as **UTC midnight**, not local midnight. `.toLocaleDateString()`/`.toLocaleString()`
+then renders that instant in the *browser's local timezone* -- anywhere west of UTC (all of the
+US, for instance), this rolls back to the previous calendar day. Appending a bare time
+component without a zone offset avoids this: `new Date("2026-09-16T00:00:00")` (no trailing
+`Z`) is parsed as **local** midnight per spec, which is why some call sites already display
+correctly by accident.
+
+**Confirmed present (renders one day early) in:** `src/components/schedule/ShiftDetailsDialog.tsx:78`,
+`src/pages/AvailableShifts.tsx:221`, `src/components/caregivers/ShiftList.tsx:99`,
+`src/components/client-dashboard/CareHistory.tsx:137`, `src/pages/Dashboard.tsx:513`,
+`src/components/schedule/ShiftCard.tsx:71`, `src/components/dashboard/UpcomingShifts.tsx:121`,
+`src/components/client-dashboard/MySchedule.tsx` (multiple), plus several `shift_date`-only
+comparisons in `CaregiverDashboard.tsx` (upcoming/this-week/history filtering -- these can
+misclassify a shift by a day at week/day boundaries, not just display it wrong).
+
+**Confirmed already correct (appends `T00:00:00` or otherwise avoids the bug):**
+`src/components/orders/OrderWizardDialog.tsx:486`, `src/pages/Reports.tsx:187`,
+`src/lib/shiftEligibility.ts` (`v_dow`/`v_hours_until` calculations).
+
+**Deliberately not fixed here** -- this touches ~10 files, not one, and several of the broken
+sites are date-*comparison* logic (which shift bucket a shift falls into), not just display
+formatting, so a blanket fix deserves its own scoped pass with real before/after verification
+across timezones, not a rushed edit folded into an unrelated PHI-visibility fix. The clean fix
+is almost certainly a single shared helper (e.g. `parseShiftDate(dateOnlyString)` using
+date-fns's `parseISO`, which already treats a date-only string as local midnight) used
+everywhere `shift_date` is turned into a `Date`, replacing the ad hoc `new Date(...)` calls one
+by one.
+
 ## New scheduling rows (shifts/client_orders/time_entries/time_off_requests) land with NULL virtual_office_id
 
 **Status:** Found 2026-09-14 while testing Smart Scheduling Phase 0 (see

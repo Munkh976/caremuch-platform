@@ -87,7 +87,7 @@ type ServerIssue = { code: string; label: string; detail: string };
  * same rules the assignment RPC enforces on write. The local implementation
  * below is only a fallback preview when the RPC is unreachable.
  */
-type RawEligibilityResult = {
+export type RawEligibilityResult = {
   hard: ServerIssue[];
   soft: ServerIssue[];
   advisory: ServerIssue[];
@@ -95,9 +95,10 @@ type RawEligibilityResult = {
   projected_weekly_hours: number;
 };
 
-/** Shared mapper from the RPC's raw shape to EligibilityResult -- used by both the
- * single-candidate and bulk paths so the mapping logic exists exactly once. */
-function mapServerResult(r: RawEligibilityResult): EligibilityResult {
+/** Shared mapper from the RPC's raw shape to EligibilityResult -- used by every
+ * single-candidate and bulk path (including the caregiver-board bulk RPCs) so the
+ * mapping logic exists exactly once. */
+export function mapServerResult(r: RawEligibilityResult): EligibilityResult {
   const hard = (r.hard || []).map((i) => ({ ...i, overridable: false }));
   const soft = (r.soft || []).map((i) => ({ ...i, overridable: true }));
   return {

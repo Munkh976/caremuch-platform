@@ -83,6 +83,14 @@ const ShiftTrades = () => {
         supabase.rpc("get_user_role", { _user_id: user.id }),
         supabase.from("profiles").select("agency_id").eq("id", user.id).maybeSingle(),
       ]);
+      // Route guard: the full agency-wide trade board (approval queue, history, every
+      // caregiver's drop reasons) is staff-only. This page previously had no role check
+      // at all -- a caregiver could reach it directly by URL even after the sidebar link
+      // is removed. Caregivers get their own scoped view on /available-shifts instead.
+      if (!STAFF_ROLES.includes((roleData as string) ?? "")) {
+        navigate("/available-shifts", { replace: true });
+        return;
+      }
       setRole((roleData as string) ?? null);
       setAgencyId(profile?.agency_id ?? null);
       if (profile?.agency_id) {
