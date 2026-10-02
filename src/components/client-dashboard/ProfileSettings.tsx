@@ -4,7 +4,6 @@ import { useCareServices } from "@/hooks/useCareServices";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { User, Phone, Mail, MapPin, Heart, Bell, Lock, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -182,7 +181,6 @@ export const ProfileSettings = ({ clientProfile, userEmail, onRefresh }: Profile
           zip_code: formData.zip_code,
           emergency_contact_name: formData.emergency_contact_name,
           emergency_contact_phone: formData.emergency_contact_phone,
-          notes: formData.notes,
         })
         .eq("id", clientProfile.id);
 
@@ -516,16 +514,8 @@ export const ProfileSettings = ({ clientProfile, userEmail, onRefresh }: Profile
               )}
             </div>
           </div>
-          <div className="space-y-2">
-            <Label>Additional Notes</Label>
-            <Textarea
-              value={formData.notes || ""}
-              onChange={(e) => updateFormData('notes', e.target.value)}
-              disabled={!editMode}
-              placeholder="Any additional medical information or special requirements"
-              rows={4}
-            />
-          </div>
+          {/* clients.notes is the staff-only "Notes" field (Client Details dialog): not shown or
+              editable in the client portal (M-SEC-2 guard). See known-issues: client_notes. */}
         </CardContent>
       </Card>
 

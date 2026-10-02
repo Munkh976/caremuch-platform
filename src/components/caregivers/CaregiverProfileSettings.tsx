@@ -111,7 +111,6 @@ useEffect(() => {
         .update({
           first_name: formData.first_name,
           last_name: formData.last_name,
-          email: formData.email,
           phone: formData.phone,
           address: formData.address,
           city: formData.city,
@@ -133,7 +132,6 @@ useEffect(() => {
           .from("profiles")
           .update({
             full_name: `${formData.first_name || ''} ${formData.last_name || ''}`.trim(),
-            email: formData.email || undefined,
             phone: formData.phone || undefined,
           })
           .eq("id", caregiverProfile.user_id);
@@ -337,11 +335,11 @@ useEffect(() => {
 </div>
 <div className="space-y-2">
   <Label>Email</Label>
-  <Input
-    value={formData?.email || ""}
-    onChange={(e) => updateFormData('email', e.target.value)}
-    disabled={!editMode}
-  />
+  {/* Login email is the account identity; only the office can change it (M-SEC-2 guard). */}
+  <Input value={formData?.email || ""} disabled readOnly />
+  {editMode && (
+    <p className="text-xs text-muted-foreground">To change your email, contact your office.</p>
+  )}
 </div>
 <div className="space-y-2">
   <Label>Phone</Label>
