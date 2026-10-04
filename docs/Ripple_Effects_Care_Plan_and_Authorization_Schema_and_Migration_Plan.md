@@ -589,6 +589,13 @@ IPOS version** — renewal (even with identical goals, per Bren), addendum, or a
 goals, objectives, or Instructions for Staff. Do **not** bump for narrative edits, needs/DSM
 edits, client forms, or `objective_measures` edits. A bump invalidates existing
 `plan_inservice_forms` and `plan_training_records` for this client (§8).
+**As built (B1, owner-accepted):**
+- A goal/objective/Instructions change bumps `training_version` only once someone was trained on
+  the current version (an in-service or training form exists at it). Before that, the plan is
+  still being drafted and the change is an ordinary edit (`care_plan_updated`).
+- Renewal always bumps.
+- The UI asks the manager to confirm "This change requires retraining all caregivers for this
+  client" before a save that will bump it.
 
 **Measure management (RPC `set_objective_measures`, Phase B):** Bren (manager role) enters the
 ISK goals/objectives and sets each objective's measures from the library. Caregivers cannot

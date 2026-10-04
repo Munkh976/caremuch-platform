@@ -1211,3 +1211,22 @@ TRUNCATE (which RLS does not apply to), on new public tables. Currently 44 table
 - **Tidy later:** a migration revoking TRUNCATE (and REFERENCES / TRIGGER) from anon and
   authenticated on existing tables, plus `ALTER DEFAULT PRIVILEGES` so new tables don't get them.
 - The Ripple Phase A tables already revoke them explicitly (schema plan §2.1).
+
+## REQUIRED BEFORE PRODUCTION: load the care-plan default catalogs before enabling the module
+
+**Status:** Logged 2026-10-04 (Ripple Phase B1, owner decision).
+
+`seed_office_care_plan_defaults(_office_id)` copies defaults from two system tables when an
+agency_admin enables the care-plan module for an office:
+- `cp_default_credential_types` (the credential checklist);
+- `cp_default_service_types` (care_type_code → service_type mappings).
+
+Their content is deployment reference data (on DEV, the ISK/Michigan checklist), so no migration
+fills them. On a new project they start **empty**: enabling the module would copy nothing.
+
+**Before enabling the module for a real agency:** load both tables through a reviewed
+reference-data step with count checks, as `scripts/seed/care_plan_defaults_dev_seed.sql` does on
+DEV. Then verify:
+
+    SELECT count(*) FROM public.cp_default_credential_types;
+    SELECT count(*) FROM public.cp_default_service_types;
