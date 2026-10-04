@@ -48,13 +48,13 @@ async function scenario(F) {
     { field_key: "objectives", label: "Objectives", field_type: "table", storage: "child_rows", writes_to_entity: "progress_note_entry" }];
   const shell = async (kind, name, fields, extra = {}) => {
     const v = await must(F.mgrX.c, "save_template_draft", { _template_id: null, _office_id: F.OX, _kind: kind, _name: `ZZ ${name} ${RUN}`, _intake_doc_type: extra.doc || null,
-      _is_required_for_client: extra.doc ? true : null, _sections: [], _note_layout: extra.layout || null, _fields: fields });
+      _is_required_for_client: extra.doc ? true : null, _sections: [], _note_layout: extra.layout || null, _fields: fields, _service_type: extra.svc || null });
     const t = await tplOf(v); ids.form_templates = (ids.form_templates || []).concat(t); S.templates.push(t);
     await must(F.mgrX.c, "publish_template_version", { _template_id: t }); return t;
   };
   S.iposTpl = await shell("ipos", "IPOS", ipos());
-  S.respiteTpl = await shell("progress_note", "Respite note", noteFields, { layout: { billing_footer: { enabled: true }, narrative: true } });
-  S.clsTpl = await shell("progress_note", "CLS note", noteFields, { layout: { billing_footer: { enabled: true } } });
+  S.respiteTpl = await shell("progress_note", "Respite note", noteFields, { layout: { billing_footer: { enabled: true }, narrative: true }, svc: "respite" });
+  S.clsTpl = await shell("progress_note", "CLS note", noteFields, { layout: { billing_footer: { enabled: true } }, svc: "cls" });
   const DOCS = ["assessment", "consent", "insurance", "emergency_contacts", "allergies", "release_of_information", "safety_behavior_plan"];
   for (const d of DOCS) await shell("intake", `intake ${d}`, [{ field_key: "notes", label: "Notes", field_type: "longtext", storage: "field_value" }], { doc: d });
   rec("S1.2 manager publishes the IPOS, respite-note, CLS-note and 7 intake shells", pass(S.templates.length === 10), `${S.templates.length} shells published`);
@@ -152,8 +152,9 @@ async function scenario(F) {
   rec("S4.1 notes: on time (4 units), +5:01 late (4 -> 3), respite (narrative); the late one returned and resubmitted",
     pass(n1r.units_used === 4 && !n1r.arrived_late && n2.arrived_late && n2.units_scheduled === 4 && n2.units_used === 3 && r1r.note_kind === "respite" && !ret.err && afterRet === "returned" && n2.status === "submitted" && n2.returned_count === 1),
     `n1 ${n1r.units_used}u; n2 late=${n2.arrived_late} ${n2.units_scheduled}->${n2.units_used}u, returned (${afterRet}) and resubmitted (${n2.status}, returned_count ${n2.returned_count}); respite kind ${r1r.note_kind}`);
-  rec("S4.1b note shells: every note snapshots the office's newest progress_note shell (one shell per office; per-service note shells are not modelled)",
-    "INFO", `CLS note -> ${(await row(N.n1)).template_id === S.clsTpl ? "CLS shell" : "other"}; respite note -> ${r1r.template_id === S.clsTpl ? "CLS shell" : r1r.template_id === S.respiteTpl ? "respite shell" : "none"}`);
+  const n1t = (await row(N.n1)).template_id;
+  rec("S4.1b note shells per service: the CLS note snapshots the CLS shell and the respite note the respite shell",
+    pass(n1t === S.clsTpl && r1r.template_id === S.respiteTpl), `CLS note -> ${n1t === S.clsTpl ? "CLS shell" : n1t === S.respiteTpl ? "respite shell" : "other"}; respite note -> ${r1r.template_id === S.respiteTpl ? "respite shell" : r1r.template_id === S.clsTpl ? "CLS shell" : "other"}`);
   const REV = (k) => rpc(F.mgrX.c, "review_progress_note", { _note_id: N[k], _billable: true, _non_billable_reason: null });
   const R = {}; for (const k of ["n1", "n2", "n3", "n4", "r1"]) R[k] = await REV(k);
   const auth = async (k) => (await row(N[k])).authorization_id;

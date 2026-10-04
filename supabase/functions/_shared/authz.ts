@@ -42,6 +42,15 @@ export interface Principal {
   role: string | null; // highest role held, from ALL user_roles rows (not get_user_role, which omits 'client')
   rank: number;
   agencyId: string | null;
+  // S-OFF-1: profiles.office_restricted / virtual_office_id (M-Office Tier 3). A restricted caller
+  // acts only inside its own office, the same rule as is_office_restricted() in the database.
+  officeRestricted: boolean;
+  officeId: string | null;
+}
+
+/** S-OFF-1: may `caller` act on a record of office `officeId`? Unrestricted callers: always. */
+export function officeAllows(caller: Principal, officeId: string | null | undefined): boolean {
+  return caller.role === "system_admin" || !caller.officeRestricted || (!!caller.officeId && officeId === caller.officeId);
 }
 
 export async function loadPrincipal(admin: SupabaseClient, userId: string): Promise<Principal | null> {
@@ -49,7 +58,7 @@ export async function loadPrincipal(admin: SupabaseClient, userId: string): Prom
   if (typeof userId !== "string" || !/^[0-9a-f-]{36}$/i.test(userId)) return null;
   const [{ data: roles }, { data: profile }] = await Promise.all([
     admin.from("user_roles").select("role").eq("user_id", userId),
-    admin.from("profiles").select("agency_id").eq("id", userId).maybeSingle(),
+    admin.from("profiles").select("agency_id, virtual_office_id, office_restricted").eq("id", userId).maybeSingle(),
   ]);
   // Owner rule C: a target with roles but no profile gets agencyId = null, which canActOn refuses
   // for everyone except system_admin. No profile AND no roles => unknown (null) => generic 403.
@@ -60,7 +69,8 @@ export async function loadPrincipal(admin: SupabaseClient, userId: string): Prom
     const k = ROLE_RANK[r.role as string] ?? 0;
     if (k > rank) { rank = k; role = r.role as string; }
   }
-  return { id: userId, role, rank, agencyId: profile?.agency_id ?? null };
+  return { id: userId, role, rank, agencyId: profile?.agency_id ?? null,
+    officeRestricted: profile?.office_restricted === true, officeId: profile?.virtual_office_id ?? null };
 }
 
 /**
@@ -71,6 +81,7 @@ export async function loadPrincipal(admin: SupabaseClient, userId: string): Prom
  *  - the target's highest role must rank strictly below the caller's (C) — an agency_admin never
  *    acts on a system_admin or another agency_admin, a manager never on an agency_admin, nobody
  *    on a peer;
+ *  - an office-restricted caller (M-Office Tier 3) acts only on users of its own office (S-OFF-1);
  *  - every refusal other than "self" returns the same generic 403 (D).
  */
 export function canActOn(caller: Principal, target: Principal | null, targetId: string, opts: { allowSelf?: boolean } = {}):
@@ -84,6 +95,8 @@ export function canActOn(caller: Principal, target: Principal | null, targetId: 
     if (!caller.agencyId || !target.agencyId || target.agencyId !== caller.agencyId) return deny;
   }
   if (target.rank >= caller.rank) return deny;
+  // S-OFF-1: an office-restricted caller acts only on users of its own office
+  if (!officeAllows(caller, target.officeId)) return deny;
   return { ok: true };
 }
 

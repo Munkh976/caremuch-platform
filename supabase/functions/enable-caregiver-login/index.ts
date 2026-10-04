@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
-import { hasCallerRole, loadPrincipal, MANAGER_OR_ABOVE } from "../_shared/authz.ts";
+import { hasCallerRole, loadPrincipal, MANAGER_OR_ABOVE, officeAllows } from "../_shared/authz.ts";
 import {
   checkExistingAccount, findAuthUserIdByEmail, inviteNewUser, linkHandedOverNote, setPasswordRedirect,
 } from "../_shared/accountLinks.ts";
@@ -51,10 +51,14 @@ serve(async (req) => {
     }
 
     const { data: caregiver, error: caregiverError } = await admin
-      .from('caregivers').select('id, agency_id, user_id, email, first_name, last_name, phone').eq('id', caregiverId).single();
+      .from('caregivers').select('id, agency_id, virtual_office_id, user_id, email, first_name, last_name, phone').eq('id', caregiverId).single();
     if (caregiverError || !caregiver) return json({ error: 'Caregiver not found' }, 404);
     if (!isSystemAdmin && caregiver.agency_id !== callerP.agencyId) {
       return json({ error: 'Caregiver belongs to another agency' }, 403);
+    }
+    // S-OFF-1: an office-restricted caller acts only on its own office's caregivers
+    if (!officeAllows(callerP, caregiver.virtual_office_id)) {
+      return json({ error: 'Caregiver belongs to another office' }, 403);
     }
     if (caregiver.user_id) return json({ error: 'This caregiver already has a login' }, 400);
     const agencyId = caregiver.agency_id as string;

@@ -1,0 +1,89 @@
+### assign_caregiver_to_shift
+--- DEV now
++++ new
+@@ -16,4 +16,9 @@ BEGIN
+     RAISE EXCEPTION 'Shift belongs to another agency' USING ERRCODE='42501';
+   END IF;
++  -- S-OFF-1: an office-restricted caller acts only inside its own office (same rule and generic
++  -- denial as cp_require_scope / the M-Office RLS predicate)
++  IF public.is_office_restricted(auth.uid()) AND s.virtual_office_id IS DISTINCT FROM public.current_virtual_office_id() THEN
++    RAISE EXCEPTION 'Not found or not allowed' USING ERRCODE = '42501';
++  END IF;
+ 
+   -- Phase C: serialize assignments drawing on this client's authorizations (id order, as review)
+
+### release_shift_assignments
+--- DEV now
++++ new
+@@ -10,4 +10,11 @@ BEGIN
+     RAISE EXCEPTION 'Only agency staff can release assignments' USING ERRCODE='42501';
+   END IF;
++  -- S-OFF-1: an office-restricted caller acts only inside its own office (same rule and generic
++  -- denial as cp_require_scope / the M-Office RLS predicate)
++  IF public.is_office_restricted(auth.uid()) AND EXISTS (SELECT 1 FROM public.shifts s
++       WHERE s.id = ANY(_shift_ids) AND s.agency_id = public.current_agency_id()
++         AND s.virtual_office_id IS DISTINCT FROM public.current_virtual_office_id()) THEN
++    RAISE EXCEPTION 'Not found or not allowed' USING ERRCODE = '42501';
++  END IF;
+ 
+   PERFORM set_config('caremuch.assignment_ctx','1',true);
+
+### compute_earnings_for_time_entry
+--- DEV now
++++ new
+@@ -20,4 +20,9 @@ BEGIN
+     RAISE EXCEPTION 'Only agency staff may compute earnings' USING ERRCODE='42501';
+   END IF;
++  -- S-OFF-1: an office-restricted caller acts only inside its own office (same rule and generic
++  -- denial as cp_require_scope / the M-Office RLS predicate)
++  IF public.is_office_restricted(auth.uid()) AND te.virtual_office_id IS DISTINCT FROM public.current_virtual_office_id() THEN
++    RAISE EXCEPTION 'Not found or not allowed' USING ERRCODE = '42501';
++  END IF;
+   IF te.status <> 'approved' OR te.voided_at IS NOT NULL THEN
+     RETURN jsonb_build_object('ok', false, 'skipped_reason', 'not_approved');
+
+### create_progress_note_for_shift
+--- DEV now
++++ new
+@@ -41,5 +41,6 @@ BEGIN
+   END IF;
+ 
+-  v_ver := cp_resolve_template(s.agency_id, s.virtual_office_id, 'progress_note', NULL);
++  -- D3 follow-up: the shell for this note's service first (office, then agency-wide; Q15 order kept)
++  v_ver := cp_resolve_note_template(s.agency_id, s.virtual_office_id, v_svc);
+   v_snap := CASE WHEN v_ver IS NULL THEN NULL ELSE cp_template_snapshot(v_ver) END;
+ 
+
+### save_template_draft
+--- DEV now
++++ new
+@@ -1,3 +1,3 @@
+-CREATE OR REPLACE FUNCTION public.save_template_draft(_template_id uuid, _office_id uuid, _kind form_template_kind, _name text, _intake_doc_type text, _is_required_for_client boolean, _sections jsonb, _note_layout jsonb, _fields jsonb)
++CREATE FUNCTION public.save_template_draft(_template_id uuid, _office_id uuid, _kind form_template_kind, _name text, _intake_doc_type text, _is_required_for_client boolean, _sections jsonb, _note_layout jsonb, _fields jsonb, _service_type text DEFAULT NULL)
+  RETURNS uuid
+  LANGUAGE plpgsql
+@@ -15,4 +15,8 @@ BEGIN
+       RAISE EXCEPTION 'intake_doc_type is required for intake shells only' USING ERRCODE = '22023';
+     END IF;
++    -- D3 follow-up: a progress-note shell may be for one service (cls / respite); NULL = any service
++    IF _service_type IS NOT NULL AND (_kind <> 'progress_note' OR _service_type NOT IN ('cls', 'respite')) THEN
++      RAISE EXCEPTION 'service_type is cls or respite, for progress-note shells only' USING ERRCODE = '22023';
++    END IF;
+     IF _office_id IS NULL THEN
+       v_agency := current_agency_id();
+@@ -22,10 +26,10 @@ BEGIN
+     PERFORM cp_require_template_editor(v_agency, _office_id);
+     PERFORM cp_validate_template_definition(_kind, _fields, _note_layout);
+-    INSERT INTO public.form_templates (agency_id, virtual_office_id, name, kind, intake_doc_type, is_required_for_client)
+-    VALUES (v_agency, _office_id, btrim(_name), _kind, _intake_doc_type, COALESCE(_is_required_for_client, false))
++    INSERT INTO public.form_templates (agency_id, virtual_office_id, name, kind, intake_doc_type, is_required_for_client, service_type)
++    VALUES (v_agency, _office_id, btrim(_name), _kind, _intake_doc_type, COALESCE(_is_required_for_client, false), _service_type)
+     RETURNING * INTO t;
+   ELSE
+-    IF _office_id IS NOT NULL OR _kind IS NOT NULL OR _intake_doc_type IS NOT NULL THEN
+-      RAISE EXCEPTION 'Office, kind and intake type are fixed on an existing shell' USING ERRCODE = '22023';
++    IF _office_id IS NOT NULL OR _kind IS NOT NULL OR _intake_doc_type IS NOT NULL OR _service_type IS NOT NULL THEN
++      RAISE EXCEPTION 'Office, kind, intake type and service type are fixed on an existing shell' USING ERRCODE = '22023';
+     END IF;
+     SELECT * INTO t FROM public.form_templates WHERE id = _template_id FOR UPDATE;
+
