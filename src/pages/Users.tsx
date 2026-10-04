@@ -40,6 +40,8 @@ import {
 import { Label } from "@/components/ui/label";
 import { UserPlus, Loader2, Search, Edit, Key, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { OneTimeLinkDialog } from "@/components/auth/OneTimeLinkDialog";
+import { requestResetLink } from "@/lib/accountLinks";
 
 interface User {
   id: string;
@@ -59,7 +61,8 @@ const Users = () => {
   const [resetPasswordDialogOpen, setResetPasswordDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  const [newPassword, setNewPassword] = useState("");
+  // Mode B (security plan §15): one-time reset link, shown once, never stored.
+  const [resetLinkInfo, setResetLinkInfo] = useState<{ email: string | null; link: string } | null>(null);
   const [resetting, setResetting] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -143,46 +146,15 @@ const Users = () => {
   };
 
   const handleResetPassword = async () => {
-    if (!selectedUser || !newPassword) return;
-
-    // Validate password
-    if (newPassword.length < 6) {
-      toast.error("Password must be at least 6 characters");
-      return;
-    }
-
+    if (!selectedUser) return;
     setResetting(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error("No session found");
-
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-reset-password`,
-        {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${session.access_token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            userId: selectedUser.id,
-            newPassword: newPassword,
-          }),
-        }
-      );
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || "Failed to reset password");
-      }
-
-      toast.success("Password reset successfully!");
+      const link = await requestResetLink(selectedUser.id);
+      setResetLinkInfo({ email: selectedUser.email ?? null, link });
       setResetPasswordDialogOpen(false);
-      setNewPassword("");
       setSelectedUser(null);
     } catch (error: any) {
-      toast.error(error.message || "Failed to reset password");
+      toast.error(error.message || "Failed to create the reset link");
     } finally {
       setResetting(false);
     }
@@ -386,31 +358,14 @@ const Users = () => {
           <DialogHeader>
             <DialogTitle>Reset Password</DialogTitle>
             <DialogDescription>
-              Set a new password for {selectedUser?.email}
+              Create a one-time link for {selectedUser?.email} to set a new password. Their current password stops working right away.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="newPassword">New Password</Label>
-              <Input
-                id="newPassword"
-                type="password"
-                placeholder="Enter new password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                minLength={6}
-              />
-              <p className="text-xs text-muted-foreground">
-                Minimum 6 characters required
-              </p>
-            </div>
-          </div>
           <DialogFooter>
             <Button
               variant="outline"
               onClick={() => {
                 setResetPasswordDialogOpen(false);
-                setNewPassword("");
                 setSelectedUser(null);
               }}
               disabled={resetting}
@@ -419,13 +374,21 @@ const Users = () => {
             </Button>
             <Button
               onClick={handleResetPassword}
-              disabled={resetting || newPassword.length < 6}
+              disabled={resetting}
             >
-              {resetting ? "Resetting..." : "Reset Password"}
+              {resetting ? "Creating link..." : "Create reset link"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <OneTimeLinkDialog
+        open={!!resetLinkInfo}
+        onClose={() => setResetLinkInfo(null)}
+        title="Password reset link"
+        email={resetLinkInfo?.email ?? null}
+        link={resetLinkInfo?.link ?? null}
+      />
 
       {/* Delete User Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

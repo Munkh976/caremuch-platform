@@ -1521,6 +1521,275 @@ role list in the commit that lands it:
   such a user would be sent to `/dashboard` instead of the caregiver app. None exist today. The
   alternative is a caregiver-row check, which is what `useIsCaregiverRole` already does.
 
+## 15. Issue 2 Mode B + 🟠 Edge Function fixes + Forgot password — DRAFT (not deployed, not committed)
+
+### 15.1 What is drafted
+**Backend:**
+- **New `_shared/accountLinks.ts`:**
+  - `findAuthUserIdByEmail` (exact match);
+  - `checkExistingAccount`, the 🟠 rule: link only if the profile is already in the record's agency; a
+    NULL/legacy profile only by a system_admin; never move an account between agencies;
+  - `inviteNewUser` / `recoveryLink` via `auth.admin.generateLink`, which **sends no email**;
+  - `setPasswordRedirect`;
+  - an audit-only outbox text with no secret.
+- **Functions:**
+
+| Function | Mode B | 🟠 / other |
+|---|---|---|
+| `enable-client-login`, `enable-caregiver-login` | New account → one-time **invite** link in the response (`setPasswordLink`), never stored. The outbox row has no password, no link and no `temp_password` key. | Caller gate uses `_shared/authz.ts` ranking. The agency comes from the **record**, fixing the system_admin cross-agency stamping. The `email` override is **refused** (400). An existing account is linked only under the agency rule above, and its agency is never overwritten. |
+| `approve-caregiver-registration` | Same (invite link; no temp password; clean outbox) | The registration must already be in the reviewer's agency; an **unassigned (NULL)** one is refused (403, "ask a system administrator to assign it"). Existing-account agency rule as above. Caregiver row matched by **exact** lower-cased email, not `.ilike()` wildcards. |
+| `admin-reset-password` | A typed `newPassword` is **refused** (400). Returns a one-time **recovery** link (`resetLink`). By default the current password is first set to a random value nobody sees, so a leaked or temp password dies at once (`keepCurrentPassword: true` skips that). | M-SEC-2b rank and agency checks unchanged |
+| `create-user` | A `password` field is **refused** (400). The account is created through an invite link (`setPasswordLink`); an existing email gets 409. | M-SEC-2b checks unchanged |
+
+`deno check` passes on all six functions plus `_shared/*` (exit 0).
+
+**Frontend:**
+- **New `OneTimeLinkDialog`:** shows the link once with Copy, "not stored, single-use, expires (1 h
+  by default)".
+- **New `src/lib/accountLinks.ts`:** `requestResetLink`.
+- **Every password field and password display is gone:**
+  - `Clients.tsx` and `Caregivers.tsx`: enable-login result and both reset paths (Caregivers' inline
+    edit-dialog reset now creates a link on Save);
+  - `CaregiverApprovals.tsx`: approval result;
+  - `Users.tsx`: reset;
+  - `AdminUserManagement.tsx`: Create + Reset tabs;
+  - `AddUser.tsx`: password field and the never-enforced "Require password change on first login"
+    checkbox removed.
+- **New public pages:**
+  - `/auth/forgot` (`ForgotPassword.tsx`): `resetPasswordForEmail`; the same message whether or not the
+    email exists;
+  - `/auth/set-password` (`SetPassword.tsx`): invite/recovery session → choose an 8–72 char password →
+    role home; an expired or used link says so.
+- **`AuthLinkRouter` in `App.tsx`:** routes invite/recovery arrivals to `/auth/set-password` even if
+  Supabase falls back to the Site URL.
+- **Small additions:** "Forgot password?" link on `/auth`; outbox label `caregiver_login_created`.
+- **Routes:** both new routes are **public by design**, marked in `App.tsx` as the CLAUDE.md rule 15
+  exception.
+- **Type check:** `tsc` clean apart from the 5 known stale-type errors.
+
+### 15.2 Supabase Auth dependencies — nothing changed, owner to verify in the dashboard
+- **Default mailer:**
+  - Supabase's built-in email service is meant for development only. It delivers **only to
+    addresses of the Supabase organization's team members** and is **rate-limited to a few emails
+    per hour** (Auth → Rate limits; historically 2–4/h). Anything else is refused or silently
+    dropped.
+  - It only matters for **Forgot password** (Supabase sends the recovery email). **Mode B links are
+    not affected**: `generateLink` sends nothing.
+  - **S8 needs a test address that is a member of the Supabase org team**, or custom SMTP (Mode A).
+  - `resetPasswordForEmail` is also throttled per address (about one request per 60 s).
+- **Redirect URLs:**
+  - Links redirect to `<app origin>/auth/set-password` only if that origin is on Auth → URL
+    Configuration → Redirect URLs (for example `http://localhost:8080/**` and the deployed origin).
+  - Otherwise Supabase falls back to the **Site URL**, and `AuthLinkRouter` still sends the user to
+    `/auth/set-password`, provided the Site URL is this app.
+- **Expiry:** links are single-use and expire after the project's email-link expiry (Supabase default
+  1 h). An invited user who never sets a password can be sent a fresh link with "reset password"
+  (to be confirmed by after-test P7).
+
+### 15.3 Before-tests (`sec_tests_modeb.cjs`, run `mb-before-muu08le0`, deployed functions)
+Disposable fixtures:
+- a manager;
+- a caregiver login;
+- an auth user whose profile has **no agency**;
+- 3 clients (one sharing that user's email), 1 caregiver;
+- an **unassigned** registration;
+- a registration whose email contains `_`, plus a decoy caregiver row matching it as a LIKE pattern.
+
+Teardown covered auth users created by the functions, outbox rows and audit events; none remained.
+
+| # | Check | Before | Must be after |
+|---|---|---|---|
+| P1 | enable-client-login returns or stores a password | **OPEN** (`tempPassword` in response + outbox) | closed; link works (P1L) |
+| P2 | enable-caregiver-login returns or stores a password | **OPEN** | closed |
+| P3 | admin-reset-password accepts a staff-typed password | **OPEN** (login with it works) | closed (400) |
+| P4 | reset link: old password dies, link sets a new one | N/A (old function) | works |
+| P5 | create-user accepts a staff-chosen password | **OPEN** | closed (400) |
+| P6 | create-user invite link sets a password | N/A | works |
+| O1 | manager links an existing **NULL-agency** account and moves it into its agency | **OPEN** | closed (409) |
+| O2 | enable-client-login honours a body `email` override | **OPEN** | closed (400) |
+| O3 | manager approves an **unassigned** registration | **OPEN** | closed (403) |
+| O4 | approval links the account to a **different** caregiver row via `ILIKE` wildcard | **OPEN** | closed (new row; decoy untouched) |
+| O4b | approval stores a password in the outbox | **OPEN** | closed |
+
+To add after deploy: **P7** (fresh reset link for an invited-but-never-activated user); **S8**
+(Forgot password with the owner's test address); **UI pass** (each dialog shows a link, never a
+password; `/auth/forgot` and `/auth/set-password` work end to end).
+
+### 15.4 E5 — redaction + forced reset (approved, runs after Mode B is deployed)
+- **Redact** the 4 rows from §6.5 with the §2.5 UPDATE: body text → `[redacted 2026-10]`; drop the
+  `temp_password` payload key. Re-query: 0 rows match.
+- **Forced reset** of the 4 demo accounts (robert.miller, betty.baker.client, maria.brown and
+  michael.gonzalez, all `@caremuch-demo.test`): set a random password nobody sees (the same mechanism
+  `admin-reset-password` now uses by default).
+- **Effect:** those 4 demo logins **stop working** until someone generates a reset link for them in the
+  UI. The screenshot manager/caregiver accounts are not affected.
+- Run as approved data statements (service role) with before/after counts shown.
+
+### 15.5 Deploy / commit plan (after owner approval)
+1. Commit only this step's files. `App.tsx` again gets just its hunks (AuthLinkRouter + 2 routes),
+   leaving the app-shell work unstaged. Staged-only build proof, this time **from a `git worktree` of
+   the staged tree, not a stash** (§14.5 lesson).
+2. Deploy `create-user`, `admin-reset-password`, `enable-client-login`, `enable-caregiver-login` and
+   `approve-caregiver-registration`. `verify_jwt` must stay unchanged (checked after deploy).
+3. After-tests P1–P7, O1–O4b, UI pass, S8 with the owner's address. Then E5. Then push the branch.
+4. **Rollback:** redeploy the five functions from the previous commit (`git checkout 419fed0 --
+   supabase/functions/<fn>`, then `supabase functions deploy`) and revert the frontend commit.
+
+**Decisions for the owner:**
+- **(a)** Unassigned registrations (from `/caregiver-registration` and `/assistant`, which carry no agency)
+  can no longer be approved by agency staff. Who assigns them? A system_admin action, or should
+  public registration always carry an office?
+- **(b)** The forced-reset default in `admin-reset-password` (invalidate current password) is on. Keep it?
+- **(c)** `AdminUserManagement`'s Reset tab finds users by `profiles.email`. Managers can't read other
+  users' profiles (RLS), so for them it reports "User not found". This is pre-existing and logged,
+  not changed here.
+
+### 15.6 Owner review (Oct 5): conditions A–F and how the draft meets them
+
+| # | Condition | Status in the draft |
+|---|---|---|
+| A | Every generated invite/recovery link writes an audit event (actor, target, link type, time); the link is never written to audit, DB, logs or console | `auditLinkIssued()` inserts an `events` row: `event_type='account_link_issued'`, `actor_id`=staff, `subject_type='user'`, `subject_id`=account, `payload={link_type, function}`, `occurred_at`. It inserts **directly** (not via `log_event()`, which swallows errors) and **fails closed**: an invite whose audit fails deletes the just-created account; a reset whose audit fails discards the link. **Needs migration M-SEC-6** (below): `events.event_type` has a CHECK list without this value. A grep found no `console.*` of any success response; functions log only `error.message`. `approve-caregiver-registration` and `create-user` were changed to log messages, not error objects. |
+| B | Link only in component state, cleared on close, never in URL/localStorage; shows expiry and "send this to the person; it works once" | `OneTimeLinkDialog` gets the link as a prop from the caller's `useState`. Every caller sets it to `null` in `onClose`. Nothing touches URL, local/session storage or the console. Text: "Send this to the person; it works once. It expires in 1 hour." |
+| C | `/auth/forgot` gives the same message whether or not the email exists | Yes. It always shows the same confirmation, including on errors and rate limits. |
+| D | Link router clears tokens from the URL after the session is established; `/auth/set-password` requires that session; password rules match Supabase's minimum | `AuthLinkRouter` forwards the token fragment to `/auth/set-password` and calls `history.replaceState` to strip it **as soon as a session exists**. An in-memory flag (`arrivedViaPasswordLink`) means `/auth/set-password` only works for a session that came from an invite/recovery link in this page load; an ordinary signed-in session gets "invalid or expired link". The app requires 8–72 chars. The server minimum can't be read without the dashboard, so after-test **PW** measures it by trying 6, 7 and 8 characters. The app's 8 is stricter than Supabase's default 6, and any extra server rule is shown as the server's own message. |
+| E | `redirectTo` only uses the app's own origin | `setPasswordRedirect()` accepts the request Origin **only if it exactly equals** one of `APP_ORIGINS` (`http://localhost:8080`, `https://caremuch-platform.fly.dev`). Otherwise no `redirect_to` is sent and Supabase uses the Site URL. Supabase also enforces its own allow-list. `/auth/forgot` uses `window.location.origin`. |
+| F | Link expiry = Supabase default 1 h; raising it is a later owner decision | Logged in known-issues; the UI states 1 hour. Not changed. |
+
+**Decisions implemented:**
+1. **Unassigned registrations: system_admin only.**
+   - Agency staff already can't see them; RLS requires `agency_id` = their agency, which a NULL never
+     matches, and that was verified on the live policy.
+   - New `UnassignedRegistrations` section on Caregiver Applications, rendered only for system_admin:
+     pending registrations with no agency, an **Agency** + **Office (optional)** picker, and **Assign**.
+     The update runs through the existing system_admin RLS and only applies while `agency_id IS NULL`.
+   - `approve-caregiver-registration` refuses unassigned rows until assigned.
+   - Per-office registration links are logged in known-issues.
+2. **Reset invalidates the current password by default:** kept. The opt-out `keepCurrentPassword: true`
+   already existed in the draft and is kept, unchanged and not surfaced in any UI.
+3. **Staff + caregiver resolving to staff:** accepted. The role switcher is logged in known-issues.
+
+### 15.7 Blocker: migration M-SEC-6 must be pushed before the functions are deployed
+`supabase/migrations/20261005120000_msec6_account_link_event_type.sql` re-creates
+`events_event_type_check` with the exact current 17 values plus `account_link_issued`. There is no
+data, function or grant change. Because the functions fail closed, deploying them without it would
+make **every** link generation fail ("Could not record the audit event"). It isn't covered by "deploy
+only the five functions", so per the standing rule it needs approval.
+
+**Proposed order after approval:**
+1. Commit the step (only its hunks; `App.tsx` again guard-only plus the 2 routes and `AuthLinkRouter`;
+   staged-only build checked from a `git worktree`, not a stash).
+2. Push M-SEC-6, then verify the constraint.
+3. Deploy the five functions.
+4. After-tests.
+5. S8 (wait for the owner's team-member address).
+6. Push the branch.
+
+### 15.8 Redirect URLs to confirm in the Supabase dashboard (Auth → URL Configuration)
+- **Site URL:** the app's main origin, e.g. `https://caremuch-platform.fly.dev`. Links fall back to it.
+- **Redirect URLs:**
+  - `http://localhost:8080/auth/set-password`
+  - `https://caremuch-platform.fly.dev/auth/set-password`
+
+  Or the wider `http://localhost:8080/**` and `https://caremuch-platform.fly.dev/**`.
+- If the app is served from any other origin (a custom domain, a Lovable preview), it must be added
+  both here **and** to `APP_ORIGINS` in `supabase/functions/_shared/accountLinks.ts`. Otherwise links
+  land on the Site URL, which `AuthLinkRouter` still handles.
+
+### 15.9 After-tests prepared (`sec_tests_modeb.cjs`, not yet run against the new code)
+- **Closed:** P1–P3, P5, O1–O4b (the 9 holes); R1/R2 (manager → agency_admin / another agency's
+  user: 403); P4b (a reset link's second use fails).
+- **Work:** P1L/P4/P6 (invite and reset links set a password, the old password dies); AU (one audit
+  row per generated link, no link/token in it).
+- **Measured:** PW (server password minimum).
+- **Not yet built:** P7 (fresh reset link for an invited-but-never-activated user); UI pass; S8.
+
+---
+
+## 16. Review packet — nothing here runs until the owner approves
+
+### 16.1 E5 — redact stored temporary passwords + force-reset the 4 demo accounts
+**Rows to redact:** `public.pending_notifications`, 4 rows, columns `body` and `payload`. Current
+values are shown with the password masked.
+
+| id | kind | recipient | delivered | body (current, masked) | payload (current, masked) |
+|---|---|---|---|---|---|
+| `bf56c29b-d234-4f29-936f-128778b7b1ef` | caregiver_login_created | robert.miller@caremuch-demo.test | no | "Hi Robert, an account was created for you. Temporary password: [MASKED, 15 chars]" | `{caregiver_id: a6fc562b-…, temp_password: [MASKED]}` |
+| `a56fae11-d722-45fc-b28c-fea26e178bbf` | client_login_created | betty.baker.client@caremuch-demo.test | yes | "Hi Betty, … Temporary password: [MASKED, 15 chars]" | `{client_id: d9f62d86-…, temp_password: [MASKED]}` |
+| `b77eb0e8-304e-4744-b367-158b8b935a02` | caregiver_login_created | maria.brown@caremuch-demo.test | no | "Hi Maria, … Temporary password: [MASKED, 15 chars]" | `{caregiver_id: cf949a04-…, temp_password: [MASKED]}` |
+| `a549bb3f-e02c-4985-981e-5aca2417c4d2` | caregiver_login_created | michael.gonzalez@caremuch-demo.test | yes | "Hi Michael, … Temporary password: [MASKED, 15 chars]" | `{caregiver_id: 3ca0b84a-…, temp_password: [MASKED]}` |
+
+```sql
+-- E5a (one transaction, approved data statement; run with the service role)
+UPDATE public.pending_notifications
+SET body    = regexp_replace(body, '(temporary password)\s*:?\s*\S+', '\1: [redacted 2026-10]', 'gi'),
+    payload = payload - 'temp_password'
+WHERE id IN ('bf56c29b-d234-4f29-936f-128778b7b1ef','a56fae11-d722-45fc-b28c-fea26e178bbf',
+             'b77eb0e8-304e-4744-b367-158b8b935a02','a549bb3f-e02c-4985-981e-5aca2417c4d2')
+  AND (payload ? 'temp_password' OR body ~* 'temporary password');
+-- expect: UPDATE 4.  Verify: the §2.5 count query returns 0 rows.
+```
+
+**Accounts to force-reset:** each password is set to a random value nobody sees.
+- **Mechanism:** the same as `admin-reset-password` does by default; run once with the service role
+  (`auth.admin.updateUserById`).
+- **No link is generated** unless someone later uses "reset password" in the UI.
+- **Effect:** these 4 demo logins **stop working** until then.
+
+| auth user id | email | role | last sign-in |
+|---|---|---|---|
+| `3d801304-e277-474f-b346-9fa2e0c01072` | robert.miller@caremuch-demo.test | caregiver | 2026-09-16 |
+| `6381919e-e94e-4bbf-be24-8c47657fcfef` | betty.baker.client@caremuch-demo.test | client | 2026-10-01 |
+| `c38a9b6c-d8d0-4879-b6ae-05a377d06f92` | maria.brown@caremuch-demo.test | caregiver | 2026-10-01 |
+| `d65d4ee5-e405-473f-af57-fabdbd7956f4` | michael.gonzalez@caremuch-demo.test | caregiver | never (temp password still valid) |
+
+```text
+-- E5b (service role, one call per id): auth.admin.updateUserById(<id>, { password: <32 random bytes, base64, discarded> })
+-- Verify: signing in with the old temporary password fails for each (checked without printing it).
+```
+
+### 16.2 E7 — delete the 2 empty anonymous sessions
+Both still exist, re-checked 2026-10-05 (read-only):
+
+| id | user_id | agency_id | flow audience | status | created_at (UTC) | answers | care_requests | registration |
+|---|---|---|---|---|---|---|---|---|
+| `36757fa8-44e5-4dd0-aae8-760bf6907688` | NULL (anonymous) | NULL | caregiver_screening | in_progress | 2026-10-01 21:17:48 | 0 | 0 | none |
+| `ea0877fd-b879-4d13-a6d5-460cc6cd6332` | NULL (anonymous) | NULL | caregiver_screening | in_progress | 2026-10-01 21:17:53 | 0 | 0 | none |
+
+They belong to no user, agency or registration: they are the page-load writes from the Oct 1 capture
+of `/caregiver-registration` (desktop and mobile). Foreign keys referencing them:
+`conversation_answers` (ON DELETE CASCADE, 0 rows) and `care_requests` (SET NULL, 0 rows).
+
+```sql
+-- E7 (approved data statement)
+DELETE FROM public.conversation_sessions s
+WHERE s.id IN ('36757fa8-44e5-4dd0-aae8-760bf6907688','ea0877fd-b879-4d13-a6d5-460cc6cd6332')
+  AND s.user_id IS NULL AND s.registration_id IS NULL AND s.completed_at IS NULL AND s.submitted_at IS NULL
+  AND NOT EXISTS (SELECT 1 FROM public.conversation_answers a WHERE a.session_id = s.id)
+  AND NOT EXISTS (SELECT 1 FROM public.care_requests c WHERE c.session_id = s.id);
+-- expect: DELETE 2.  Verify: SELECT count(*) FROM conversation_sessions WHERE id IN (...) = 0.
+```
+
+### 16.3 Write-on-load fix (drafted in the working tree; not committed, not run)
+`src/hooks/useConversationFlow.ts` (the one hook every caller uses):
+- **No `conversation_sessions` insert on mount.** The row is created by `ensureSession()` on the first
+  answer, for every caller (`ChatWidget` on `/caregiver-registration`, `ConversationSurface` on
+  `/a/:slug/apply` / `/` / `/assistant`, `FamilyIntakeSurface`).
+- **Single-flight `ensureSession`:** the in-flight promise is kept in a ref, so a double-tap or
+  multi-select Continue creates one row, not two. It is cleared on error so the next answer retries.
+- **The deferred insert now includes `current_node_id`** (parity with the old mount insert).
+- **`back`, `rewindTo`, `complete` and `linkRegistration` read `sessionRef`,** not possibly stale
+  `sessionId`/`sessionToken` state.
+- `options.deferSession` is still accepted (now always the behaviour).
+- `tsc`: no new errors. eslint: no new errors or warnings.
+
+**Test** `sec_tests_wol.cjs` (Chromium + dev server):
+- **W1–W3:** loading `/caregiver-registration`, `/a/ripple-effects/apply` and `/assistant` makes 0
+  POSTs to `conversation_sessions`.
+- **W4:** the first answer makes exactly 1.
+- **W5:** a double-tap on the first answer still makes ≤ 1.
+- It deletes exactly the rows it created (ids taken from its own POST bodies) and re-queries.
+- **Not run yet:** even the "before" half writes rows today, which is the bug itself.
+
 ## 13. RequireRole step — task list (accumulated)
 1. `RequireRole` wrapper plus `src/lib/roleHome.ts` (shared with `Auth.tsx`). Wrap every
    STAFF/ADMIN/SYSTEM_ADMIN route from §1.1, **including `/schedule`** (owner, Oct 1). A NULL role is

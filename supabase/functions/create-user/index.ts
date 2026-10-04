@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 import { CREATABLE_ROLES, hasCallerRole, loadPrincipal, MANAGER_OR_ABOVE, pick, STAFF_ROLES } from "../_shared/authz.ts";
+import { findAuthUserIdByEmail, inviteNewUser, setPasswordRedirect } from "../_shared/accountLinks.ts";
 
 // Caller-supplied userData columns allowed on the new record (M-SEC-2b). Everything else —
 // id, user_id, agency_id, virtual_office_id, is_active, preferred_caregiver_id, rates set by
@@ -130,7 +131,15 @@ serve(async (req) => {
       targetOfficeId = null; // the caller's own office never applies inside another agency
     }
 
-    if (!email || !password || !firstName || !lastName || !userType) {
+    // Issue 2 Mode B (security plan §15): staff no longer choose a password for the new user.
+    if (password !== undefined) {
+      return new Response(
+        JSON.stringify({ error: 'Passwords are no longer set here. A one-time set-password link is generated instead.' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (!email || !firstName || !lastName || !userType) {
       return new Response(
         JSON.stringify({ error: 'Missing required fields' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -165,24 +174,25 @@ serve(async (req) => {
     // (previously the whole userData object was spread in, so any column could be set).
     const safeUserData = pick(userData, userType === 'client' ? CLIENT_FIELDS : CAREGIVER_FIELDS);
 
-    // Create the auth user with admin privileges
-    const { data: authData, error: createError } = await supabaseClient.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-      user_metadata: {
-        full_name: `${firstName} ${lastName}`,
-        agency_id: targetAgencyId,
-      }
-    });
-
-    if (createError || !authData.user) {
-      console.error('Error creating user:', createError);
+    // Mode B: create the auth user through a one-time INVITE link (no password). The link is
+    // returned once in this response and never stored or logged.
+    if (await findAuthUserIdByEmail(supabaseClient, email)) {
       return new Response(
-        JSON.stringify({ error: createError?.message || 'Failed to create user' }),
+        JSON.stringify({ error: 'An account with this email already exists' }),
+        { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    let invited: { userId: string; link: string };
+    try {
+      invited = await inviteNewUser(supabaseClient, { email, fullName: `${firstName} ${lastName}`, agencyId: targetAgencyId, redirectTo: setPasswordRedirect(req), actorId: caller.id, fn: 'create-user' });
+    } catch (e) {
+      console.error('Error creating user:', e instanceof Error ? e.message : 'unknown');
+      return new Response(
+        JSON.stringify({ error: e instanceof Error ? e.message : 'Failed to create user' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+    const authData = { user: { id: invited.userId } };
 
     // Wait a moment for the profile trigger to complete
     await new Promise(resolve => setTimeout(resolve, 500));
@@ -273,13 +283,14 @@ serve(async (req) => {
       JSON.stringify({ 
         success: true, 
         userId: authData.user.id,
+        setPasswordLink: invited.link,
         recordId,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
-    console.error('Error in create-user function:', error);
+    console.error('Error in create-user function:', error instanceof Error ? error.message : 'unknown');
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

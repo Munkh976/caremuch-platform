@@ -16,6 +16,9 @@ import { BAND_LABELS, ScoreBand } from "@/lib/flowEngine";
 import { ClipboardList } from "lucide-react";
 import { useCareServices } from "@/hooks/useCareServices";
 import { Input } from "@/components/ui/input";
+import { OneTimeLinkDialog } from "@/components/auth/OneTimeLinkDialog";
+import type { AccountLinkResponse } from "@/lib/accountLinks";
+import { UnassignedRegistrations } from "@/components/approvals/UnassignedRegistrations";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface CaregiverRegistration {
@@ -56,7 +59,8 @@ const CaregiverApprovals = () => {
   const [registrations, setRegistrations] = useState<CaregiverRegistration[]>([]);
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
-  const [credentials, setCredentials] = useState<{ email: string; password: string | null } | null>(null);
+  // Mode B (security plan §15): a one-time set-password link, shown once, never stored.
+  const [credentials, setCredentials] = useState<{ email: string; link: string | null; existing: boolean } | null>(null);
   const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('pending');
   const [screenings, setScreenings] = useState<Record<string, ScreeningSession>>({});
   const [openScreening, setOpenScreening] = useState<CaregiverRegistration | null>(null);
@@ -156,9 +160,9 @@ const CaregiverApprovals = () => {
         body: { registrationId: registration.id, action: "approve" },
       });
       if (error) throw new Error((await (error as any)?.context?.text?.()) || error.message);
-      if ((data as any)?.error) throw new Error((data as any).error);
+      if ((data as AccountLinkResponse | null)?.error) throw new Error((data as AccountLinkResponse | null).error);
 
-      setCredentials({ email: registration.email, password: (data as any)?.tempPassword ?? null });
+      setCredentials({ email: registration.email, link: (data as AccountLinkResponse | null)?.setPasswordLink ?? null, existing: !!(data as AccountLinkResponse | null)?.existingAccount });
       toast({
         title: "Caregiver approved",
         description: "Their login is active and they were added to your team",
@@ -187,7 +191,7 @@ const CaregiverApprovals = () => {
         },
       });
       if (error) throw new Error((await (error as any)?.context?.text?.()) || error.message);
-      if ((data as any)?.error) throw new Error((data as any).error);
+      if ((data as AccountLinkResponse | null)?.error) throw new Error((data as AccountLinkResponse | null).error);
 
       toast({
         title: "Registration Rejected",
@@ -261,6 +265,7 @@ const CaregiverApprovals = () => {
   return (
     <AppLayout>
       <div>
+        {userRole === "system_admin" && <UnassignedRegistrations onAssigned={fetchRegistrations} />}
         <div className="mb-6 flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-foreground">Caregiver Applications</h1>
@@ -540,44 +545,14 @@ const CaregiverApprovals = () => {
           </DialogContent>
         </Dialog>
 
-        <Dialog open={!!credentials} onOpenChange={(open) => !open && setCredentials(null)}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Account activated</DialogTitle>
-              <DialogDescription>
-                No email is sent yet — this notice is stored in the notification outbox. Share these
-                details with the caregiver directly.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-2 text-sm">
-              <div>
-                <span className="font-medium">Email: </span>
-                <span className="text-muted-foreground">{credentials?.email}</span>
-              </div>
-              <div>
-                <span className="font-medium">Password: </span>
-                <span className="text-muted-foreground">
-                  {credentials?.password ?? "the password chosen during registration"}
-                </span>
-              </div>
-            </div>
-            <DialogFooter>
-              {credentials?.password && (
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    if (credentials.password) {
-                      navigator.clipboard.writeText(credentials.password);
-                    }
-                  }}
-                >
-                  Copy password
-                </Button>
-              )}
-              <Button onClick={() => setCredentials(null)}>Done</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <OneTimeLinkDialog
+          open={!!credentials}
+          onClose={() => setCredentials(null)}
+          title="Account activated"
+          email={credentials?.email ?? null}
+          link={credentials?.link ?? null}
+          existingAccount={credentials?.existing}
+        />
 
         <ScreeningResultDialog
           open={!!openScreening}

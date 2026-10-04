@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
+import { checkExistingAccount, findAuthUserIdByEmail, inviteNewUser, linkHandedOverNote, setPasswordRedirect } from "../_shared/accountLinks.ts";
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 
 const json = (body: unknown, status = 200) =>
@@ -82,7 +83,12 @@ serve(async (req) => {
       .from('caregiver_registrations').select('*').eq('id', registrationId).single();
     if (regError || !reg) return json({ error: 'Registration not found' }, 404);
     if (reg.status !== 'pending') return json({ error: `Registration is already ${reg.status}` }, 400);
-    if (reg.agency_id && reg.agency_id !== agencyId) {
+    // 🟠 fix (security plan §15): previously a NULL-agency registration could be claimed (and stamped)
+    // by ANY agency. It must now already belong to the reviewer's agency.
+    if (!reg.agency_id) {
+      return json({ error: 'This registration is not assigned to an agency yet. Ask a system administrator to assign it.' }, 403);
+    }
+    if (reg.agency_id !== agencyId) {
       return json({ error: 'This registration belongs to another agency' }, 403);
     }
 
@@ -107,60 +113,30 @@ serve(async (req) => {
       return json({ success: true, status: 'rejected' });
     }
 
-    // Approve: find the auth user created at self-registration
-    let authUserId: string | null = null;
-    for (let page = 1; page <= 10; page += 1) {
-      const { data: usersPage, error: listError } = await admin.auth.admin.listUsers({ page, perPage: 1000 });
-      if (listError) return json({ error: listError.message }, 400);
-      const match = usersPage?.users?.find(
-        (u) => (u.email ?? '').toLowerCase() === reg.email.toLowerCase()
-      );
-      if (match) {
-        authUserId = match.id;
-        break;
-      }
-      if (!usersPage?.users || usersPage.users.length < 1000) break;
-    }
-
-    let tempPassword: string | null = null;
-    if (!authUserId) {
-      tempPassword = `Care-${crypto.randomUUID().slice(0, 10)}`;
-      const { data: created, error: createError } = await admin.auth.admin.createUser({
-        email: reg.email,
-        password: tempPassword,
-        email_confirm: true,
-        user_metadata: {
-          full_name: `${reg.first_name} ${reg.last_name}`,
-          agency_id: agencyId,
-        },
-      });
-      if (createError || !created.user) return json({ error: createError?.message ?? 'Failed to create account' }, 400);
-      authUserId = created.user.id;
+    // Approve (Mode B, security plan §15): no temporary password. An existing account is linked only
+    // if its profile is already in this agency (never moved; NULL/legacy -> refused); a new account
+    // gets a one-time invite link returned once in the response and never stored.
+    const fullName = `${reg.first_name} ${reg.last_name}`;
+    let authUserId: string | null = await findAuthUserIdByEmail(admin, reg.email);
+    let setPasswordLink: string | null = null;
+    if (authUserId) {
+      const verdict = await checkExistingAccount(admin, authUserId, agencyId, false);
+      if (!verdict.ok) return json({ error: verdict.error }, verdict.status);
+      await admin.from('profiles').upsert({ id: authUserId, email: reg.email, full_name: fullName, phone: reg.phone }, { onConflict: 'id' });
+    } else {
+      const invited = await inviteNewUser(admin, { email: reg.email, fullName, agencyId, redirectTo: setPasswordRedirect(req), actorId: caller.id, fn: 'approve-caregiver-registration' });
+      authUserId = invited.userId;
+      setPasswordLink = invited.link;
       await new Promise((r) => setTimeout(r, 400));
+      await admin.from('profiles').upsert({ id: authUserId, email: reg.email, full_name: fullName, phone: reg.phone, agency_id: agencyId }, { onConflict: 'id' });
     }
-
-    const { data: existingProfile } = await admin
-      .from('profiles')
-      .select('agency_id')
-      .eq('id', authUserId)
-      .maybeSingle();
-
-    if (existingProfile?.agency_id && ![agencyId, LEGACY_SYSTEM_AGENCY_ID].includes(existingProfile.agency_id)) {
-      return json({ error: 'An account with this email is already linked to another agency' }, 400);
-    }
-
-    // Make sure the profile exists and is attached to this agency
-    await admin.from('profiles').upsert({
-      id: authUserId,
-      email: reg.email,
-      full_name: `${reg.first_name} ${reg.last_name}`,
-      phone: reg.phone,
-      agency_id: agencyId,
-    }, { onConflict: 'id' });
 
     // Link or create the caregiver roster record
-    const { data: existing } = await admin
-      .from('caregivers').select('id, user_id').eq('agency_id', agencyId).ilike('email', reg.email).maybeSingle();
+    // 🟠 fix: exact case-insensitive match. `.ilike(email)` treated % and _ in the applicant's own
+    // email as wildcards and could attach this account to another caregiver row.
+    const { data: agencyCaregivers } = await admin
+      .from('caregivers').select('id, user_id, email').eq('agency_id', agencyId);
+    const existing = (agencyCaregivers ?? []).find((c: { email: string | null }) => (c.email ?? '').toLowerCase() === reg.email.toLowerCase()) ?? null;
 
     let caregiverId: string;
     if (existing) {
@@ -257,13 +233,14 @@ serve(async (req) => {
       recipient_name: `${reg.first_name} ${reg.last_name}`,
       kind: 'caregiver_approved',
       subject: 'Your caregiver account is active',
-      body: `Hi ${reg.first_name}, your application was approved. You can now sign in${tempPassword ? ` with the temporary password: ${tempPassword}` : ' with the password you chose during registration'}.`,
-      payload: { registration_id: registrationId, caregiver_id: caregiverId, temp_password: tempPassword },
+      body: `Your application was approved. ${linkHandedOverNote(reg.first_name, setPasswordLink ? 'invite' : 'existing')}`,
+      payload: { registration_id: registrationId, caregiver_id: caregiverId, delivery: setPasswordLink ? 'set_password_link_shown_once' : 'existing_account' },
     });
 
-    return json({ success: true, status: 'approved', caregiverId, userId: authUserId, tempPassword });
+    // setPasswordLink is returned ONCE to the reviewer; it is not stored or logged.
+    return json({ success: true, status: 'approved', caregiverId, userId: authUserId, setPasswordLink, existingAccount: !setPasswordLink });
   } catch (error) {
-    console.error('approve-caregiver-registration error:', error);
+    console.error('approve-caregiver-registration error:', error instanceof Error ? error.message : 'unknown');
     return json({ error: error instanceof Error ? error.message : 'Unknown error' }, 500);
   }
 });

@@ -18,7 +18,9 @@ import { AvailabilityDialog } from "@/components/caregivers/AvailabilityDialog";
 import { US_STATES } from "@/constants/usStates";
 import { Separator } from "@/components/ui/separator";
 import { AppLayout } from "@/components/AppLayout";
-import { caregiverFormSchema, passwordResetSchema } from "@/lib/validation";
+import { caregiverFormSchema } from "@/lib/validation";
+import { OneTimeLinkDialog } from "@/components/auth/OneTimeLinkDialog";
+import { requestResetLink, type AccountLinkResponse } from "@/lib/accountLinks";
 import { usePendingApprovals } from "@/hooks/usePendingApprovals";
 import { useCareServices } from "@/hooks/useCareServices";
 
@@ -59,7 +61,9 @@ const Caregivers = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [resetPasswordCaregiver, setResetPasswordCaregiver] = useState<any>(null);
   const [enablingLoginId, setEnablingLoginId] = useState<string | null>(null);
-  const [newCredentials, setNewCredentials] = useState<{ email: string; password: string | null } | null>(null);
+  // Mode B (security plan §15): one-time links, shown once in OneTimeLinkDialog, never stored.
+  const [newCredentials, setNewCredentials] = useState<{ email: string; link: string | null; existing: boolean } | null>(null);
+  const [resetLinkInfo, setResetLinkInfo] = useState<{ email: string | null; link: string } | null>(null);
 
   const canManageCaregivers = userRole === 'system_admin' || userRole === 'agency_admin' || userRole === 'manager';
 
@@ -266,7 +270,7 @@ const Caregivers = () => {
       }
 
       // Handle password reset if requested
-      if (showResetPassword && newPassword && editCaregiver.user_id) {
+      if (showResetPassword && editCaregiver.user_id) {
         await handleResetPassword();
       }
 
@@ -327,29 +331,9 @@ const Caregivers = () => {
       return;
     }
 
-    if (newPassword !== confirmPassword) {
-      toast.error("Passwords do not match");
-      return;
-    }
-
-    // Validate password
-    const validation = passwordResetSchema.safeParse({ newPassword });
-    if (!validation.success) {
-      toast.error(validation.error.errors[0].message);
-      return;
-    }
-
     try {
-      const { error } = await supabase.functions.invoke('admin-reset-password', {
-        body: {
-          userId: targetCaregiver.user_id,
-          newPassword: newPassword,
-        }
-      });
-
-      if (error) throw error;
-      
-      toast.success("Password reset successfully");
+      const link = await requestResetLink(targetCaregiver.user_id);
+      setResetLinkInfo({ email: targetCaregiver.email ?? null, link });
       setShowResetPassword(false);
       setNewPassword("");
       setConfirmPassword("");
@@ -366,11 +350,12 @@ const Caregivers = () => {
         body: { caregiverId: caregiver.id },
       });
       if (error) throw new Error((await (error as any)?.context?.text?.()) || error.message);
-      if ((data as any)?.error) throw new Error((data as any).error);
+      if ((data as AccountLinkResponse | null)?.error) throw new Error((data as AccountLinkResponse | null).error);
 
       setNewCredentials({
-        email: (data as any)?.email ?? caregiver.email,
-        password: (data as any)?.tempPassword ?? null,
+        email: (data as AccountLinkResponse | null)?.email ?? caregiver.email,
+        link: (data as AccountLinkResponse | null)?.setPasswordLink ?? null,
+        existing: !!(data as AccountLinkResponse | null)?.existingAccount,
       });
       toast.success("Login enabled for this caregiver");
       if (user) fetchCaregivers(user.id);
@@ -697,26 +682,9 @@ const Caregivers = () => {
 
                         {showResetPassword && (
                           <div className="space-y-3 bg-muted/30 p-4 rounded-lg border">
-                            <div className="space-y-2">
-                              <Label htmlFor="newPassword">New Password</Label>
-                              <Input
-                                id="newPassword"
-                                type="password"
-                                value={newPassword}
-                                onChange={(e) => setNewPassword(e.target.value)}
-                                placeholder="Enter new password"
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="confirmPassword">Confirm Password</Label>
-                              <Input
-                                id="confirmPassword"
-                                type="password"
-                                value={confirmPassword}
-                                onChange={(e) => setConfirmPassword(e.target.value)}
-                                placeholder="Confirm new password"
-                              />
-                            </div>
+                            <p className="text-sm text-muted-foreground">
+                              A one-time link to set a new password will be created when you click "Update Caregiver". Their current password stops working right away.
+                            </p>
                             <div className="flex gap-2">
                               <Button 
                                 type="button"
@@ -732,7 +700,7 @@ const Caregivers = () => {
                               </Button>
                             </div>
                             <p className="text-xs text-muted-foreground">
-                              Password will be reset when you click "Update Caregiver"
+                              The link is shown once and is not stored.
                             </p>
                           </div>
                         )}
@@ -1086,28 +1054,8 @@ const Caregivers = () => {
           </DialogHeader>
           <div className="space-y-4 py-4">
             <p className="text-sm text-muted-foreground">
-              Reset password for {resetPasswordCaregiver?.first_name} {resetPasswordCaregiver?.last_name}
+              Create a one-time link for {resetPasswordCaregiver?.first_name} {resetPasswordCaregiver?.last_name} to set a new password. Their current password stops working right away.
             </p>
-            <div className="space-y-2">
-              <Label htmlFor="reset-new-password">New Password</Label>
-              <Input
-                id="reset-new-password"
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Enter new password (min 6 characters)"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="reset-confirm-password">Confirm Password</Label>
-              <Input
-                id="reset-confirm-password"
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Confirm new password"
-              />
-            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => {
@@ -1118,46 +1066,27 @@ const Caregivers = () => {
               Cancel
             </Button>
             <Button onClick={handleResetPassword}>
-              Reset Password
+              Create reset link
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!newCredentials} onOpenChange={(open) => !open && setNewCredentials(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Caregiver login created</DialogTitle>
-            <DialogDescription>
-              No email is sent yet — this notice is stored in the notification outbox. Share these
-              details with the caregiver directly.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2 text-sm">
-            <div>
-              <span className="font-medium">Email: </span>
-              <span className="text-muted-foreground">{newCredentials?.email}</span>
-            </div>
-            <div>
-              <span className="font-medium">Temporary password: </span>
-              <span className="text-muted-foreground">
-                {newCredentials?.password ?? "existing account — password unchanged"}
-              </span>
-            </div>
-          </div>
-          <DialogFooter>
-            {newCredentials?.password && (
-              <Button
-                variant="outline"
-                onClick={() => navigator.clipboard.writeText(newCredentials.password!)}
-              >
-                Copy password
-              </Button>
-            )}
-            <Button onClick={() => setNewCredentials(null)}>Done</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <OneTimeLinkDialog
+        open={!!newCredentials}
+        onClose={() => setNewCredentials(null)}
+        title="Caregiver login created"
+        email={newCredentials?.email ?? null}
+        link={newCredentials?.link ?? null}
+        existingAccount={newCredentials?.existing}
+      />
+      <OneTimeLinkDialog
+        open={!!resetLinkInfo}
+        onClose={() => setResetLinkInfo(null)}
+        title="Password reset link"
+        email={resetLinkInfo?.email ?? null}
+        link={resetLinkInfo?.link ?? null}
+      />
 
       {/* Availability Dialog */}
       {availabilityCaregiver && (

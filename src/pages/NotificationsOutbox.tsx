@@ -24,6 +24,7 @@ const kindLabels: Record<string, string> = {
   caregiver_approved: "Caregiver approved",
   caregiver_rejected: "Caregiver rejected",
   client_login_created: "Client login created",
+  caregiver_login_created: "Caregiver login created",
 };
 
 const NotificationsOutbox = () => {

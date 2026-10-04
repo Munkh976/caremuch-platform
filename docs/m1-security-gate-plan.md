@@ -3,7 +3,8 @@
 > **Status: CLOSED — applied and verified 2026-09-13.** This started as the M0
 > verification pass (per `multitenant-saas-architecture-plan.md`'s Step 5, Phase M0)
 > plus the M1 fix design, done by reading the **live** RLS policy bodies directly from
-> the production database (`rgeldgztadebgvrdhaqa`), not by inference from migration
+> the live DEV database (`rgeldgztadebgvrdhaqa` — the only project; no production project exists
+> yet, see `docs/Ripple_UI_Plan_Decisions_2026-10-01.md`), not by inference from migration
 > files. §7 records the applied migration, the pre-push regression finding
 > (`EditUser.tsx`) and its fix, and the full two-tenant isolation test run — 25/25
 > checks passed, teardown confirmed clean by content. M1 is closed per the roadmap's

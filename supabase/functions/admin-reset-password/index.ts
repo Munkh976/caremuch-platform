@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { canActOn, hasCallerRole, loadPrincipal, MANAGER_OR_ABOVE } from "../_shared/authz.ts";
+import { recoveryLink, setPasswordRedirect } from "../_shared/accountLinks.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -66,9 +67,20 @@ serve(async (req) => {
       });
     }
 
-    const { userId, newPassword } = await req.json();
+    // Issue 2 Mode B (security plan §15): staff no longer type a password for someone else.
+    // The function returns a one-time recovery link (shown once, never stored). By default the
+    // current password is also invalidated (set to a random value nobody sees), so a leaked or
+    // temporary password stops working at once; `keepCurrentPassword: true` skips that step.
+    const { userId, newPassword, keepCurrentPassword } = await req.json();
 
-    if (!userId || !newPassword) {
+    if (newPassword !== undefined) {
+      return new Response(JSON.stringify({ error: "Typed passwords are no longer accepted. A one-time reset link is generated instead." }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (!userId) {
       return new Response(JSON.stringify({ error: "Missing required fields" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -87,18 +99,29 @@ serve(async (req) => {
       });
     }
 
-    // Reset the password
-    const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
-      userId,
-      { password: newPassword }
-    );
-
-    if (updateError) {
-      throw updateError;
+    const { data: targetUser, error: targetError } = await supabaseAdmin.auth.admin.getUserById(userId);
+    if (targetError || !targetUser?.user?.email) {
+      return new Response(JSON.stringify({ error: "You do not have permission to manage this user" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
+    if (keepCurrentPassword !== true) {
+      const random = crypto.getRandomValues(new Uint8Array(32));
+      const unknownPassword = btoa(String.fromCharCode(...random)); // never returned, logged or stored
+      const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(userId, { password: unknownPassword });
+      if (updateError) throw updateError;
+    }
+
+    const resetLink = await recoveryLink(supabaseAdmin, {
+      email: targetUser.user.email, redirectTo: setPasswordRedirect(req),
+      agencyId: target?.agencyId ?? caller.agencyId, actorId: caller.id, targetUserId: userId, fn: 'admin-reset-password',
+    });
+
+    // resetLink is returned ONCE to the staff member who asked; it is not stored or logged.
     return new Response(
-      JSON.stringify({ success: true, message: "Password reset successfully" }),
+      JSON.stringify({ success: true, resetLink, currentPasswordInvalidated: keepCurrentPassword !== true }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {

@@ -949,3 +949,157 @@ system_admin-only, consistent with the same tightening applied to
 these rows end up with `agency_id`/`virtual_office_id` NULL in the first place) is
 still not fixed** — this only closed who can see the resulting NULL rows, not the root
 cause described above.
+
+## OPEN: staff email edits on a caregiver leave `profiles.email` and the login email out of sync
+
+**Status:** Found 2026-10-02 while drafting M-SEC-2 (`docs/security-fixes-2026-10-plan.md` §8.2).
+Pre-existing; not changed by the security batch.
+
+`src/pages/Caregivers.tsx:224` (and `Clients.tsx:304` for clients) update the *other user's*
+`profiles` row after a staff edit, but `profiles` has **no staff UPDATE policy** (only
+"Users can update their own profile"). PostgREST therefore matches 0 rows and returns no error,
+so the write is silently dropped. A staff change to `caregivers.email` updates only the caregiver
+record. `profiles.email` and `auth.users.email` (the actual login) keep the old address.
+
+**Why it matters:** `AdminUserManagement.tsx:121,173` finds password-reset and delete targets
+**by `profiles.email`**, and the caregiver now sees one email on their profile while logging in
+with another. M-SEC-2 makes the login email read-only for caregivers ("contact your office"),
+which makes the staff path the only way to change it, and that path doesn't work today.
+
+**Fix direction (separate task):** a staff "change login email" action through an Edge Function.
+It would check the caller's role and agency (the M-SEC-2b pattern), call
+`auth.admin.updateUserById(id, { email })`, then update `profiles.email` and `caregivers.email`
+(or `clients.email`) together with the service role. Do not add a broad staff UPDATE policy on
+`profiles`: the M-SEC-2 guard would block scope changes, but a narrow server path is simpler to
+reason about.
+
+Verified 2026-10-02 (read-only): all 8 profiles currently match `auth.users.email`, and all 4
+linked caregivers match their `profiles.email`. No drift yet.
+
+## REQUIRED BEFORE PRODUCTION: configure custom SMTP and switch account emails to Mode A
+
+**Status:** Logged 2026-10-04 (owner decision Q1, `docs/security-fixes-2026-10-plan.md` §2.2, §15).
+
+**Mode B (in progress):** temporary passwords are replaced by one-time invite/reset links that staff
+see once and hand over themselves (`auth.admin.generateLink` sends no email). It works without any
+mail setup but still puts a credential-bearing link in a staff member's hands.
+
+**Mode A (required before production):**
+- configure a custom SMTP provider in Supabase (Auth → SMTP);
+- set Site URL and Redirect URLs for the production origin;
+- switch the account functions to Supabase-sent invite and recovery emails (`inviteUserByEmail`,
+  `resetPasswordForEmail`), so no link passes through staff.
+
+**Why the built-in mailer can't be used:**
+- it only delivers to the Supabase organization's own team addresses;
+- it is rate-limited to a few emails per hour.
+
+So "Forgot password?" works only for team addresses until SMTP is configured. No Auth/SMTP setting
+has been changed by the security batch.
+
+## FUTURE: per-office caregiver registration links (set the agency server-side)
+
+**Status:** Logged 2026-10-05 (owner decision 1, security plan §15.7).
+
+Registrations from `/caregiver-registration` and `/assistant` carry no agency. Since the Issue 2
+batch, agency staff can neither see nor approve them; only a system_admin can assign an agency and
+office, from the "Unassigned registrations" list on Caregiver Applications. Better: per-office links
+(e.g. `/caregiver-registration?office=<slug>`) where the server (the `submit_caregiver_registration`
+RPC) resolves the slug to the published office and sets `agency_id` / `virtual_office_id` itself.
+The client must never send an id; this mirrors `/a/:slug/apply`.
+
+## FUTURE: role switcher for staff who also work shifts
+
+**Status:** Logged 2026-10-05 (owner decision 3, security plan §14.7).
+
+`get_user_role()` (and so `RequireRole` and post-login routing) resolves a user with several roles to
+the highest one. A manager who also works as a caregiver therefore always lands in the staff app and
+is redirected away from the caregiver app. None exist today. When they do, add an explicit role
+switcher, and let caregiver-app routes accept a user who holds the caregiver role even if it isn't
+their highest.
+
+## NOTE: one-time invite / reset links expire after the Supabase default (1 hour)
+
+**Status:** Logged 2026-10-05 (owner point F, security plan §15).
+
+Mode B invite and recovery links (and "Forgot password?" emails) use the project's email-link expiry,
+which is the Supabase default of **1 hour**. The UI says so ("It expires in 1 hour"). An invite that
+isn't used in time can be replaced by a fresh reset link from the staff screens. Raising the expiry
+for invites is an Auth setting and an **owner decision for later**; it has not been changed.
+
+## OPEN: Admin User Management "Reset Password" tab can't find users for a manager
+
+**Status:** Found 2026-10-04 while drafting Mode B (plan §15.5(c)). Pre-existing.
+
+`AdminUserManagement.tsx` resolves the email typed into the Reset tab with a client-side
+`profiles` query. `profiles` RLS lets a user read only their own row (plus agency_admin and
+system_admin within scope), so a manager always gets "User not found", although
+`admin-reset-password` would allow them to reset a lower-ranked user in their agency. The fix
+direction is to let the Edge Function accept an email and resolve it server-side with the same
+rank and agency checks. The Reset buttons on Users / Caregivers / Clients (which pass a user id)
+are not affected.
+
+## FUTURE: "caregiver proposes a skill, staff approves" flow
+
+**Status:** Logged 2026-10-04 with the M-SEC-1 batch (`docs/security-fixes-2026-10-plan.md` §12.1,
+owner decision Q7).
+
+Caregiver skills (`caregiver_skills`) are now **staff-managed**. The caregiver Profile shows them
+read-only ("To change your skills, contact your office.") and the caregiver role keeps SELECT on its
+own rows only. Reason: the eligibility engine's `skill` rule treats any listed care type as
+qualified, so a self-added skill made a caregiver eligible for services nobody had vetted.
+A later improvement: let a caregiver *propose* a skill (with optional certification proof) into a
+pending table that staff approve or reject. Approval writes `caregiver_skills` through the staff
+path. Not started.
+
+## OPEN: client "Care Plans" booking cannot be submitted (no client INSERT policy)
+
+**Status:** Found 2026-10-04 during the M-SEC-1 breakage sweep (plan §12.2(a)). Pre-existing; not
+caused or fixed by the security batch.
+
+The client dashboard's Care Plans tab (`client-dashboard/OrdersManagement.tsx`) submits a booking by
+inserting into `client_orders` and then `shifts` with the signed-in client's JWT. Neither table has
+a client INSERT policy:
+- `client_orders` has only "Clients read their own care plans";
+- `shifts` has only "Clients read their own shifts".
+
+So the submit fails at the first insert. The owner has said clients book through this tab (not
+`/order-management`), so it needs a decision:
+- a narrow SECURITY DEFINER "request care" RPC that creates a draft order for the caller's own
+  client record; or
+- routing client requests into `care_requests`, the same inbox as family intake, for staff to turn
+  into a plan.
+
+Related, fixed in the same batch: the picker no longer prices the booking with the caregiver's pay
+rate (`rate: caregiver.hourly_rate`). It keeps the care-service price.
+
+**Also found 2026-10-04 (browser pass):** step 1 of that booking form ("Select Primary Service")
+is **empty for every client**. `OrdersManagement.tsx` keeps only care needs whose care-type
+`category` is exactly 'Activities of Daily Living (ADL)', 'Health Monitoring & Care' or
+'Instrumental Activities of Daily Living (IADL)'. The live categories are now 'Basic Care',
+'Daily Living', 'Medical Support', 'Physical Care', 'Therapeutic Care' and 'Community Programs', so
+nothing matches. Continue stays disabled and the caregiver picker (step 2) is unreachable in the UI.
+Pre-existing; not changed by the security batch. The picker's data path,
+`get_bookable_caregivers()`, was verified at the API level (plan §12.7: R3, O1, O2, D1). Fix
+together with the booking-submit decision above: filter by `category_id` / a "primary service" flag
+rather than hard-coded category names.
+
+## FUTURE: consider a separate client-editable field (`client_notes`) for the client portal
+
+**Status:** Logged 2026-10-02 with M-SEC-2 (`docs/security-fixes-2026-10-plan.md` §9).
+
+`clients.notes` is the staff "Notes" field (Client Details dialog in `Clients.tsx`). Until M-SEC-2
+the client portal's Profile form (`client-dashboard/ProfileSettings.tsx`) let a client overwrite it.
+Owner decision: staff notes must not be client-editable, so M-SEC-2 freezes `notes` for the client
+role, and the client form no longer shows or sends it. That removed the client's only free-text
+field ("Additional Notes — any additional medical information or special requirements").
+If clients need to tell the agency something, add a separate `client_notes` column, shown to staff
+as client-supplied and kept distinct from staff notes.
+
+**Related, still open:** the client can still **read** staff-internal fields on their own row.
+`ClientDashboard.tsx:98` loads it with `select("*")`, and the client self-SELECT policy returns
+every column: `notes`, `scheduling_notes`, `care_requirements`, `medical_conditions`,
+`preferred_caregiver_id`. Hiding the textarea does not stop an API read. If staff notes must also
+be private from the client, serve the client's profile through a narrow view/RPC, following the
+`get_caregiver_visible_clients()` pattern. That needs a product decision on which fields a client
+may see.

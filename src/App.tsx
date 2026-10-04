@@ -42,6 +42,9 @@ import ClientInquiries from "./pages/ClientInquiries";
 import PublicOffice from "./pages/PublicOffice";
 import KnowledgeBase from "./pages/KnowledgeBase";
 import { RequireRole } from "./components/auth/RequireRole";
+import { AuthLinkRouter } from "./components/auth/AuthLinkRouter";
+import ForgotPassword from "./pages/ForgotPassword";
+import SetPassword from "./pages/SetPassword";
 import { ADMIN, MANAGER_OR_ABOVE, STAFF, SYSTEM_ADMIN } from "./lib/roleHome";
 
 const queryClient = new QueryClient();
@@ -52,9 +55,13 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
+        <AuthLinkRouter />
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/auth" element={<Auth />} />
+          {/* PUBLIC by design (CLAUDE.md rule 15 exception): password reset / one-time-link landing pages */}
+          <Route path="/auth/forgot" element={<ForgotPassword />} />
+          <Route path="/auth/set-password" element={<SetPassword />} />
           <Route path="/a/:slug" element={<PublicOffice />} />
           <Route path="/a/:slug/apply" element={<PublicOffice initialMode="apply" />} />
           <Route path="/a/:slug/care" element={<PublicOffice initialMode="care" />} />

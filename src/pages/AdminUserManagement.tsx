@@ -12,6 +12,8 @@ import { ArrowLeft, UserPlus, KeyRound, UserX } from "lucide-react";
 import { AppLayout } from "@/components/AppLayout";
 import { usePermissions } from "@/hooks/usePermissions";
 import { ADMIN, type AppRole } from "@/lib/roleHome";
+import { OneTimeLinkDialog } from "@/components/auth/OneTimeLinkDialog";
+import { requestResetLink } from "@/lib/accountLinks";
 
 const AdminUserManagement = () => {
   const navigate = useNavigate();
@@ -23,7 +25,8 @@ const AdminUserManagement = () => {
 
   // Create User State
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  // Mode B (security plan §15): no typed passwords; one-time links shown once, never stored.
+  const [linkInfo, setLinkInfo] = useState<{ title: string; email: string | null; link: string } | null>(null);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
@@ -31,7 +34,6 @@ const AdminUserManagement = () => {
 
   // Reset Password State
   const [resetEmail, setResetEmail] = useState("");
-  const [newPassword, setNewPassword] = useState("");
 
   // Delete User State
   const [deleteEmail, setDeleteEmail] = useState("");
@@ -53,7 +55,6 @@ const AdminUserManagement = () => {
         const { data, error } = await supabase.functions.invoke('create-user', {
           body: {
             email,
-            password,
             firstName,
             lastName,
             phone,
@@ -70,13 +71,13 @@ const AdminUserManagement = () => {
         if (error) throw error;
         if (data?.error) throw new Error(data.error);
 
-        toast.success(`User created successfully with ${role} role`);
+        toast.success(`User created with the ${role} role`);
+        if (data?.setPasswordLink) setLinkInfo({ title: 'User created', email, link: data.setPasswordLink });
       } else {
         // For caregiver/client, use the existing flow
         const { data, error } = await supabase.functions.invoke('create-user', {
           body: {
             email,
-            password,
             firstName,
             lastName,
             phone,
@@ -91,12 +92,12 @@ const AdminUserManagement = () => {
         if (error) throw error;
         if (data?.error) throw new Error(data.error);
 
-        toast.success(`${role} created successfully`);
+        toast.success(`${role} created`);
+        if (data?.setPasswordLink) setLinkInfo({ title: 'User created', email, link: data.setPasswordLink });
       }
 
       // Reset form
       setEmail("");
-      setPassword("");
       setFirstName("");
       setLastName("");
       setPhone("");
@@ -132,22 +133,9 @@ const AdminUserManagement = () => {
         return;
       }
 
-      const { data, error } = await supabase.functions.invoke('admin-reset-password', {
-        body: {
-          userId: users.id,
-          newPassword
-        },
-        headers: {
-          Authorization: `Bearer ${session.access_token}`
-        }
-      });
-
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-
-      toast.success("Password reset successfully");
+      const link = await requestResetLink(users.id);
+      setLinkInfo({ title: 'Password reset link', email: resetEmail, link });
       setResetEmail("");
-      setNewPassword("");
     } catch (error: any) {
       console.error('Reset password error:', error);
       toast.error(error.message || "Failed to reset password");
@@ -284,17 +272,9 @@ const AdminUserManagement = () => {
                     />
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="password">Password</Label>
-                    <Input
-                      id="password"
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                      placeholder="Min 8 characters"
-                    />
-                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    No password is set here. After creating the user you get a one-time link to give them, so they choose their own password.
+                  </p>
 
                   <div className="space-y-2">
                     <Label htmlFor="phone">Phone (Optional)</Label>
@@ -337,7 +317,7 @@ const AdminUserManagement = () => {
               <CardHeader>
                 <CardTitle>Reset User Password</CardTitle>
                 <CardDescription>
-                  Reset a user's password using their email address
+                  Create a one-time reset link for a user. Their current password stops working right away.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -354,20 +334,8 @@ const AdminUserManagement = () => {
                     />
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="newPassword">New Password</Label>
-                    <Input
-                      id="newPassword"
-                      type="password"
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      required
-                      placeholder="Min 8 characters"
-                    />
-                  </div>
-
                   <Button type="submit" className="w-full" disabled={loading}>
-                    {loading ? "Resetting..." : "Reset Password"}
+                    {loading ? "Creating link..." : "Create reset link"}
                   </Button>
                 </form>
               </CardContent>
@@ -418,6 +386,13 @@ const AdminUserManagement = () => {
           </TabsContent>
           )}
         </Tabs>
+        <OneTimeLinkDialog
+          open={!!linkInfo}
+          onClose={() => setLinkInfo(null)}
+          title={linkInfo?.title ?? ""}
+          email={linkInfo?.email ?? null}
+          link={linkInfo?.link ?? null}
+        />
       </div>
     </AppLayout>
   );

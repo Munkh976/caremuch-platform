@@ -19,7 +19,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { format } from "date-fns";
 import { AppLayout } from "@/components/AppLayout";
 import { useCareServices } from "@/hooks/useCareServices";
-import { clientFormSchema, passwordResetSchema } from "@/lib/validation";
+import { clientFormSchema } from "@/lib/validation";
+import { OneTimeLinkDialog } from "@/components/auth/OneTimeLinkDialog";
+import { requestResetLink, type AccountLinkResponse } from "@/lib/accountLinks";
 import { FamilyDialog } from "@/components/families/FamilyDialog";
 import { ClientSchedulingDialog } from "@/components/clients/ClientSchedulingDialog";
 import { CalendarClock } from "lucide-react";
@@ -53,10 +55,11 @@ const Clients = () => {
   const { services: careTypes, groupedOptions, optionFor } = useCareServices();
   const [resetPasswordDialogOpen, setResetPasswordDialogOpen] = useState(false);
   const [selectedClient, setSelectedClient] = useState<any>(null);
-  const [newPassword, setNewPassword] = useState("");
   const [resetting, setResetting] = useState(false);
   const [enablingLoginId, setEnablingLoginId] = useState<string | null>(null);
-  const [newCredentials, setNewCredentials] = useState<{ email: string; password: string | null } | null>(null);
+  // Mode B (security plan §15): one-time links, shown once in OneTimeLinkDialog, never stored.
+  const [newCredentials, setNewCredentials] = useState<{ email: string; link: string | null; existing: boolean } | null>(null);
+  const [resetLinkInfo, setResetLinkInfo] = useState<{ email: string | null; link: string } | null>(null);
   const [formData, setFormData] = useState({
     first_name: "",
     last_name: "",
@@ -217,11 +220,12 @@ const Clients = () => {
         body: { clientId: client.id },
       });
       if (error) throw new Error((await (error as any)?.context?.text?.()) || error.message);
-      if ((data as any)?.error) throw new Error((data as any).error);
+      if ((data as AccountLinkResponse | null)?.error) throw new Error((data as AccountLinkResponse | null).error);
 
       setNewCredentials({
-        email: (data as any)?.email ?? client.email,
-        password: (data as any)?.tempPassword ?? null,
+        email: (data as AccountLinkResponse | null)?.email ?? client.email,
+        link: (data as AccountLinkResponse | null)?.setPasswordLink ?? null,
+        existing: !!(data as AccountLinkResponse | null)?.existingAccount,
       });
       toast.success("Login enabled for this client");
       if (profile) fetchClients(profile.agency_id);
@@ -389,54 +393,17 @@ const Clients = () => {
   };
 
   const handleResetPassword = async () => {
-    if (!selectedClient || !newPassword) return;
-
-    // Validate password
-    const validation = passwordResetSchema.safeParse({ newPassword });
-    if (!validation.success) {
-      toast.error(validation.error.errors[0].message);
-      return;
-    }
-
+    if (!selectedClient) return;
     setResetting(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error("No session found");
-
-      // Get user_id from client profile
       const userId = selectedClient.user_id;
-      if (!userId) {
-        throw new Error("Client doesn't have a user account");
-      }
-
-      // Call edge function to reset password
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-reset-password`,
-        {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${session.access_token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            userId: userId,
-            newPassword: newPassword,
-          }),
-        }
-      );
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || "Failed to reset password");
-      }
-
-      toast.success("Password reset successfully!");
+      if (!userId) throw new Error("Client doesn't have a user account");
+      const link = await requestResetLink(userId);
+      setResetLinkInfo({ email: selectedClient.email ?? null, link });
       setResetPasswordDialogOpen(false);
-      setNewPassword("");
       setSelectedClient(null);
     } catch (error: any) {
-      toast.error(error.message || "Failed to reset password");
+      toast.error(error.message || "Failed to create the reset link");
     } finally {
       setResetting(false);
     }
@@ -1179,31 +1146,15 @@ const Clients = () => {
           <DialogHeader>
             <DialogTitle>Reset Password</DialogTitle>
             <DialogDescription>
-              Set a new password for {selectedClient?.first_name} {selectedClient?.last_name}
+              Create a one-time link for {selectedClient?.first_name} {selectedClient?.last_name} to set a new password.
+              Their current password stops working right away.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="newPassword">New Password</Label>
-              <Input
-                id="newPassword"
-                type="password"
-                placeholder="Enter new password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                minLength={6}
-              />
-              <p className="text-xs text-muted-foreground">
-                Minimum 6 characters required
-              </p>
-            </div>
-          </div>
           <DialogFooter>
             <Button
               variant="outline"
               onClick={() => {
                 setResetPasswordDialogOpen(false);
-                setNewPassword("");
                 setSelectedClient(null);
               }}
               disabled={resetting}
@@ -1212,48 +1163,29 @@ const Clients = () => {
             </Button>
             <Button
               onClick={handleResetPassword}
-              disabled={resetting || newPassword.length < 6}
+              disabled={resetting}
             >
-              {resetting ? "Resetting..." : "Reset Password"}
+              {resetting ? "Creating link..." : "Create reset link"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!newCredentials} onOpenChange={(open) => !open && setNewCredentials(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Client login created</DialogTitle>
-            <DialogDescription>
-              No email is sent yet — this notice is stored in the notification outbox. Share these
-              details with the client directly.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2 text-sm">
-            <div>
-              <span className="font-medium">Email: </span>
-              <span className="text-muted-foreground">{newCredentials?.email}</span>
-            </div>
-            <div>
-              <span className="font-medium">Temporary password: </span>
-              <span className="text-muted-foreground">
-                {newCredentials?.password ?? "existing account — password unchanged"}
-              </span>
-            </div>
-          </div>
-          <DialogFooter>
-            {newCredentials?.password && (
-              <Button
-                variant="outline"
-                onClick={() => navigator.clipboard.writeText(newCredentials.password!)}
-              >
-                Copy password
-              </Button>
-            )}
-            <Button onClick={() => setNewCredentials(null)}>Done</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <OneTimeLinkDialog
+        open={!!newCredentials}
+        onClose={() => setNewCredentials(null)}
+        title="Client login created"
+        email={newCredentials?.email ?? null}
+        link={newCredentials?.link ?? null}
+        existingAccount={newCredentials?.existing}
+      />
+      <OneTimeLinkDialog
+        open={!!resetLinkInfo}
+        onClose={() => setResetLinkInfo(null)}
+        title="Password reset link"
+        email={resetLinkInfo?.email ?? null}
+        link={resetLinkInfo?.link ?? null}
+      />
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={!!deleteClient} onOpenChange={() => setDeleteClient(null)}>

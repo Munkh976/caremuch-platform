@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
+import { OneTimeLinkDialog } from "@/components/auth/OneTimeLinkDialog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowLeft, UserPlus } from "lucide-react";
 import { toast } from "sonner";
@@ -23,9 +23,9 @@ const AddUser = () => {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [role, setRole] = useState<string>("scheduler");
-  const [requirePasswordChange, setRequirePasswordChange] = useState(true);
+  // Mode B (security plan §15): no typed password; the new user sets their own via a one-time link.
+  const [linkInfo, setLinkInfo] = useState<{ email: string; link: string } | null>(null);
 
   useEffect(() => {
     checkAuth();
@@ -57,23 +57,15 @@ const AddUser = () => {
       toast.error("Valid email is required");
       return;
     }
-    if (password.length < 6) {
-      toast.error("Password must be at least 6 characters");
-      return;
-    }
-
     setLoading(true);
     try {
-      // Admin-API pre-confirmed path -- same mechanism as create-user's
-      // client/caregiver paths and enable-client-login/enable-caregiver-login.
-      // Resolves agency_id server-side from the caller's own profile (never
-      // NULL, never client-supplied) and sets email_confirm: true, so the new
-      // user can log in immediately instead of waiting on a confirmation
-      // email that was never guaranteed to be enabled.
+      // create-user resolves agency_id server-side (never client-supplied), checks the
+      // requested role against what this caller may grant (M-SEC-2b), and creates the
+      // account through a one-time invite link (Mode B) that is returned once and shown
+      // in OneTimeLinkDialog. No password is typed or stored.
       const { data, error } = await supabase.functions.invoke('create-user', {
         body: {
           email,
-          password,
           firstName,
           lastName,
           userType: 'staff',
@@ -84,8 +76,9 @@ const AddUser = () => {
       if (error) throw new Error((await (error as any)?.context?.text?.()) || error.message);
       if (!data?.success) throw new Error(data?.error || "Failed to create user");
 
-      toast.success("User created successfully!");
-      navigate("/users");
+      toast.success("User created");
+      if (data?.setPasswordLink) setLinkInfo({ email, link: data.setPasswordLink });
+      else navigate("/users");
     } catch (error: any) {
       toast.error(error.message || "Failed to create user");
     } finally {
@@ -157,18 +150,9 @@ const AddUser = () => {
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="••••••••••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  minLength={6}
-                />
-              </div>
+              <p className="text-xs text-muted-foreground">
+                No password is set here. After creating the user you get a one-time link to give them, so they choose their own password.
+              </p>
 
               <div className="space-y-2">
                 <Label htmlFor="role">Account Type</Label>
@@ -189,25 +173,19 @@ const AddUser = () => {
                 </p>
               </div>
 
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="requirePasswordChange"
-                  checked={requirePasswordChange}
-                  onCheckedChange={(checked) => setRequirePasswordChange(checked as boolean)}
-                />
-                <Label htmlFor="requirePasswordChange" className="text-sm font-normal cursor-pointer">
-                  Require password change on first login
-                </Label>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                When enabled, the user will be forced to change their password when they first log in. This is recommended for security.
-              </p>
 
               <Button type="submit" className="w-full" disabled={loading}>
                 <UserPlus className="mr-2 h-4 w-4" />
                 {loading ? "Creating user..." : "Add User"}
               </Button>
             </form>
+            <OneTimeLinkDialog
+              open={!!linkInfo}
+              onClose={() => { setLinkInfo(null); navigate("/users"); }}
+              title="User created"
+              email={linkInfo?.email ?? null}
+              link={linkInfo?.link ?? null}
+            />
           </CardContent>
         </Card>
       </div>

@@ -1,17 +1,26 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
+import { hasCallerRole, loadPrincipal, MANAGER_OR_ABOVE } from "../_shared/authz.ts";
+import {
+  checkExistingAccount, findAuthUserIdByEmail, inviteNewUser, linkHandedOverNote, setPasswordRedirect,
+} from "../_shared/accountLinks.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Legacy shared-tenant id — same sentinel used in approve-caregiver-registration.
-const LEGACY_SYSTEM_AGENCY_ID = '00000000-0000-0000-0000-000000000000';
-
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
+// Issue 2 Mode B + 🟠 fixes (security plan §15):
+//  - no temporary password: a NEW account gets a one-time invite link, returned once in the response
+//    and never stored (pending_notifications keeps an audit line without any secret);
+//  - the agency comes from the CLIENT RECORD (a system_admin acting on another agency no longer
+//    stamps its own agency on the account);
+//  - no `email` override: the client's own email is used (change it on the client first);
+//  - an EXISTING auth user is linked only if its profile is already in that agency
+//    (NULL/legacy profiles: system_admin only) and its agency is never overwritten.
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
@@ -27,73 +36,52 @@ serve(async (req) => {
     const { data: { user: caller }, error: authError } = await admin.auth.getUser(authHeader.replace('Bearer ', ''));
     if (authError || !caller) return json({ error: 'Unauthorized' }, 401);
 
-    const { data: callerRole } = await admin.rpc('get_user_role', { _user_id: caller.id });
-    if (!callerRole || !['system_admin', 'agency_admin', 'manager'].includes(callerRole)) {
+    const callerP = await loadPrincipal(admin, caller.id);
+    if (!hasCallerRole(callerP, MANAGER_OR_ABOVE)) {
       return json({ error: 'You do not have permission to create client logins' }, 403);
     }
-
-    const { data: callerProfile } = await admin
-      .from('profiles').select('agency_id').eq('id', caller.id).single();
-    if (!callerProfile?.agency_id) return json({ error: 'Your profile is missing an agency' }, 400);
-    const agencyId = callerProfile.agency_id as string;
+    const isSystemAdmin = callerP.role === 'system_admin';
+    if (!isSystemAdmin && !callerP.agencyId) return json({ error: 'Your profile is missing an agency' }, 400);
 
     const body = await req.json().catch(() => ({}));
     const clientId: string | undefined = body.clientId;
-    const emailOverride: string | undefined = body.email;
     if (!clientId) return json({ error: 'clientId is required' }, 400);
+    if (body.email !== undefined) {
+      return json({ error: "The login uses the client's own email. Update the client's email first." }, 400);
+    }
 
     const { data: client, error: clientError } = await admin
-      .from('clients').select('*').eq('id', clientId).single();
+      .from('clients').select('id, agency_id, user_id, email, first_name, last_name, phone').eq('id', clientId).single();
     if (clientError || !client) return json({ error: 'Client not found' }, 404);
-    if (client.agency_id !== agencyId && callerRole !== 'system_admin') {
+    if (!isSystemAdmin && client.agency_id !== callerP.agencyId) {
       return json({ error: 'Client belongs to another agency' }, 403);
     }
     if (client.user_id) return json({ error: 'This client already has a login' }, 400);
+    const agencyId = client.agency_id as string;
 
-    const email = (emailOverride ?? client.email ?? '').trim().toLowerCase();
+    const email = (client.email ?? '').trim().toLowerCase();
     if (!email) return json({ error: 'This client has no email address. Add one first.' }, 400);
-
     const fullName = `${client.first_name} ${client.last_name}`;
-    let userId: string | null = null;
-    let tempPassword: string | null = null;
 
-    const { data: usersPage } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
-    const existingUser = usersPage?.users?.find((u) => (u.email ?? '').toLowerCase() === email);
+    let userId = await findAuthUserIdByEmail(admin, email);
+    let setPasswordLink: string | null = null;
 
-    if (existingUser) {
-      userId = existingUser.id;
+    if (userId) {
+      const verdict = await checkExistingAccount(admin, userId, agencyId, isSystemAdmin);
+      if (!verdict.ok) return json({ error: verdict.error }, verdict.status);
+      // Existing account: fill name/phone, set the agency only if it had none (system_admin path).
+      const patch: Record<string, unknown> = { id: userId, email, full_name: fullName, phone: client.phone };
+      if (!verdict.profileAgencyId) patch.agency_id = agencyId;
+      await admin.from('profiles').upsert(patch, { onConflict: 'id' });
     } else {
-      tempPassword = `Care-${crypto.randomUUID().slice(0, 10)}`;
-      const { data: created, error: createError } = await admin.auth.admin.createUser({
-        email,
-        password: tempPassword,
-        email_confirm: true,
-        user_metadata: { full_name: fullName, agency_id: agencyId },
-      });
-      if (createError || !created.user) return json({ error: createError?.message ?? 'Failed to create account' }, 400);
-      userId = created.user.id;
-      await new Promise((r) => setTimeout(r, 400));
+      const invited = await inviteNewUser(admin, { email, fullName, agencyId, redirectTo: setPasswordRedirect(req), actorId: caller.id, fn: 'enable-client-login' });
+      userId = invited.userId;
+      setPasswordLink = invited.link;
+      await new Promise((r) => setTimeout(r, 400)); // handle_new_user creates the profile from metadata
+      await admin.from('profiles').upsert({ id: userId, email, full_name: fullName, phone: client.phone, agency_id: agencyId }, { onConflict: 'id' });
     }
 
-    // Same guard as approve-caregiver-registration:148 — an existing auth user (matched
-    // by email, which Supabase enforces globally-unique) must not be silently reassigned
-    // to a different agency's profile just because this agency ran client-login enable.
-    const { data: existingProfile } = await admin
-      .from('profiles').select('agency_id').eq('id', userId).maybeSingle();
-    if (existingProfile?.agency_id && ![agencyId, LEGACY_SYSTEM_AGENCY_ID].includes(existingProfile.agency_id)) {
-      return json({ error: 'An account with this email is already linked to another agency' }, 400);
-    }
-
-    await admin.from('profiles').upsert({
-      id: userId,
-      email,
-      full_name: fullName,
-      phone: client.phone,
-      agency_id: agencyId,
-    }, { onConflict: 'id' });
-
-    const { error: linkError } = await admin.from('clients')
-      .update({ user_id: userId, email }).eq('id', clientId);
+    const { error: linkError } = await admin.from('clients').update({ user_id: userId }).eq('id', clientId);
     if (linkError) return json({ error: linkError.message }, 400);
 
     await admin.from('user_roles')
@@ -105,13 +93,14 @@ serve(async (req) => {
       recipient_name: fullName,
       kind: 'client_login_created',
       subject: 'Your CareMuch account is ready',
-      body: `Hi ${client.first_name}, an account was created for you.${tempPassword ? ` Temporary password: ${tempPassword}` : ' Use your existing password to sign in.'}`,
-      payload: { client_id: clientId, temp_password: tempPassword },
+      body: linkHandedOverNote(client.first_name, setPasswordLink ? 'invite' : 'existing'),
+      payload: { client_id: clientId, delivery: setPasswordLink ? 'set_password_link_shown_once' : 'existing_account' },
     });
 
-    return json({ success: true, userId, email, tempPassword });
+    // setPasswordLink is returned ONCE to the staff member who asked; it is not stored or logged.
+    return json({ success: true, userId, email, setPasswordLink, existingAccount: !setPasswordLink });
   } catch (error) {
-    console.error('enable-client-login error:', error);
+    console.error('enable-client-login error:', error instanceof Error ? error.message : 'unknown');
     return json({ error: error instanceof Error ? error.message : 'Unknown error' }, 500);
   }
 });
