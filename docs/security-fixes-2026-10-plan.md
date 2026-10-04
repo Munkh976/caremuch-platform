@@ -1808,11 +1808,12 @@ WHERE s.id IN ('36757fa8-44e5-4dd0-aae8-760bf6907688','ea0877fd-b879-4d13-a6d5-4
   - teardown verified.
 - **PW:** the server accepts 6 and 7 characters. Owner action logged in known-issues (minimum 8 +
   leaked-password protection).
-- **S8:**
-  - a disposable account was created for the team address given by the owner;
-  - `resetPasswordForEmail` was accepted and `recovery_sent_at` set (2026-10-04 16:47:33 UTC);
-  - receipt is pending the owner's confirmation;
-  - the disposable account is deleted after that.
+- **S8: PASS.**
+  - The reset email reached the owner's team address, and its link pointed to
+    `http://localhost:8080/auth/set-password` (owner confirmed, 2026-10-04).
+  - The disposable account `2aaeb094-788d-4030-95c0-91202b53176a` was deleted. Re-query: 0 in
+    `auth.users`, `auth.identities`, `auth.one_time_tokens` (recovery token), `auth.sessions`,
+    `profiles` and `user_roles`.
 - **Branch pushed** after the after-tests.
 
 ### 17.2 E5
@@ -1848,7 +1849,7 @@ One `DO` block (raises unless exactly 2) with every guard from §16.2. Re-query:
 | 4 | `sec_tests_1` S1–S5, R1; `browser_pass` B5, B6 | PASS. Today/Schedule are the separate caregiver-app-shell WIP, not in these commits |
 | 5 | `sec_tests_1` S7, S8; UI U6, U13, sidebars U14 | PASS |
 | 6 | `sec_tests_ui` U1–U13 | PASS |
-| 7 | `sec_tests_modeb` (§17.1) + E5 count 0 | PASS (S8 receipt pending owner) |
+| 7 | `sec_tests_modeb` (§17.1) + E5 count 0 + S8 | PASS |
 | 8 | `sec_tests_wol` W1–W5 | PASS |
 | 9 | Every suite's teardown re-query | PASS |
 
