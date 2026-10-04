@@ -1,0 +1,575 @@
+### check_assignment_eligibility -> cp_eligibility_core
+--- live
++++ phase-c
+@@ -1,7 +1,7 @@
+-CREATE OR REPLACE FUNCTION public.check_assignment_eligibility(_shift_id uuid, _caregiver_id uuid)
++CREATE OR REPLACE FUNCTION public.cp_eligibility_core(_shift_id uuid, _caregiver_id uuid, _ctx jsonb)
+  RETURNS jsonb
+  LANGUAGE plpgsql
+- STABLE SECURITY DEFINER
++ STABLE
+  SET search_path TO 'public'
+ AS $function$
+ DECLARE
+@@ -13,6 +13,9 @@ DECLARE
+   v_missing text[]; v_expired text[]; v_unverified text[];
+   v_avail_rows int; v_covered boolean; v_dow int;
+   v_hours_until numeric; v_exc record;
++  -- Phase C
++  v_ctx jsonb; v_enforce boolean := false; v_svc text; v_need integer; v_proj jsonb;
++  v_creds text[]; v_gmax integer; v_gcount integer; v_issue jsonb;
+ BEGIN
+   SELECT * INTO s FROM public.shifts WHERE id = _shift_id;
+   IF NOT FOUND THEN
+@@ -93,13 +96,17 @@ BEGIN
+   END IF;
+ 
+   FOR r IN
+-    SELECT o.id, o.start_time, o.end_time
++    SELECT o.id, o.start_time, o.end_time, o.group_session_id
+     FROM public.shift_assignments a
+     JOIN public.shifts o ON o.id = a.shift_id
+     WHERE a.caregiver_id = _caregiver_id AND a.status <> 'cancelled'
+       AND o.shift_date = s.shift_date AND o.id <> s.id
+   LOOP
+-    IF s.start_time < r.end_time AND r.start_time < s.end_time THEN
++    IF s.start_time < r.end_time AND r.start_time < s.end_time
++       AND s.group_session_id IS NOT NULL AND r.group_session_id = s.group_session_id THEN
++      NULL;  -- Phase C: both shifts are in the same group session and (this loop only sees
++             -- _caregiver_id's own assignments) worked by the same caregiver: allowed overlap.
++    ELSIF s.start_time < r.end_time AND r.start_time < s.end_time THEN
+       hard := hard || jsonb_build_object('code','double_booked','label','Double booked',
+         'detail','Overlaps a shift '||to_char(r.start_time,'HH24:MI')||'-'||to_char(r.end_time,'HH24:MI')||' on this day.');
+     ELSIF s.start_time < r.end_time + make_interval(mins => v_buffer)
+@@ -109,6 +116,23 @@ BEGIN
+     END IF;
+   END LOOP;
+ 
++  -- Phase C: per caregiver, a group session can't take more clients than its max (session
++  -- value, else the office default): distinct clients THIS caregiver already has on other
++  -- actively assigned shifts of the same group, plus this one.
++  IF s.group_session_id IS NOT NULL THEN
++    SELECT COALESCE(gs.max_clients, gvo.group_session_max_clients) INTO v_gmax
++      FROM public.group_sessions gs JOIN public.virtual_office gvo ON gvo.id = gs.virtual_office_id
++     WHERE gs.id = s.group_session_id;
++    SELECT count(DISTINCT o.client_id) INTO v_gcount
++      FROM public.shifts o
++      JOIN public.shift_assignments a ON a.shift_id = o.id AND a.status <> 'cancelled' AND a.caregiver_id = _caregiver_id
++     WHERE o.group_session_id = s.group_session_id AND o.id <> s.id AND o.client_id <> s.client_id;
++    IF v_gcount + 1 > COALESCE(v_gmax, 3) THEN
++      hard := hard || jsonb_build_object('code','group_full','label','Group session full',
++        'detail','This caregiver already has '||v_gcount||' of '||COALESCE(v_gmax, 3)||' clients in this group session.');
++    END IF;
++  END IF;
++
+   v_week_start := (date_trunc('week', s.shift_date::timestamp))::date;
+   v_week_end := v_week_start + 6;
+   SELECT COALESCE(SUM(o.duration_hours),0) INTO v_weekly
+@@ -195,6 +219,61 @@ BEGIN
+       'detail','Reliability score is '||cg.reliability_score||'.');
+   END IF;
+ 
++  -- Phase C (M-CP-06, schema plan §7): care-plan compliance rules, evaluated on the SHIFT's office.
++  -- The client-level part (office flags, service, active plan, projected units) comes from
++  -- _ctx when the bulk path computed it once for the shift, else from cp_shift_client_context().
++  -- Only offices using the care-plan module (module flag or enforcement flag on) are evaluated,
++  -- so every other office's result is unchanged. Enforcement on -> hard; off -> advisory.
++  v_ctx := COALESCE(_ctx, cp_shift_client_context(_shift_id));
++  v_enforce := COALESCE((v_ctx ->> 'enforce')::boolean, false);
++  IF COALESCE((v_ctx ->> 'rules')::boolean, false) THEN
++    -- (a) a required credential type the caregiver has no record of (expired ones are the existing rule above)
++    SELECT ARRAY(SELECT t.name FROM public.credential_types t
++                  WHERE t.agency_id = s.agency_id AND t.required AND t.is_active
++                    AND NOT EXISTS (SELECT 1 FROM public.caregiver_certifications c
++                                    WHERE c.caregiver_id = _caregiver_id AND c.credential_type_id = t.id)
++                  ORDER BY t.name) INTO v_creds;
++    IF array_length(v_creds, 1) > 0 THEN
++      v_issue := jsonb_build_object('code','credential_missing','label','Required credential missing',
++        'detail','Missing required credential(s): '||array_to_string(v_creds, ', ')||'.');
++      IF v_enforce THEN hard := hard || v_issue; ELSE adv := adv || v_issue; END IF;
++    END IF;
++    v_svc := v_ctx ->> 'svc';
++    IF v_svc IN ('cls', 'respite') THEN
++      -- (b) trained on this client's current plan version (CLS and respite alike)
++      IF v_ctx ->> 'plan_id' IS NULL THEN
++        v_issue := jsonb_build_object('code','training_missing','label','No active plan of service',
++          'detail','The client has no active plan of service on this date, so no training can apply.');
++      ELSIF NOT EXISTS (SELECT 1 FROM public.plan_training_records tr
++                         WHERE tr.caregiver_id = _caregiver_id AND tr.care_plan_id = (v_ctx ->> 'plan_id')::uuid
++                           AND tr.training_version = (v_ctx ->> 'training_version')::int) THEN
++        v_issue := jsonb_build_object('code','training_missing','label','Not trained on the current plan',
++          'detail','Not trained on this client''s current plan (training version '||(v_ctx ->> 'training_version')||').');
++      ELSE
++        v_issue := NULL;
++      END IF;
++      IF v_issue IS NOT NULL THEN
++        IF v_enforce THEN hard := hard || v_issue; ELSE adv := adv || v_issue; END IF;
++      END IF;
++      -- (c) projected authorized units cover this shift (formula: cp_projected_units)
++      v_need := (v_ctx ->> 'need')::int;
++      v_proj := v_ctx -> 'proj';
++      v_issue := CASE v_proj ->> 'status'
++        WHEN 'missing' THEN jsonb_build_object('code','authorization_missing','label','No authorization',
++          'detail','The client has no '||v_svc||' authorization.')
++        WHEN 'expired' THEN jsonb_build_object('code','authorization_expired','label','No authorization on this date',
++          'detail','No '||v_svc||' authorization is valid on '||to_char(s.shift_date,'YYYY-MM-DD')||'.')
++        WHEN 'short' THEN jsonb_build_object('code','units_short','label','Not enough authorized units',
++          'detail','This shift needs '||v_need||' units; '||COALESCE((v_proj ->> 'projected'), '0')||' projected units remain after scheduled and delivered work.')
++        WHEN 'short_period' THEN jsonb_build_object('code','units_short_period','label','Over the authorization''s period cap',
++          'detail','This shift needs '||v_need||' units; '||COALESCE((v_proj ->> 'projected'), '0')||' left this '||(v_proj ->> 'period')||'.')
++        ELSE NULL END;
++      IF v_issue IS NOT NULL THEN
++        IF v_enforce THEN hard := hard || v_issue; ELSE adv := adv || v_issue; END IF;
++      END IF;
++    END IF;
++  END IF;
++
+   RETURN jsonb_build_object(
+     'eligible', jsonb_array_length(hard) = 0,
+     'auto_approvable', jsonb_array_length(hard) = 0 AND jsonb_array_length(soft) = 0,
+
+### check_assignment_eligibility (new wrapper)
+--- live
++++ phase-c
+@@ -4,201 +4,9 @@ CREATE OR REPLACE FUNCTION public.check_assignment_eligibility(_shift_id uuid, _
+  STABLE SECURITY DEFINER
+  SET search_path TO 'public'
+ AS $function$
+-DECLARE
+-  s record; cg record; cl record; svc record; r record;
+-  hard jsonb := '[]'::jsonb; soft jsonb := '[]'::jsonb; adv jsonb := '[]'::jsonb;
+-  v_cap numeric := 40; v_buffer int := 30; v_late int := 24;
+-  v_week_start date; v_week_end date;
+-  v_weekly numeric := 0; v_projected numeric; v_hours numeric;
+-  v_missing text[]; v_expired text[]; v_unverified text[];
+-  v_avail_rows int; v_covered boolean; v_dow int;
+-  v_hours_until numeric; v_exc record;
+ BEGIN
+-  SELECT * INTO s FROM public.shifts WHERE id = _shift_id;
+-  IF NOT FOUND THEN
+-    RETURN jsonb_build_object('eligible', false, 'hard',
+-      jsonb_build_array(jsonb_build_object('code','shift_missing','label','Shift not found','detail','This shift no longer exists.')),
+-      'soft','[]'::jsonb,'advisory','[]'::jsonb,'weekly_hours',0,'projected_weekly_hours',0);
+-  END IF;
+-
+-  SELECT * INTO cg FROM public.caregivers WHERE id = _caregiver_id;
+-  IF NOT FOUND THEN
+-    RETURN jsonb_build_object('eligible', false, 'hard',
+-      jsonb_build_array(jsonb_build_object('code','caregiver_missing','label','Caregiver not found','detail','This caregiver no longer exists.')),
+-      'soft','[]'::jsonb,'advisory','[]'::jsonb,'weekly_hours',0,'projected_weekly_hours',0);
+-  END IF;
+-
+-  SELECT COALESCE(max_weekly_hours,40), COALESCE(travel_buffer_minutes,30), COALESCE(late_trade_hours,24)
+-    INTO v_cap, v_buffer, v_late
+-  FROM public.agency WHERE id = s.agency_id;
+-  v_cap := COALESCE(v_cap,40); v_buffer := COALESCE(v_buffer,30); v_late := COALESCE(v_late,24);
+-
+-  v_hours := COALESCE(s.duration_hours, EXTRACT(EPOCH FROM (s.end_time - s.start_time))/3600.0);
+-
+-  IF cg.agency_id IS DISTINCT FROM s.agency_id THEN
+-    hard := hard || jsonb_build_object('code','tenancy','label','Different agency','detail','Caregiver belongs to another agency.');
+-  END IF;
+-
+-  -- NEW: Rule B, mirrors Rule A exactly. NULL IS DISTINCT FROM NULL = false, so two
+-  -- not-yet-backfilled-office rows don't false-positive-block each other; any real
+-  -- mismatch (including one-sided NULL) does.
+-  IF cg.virtual_office_id IS DISTINCT FROM s.virtual_office_id THEN
+-    hard := hard || jsonb_build_object('code','office_scope','label','Different office','detail','Caregiver belongs to a different office.');
+-  END IF;
+-
+-  IF cg.is_active IS FALSE THEN
+-    hard := hard || jsonb_build_object('code','inactive','label','Inactive caregiver','detail','This caregiver is not active.');
+-  END IF;
+-
+-  IF EXISTS (
+-    SELECT 1 FROM public.shift_assignments a
+-    WHERE a.shift_id = _shift_id AND a.status IN ('in_progress','completed')
+-      AND a.caregiver_id <> _caregiver_id
+-  ) THEN
+-    hard := hard || jsonb_build_object('code','shift_taken','label','Shift already worked','detail','Another caregiver has already started or completed this shift.');
+-  END IF;
+-
+-  IF s.status IN ('completed','cancelled') THEN
+-    hard := hard || jsonb_build_object('code','shift_state','label','Shift not open','detail','Shift is '||s.status||'.');
+-  END IF;
+-
+-  SELECT ARRAY(
+-    SELECT DISTINCT code FROM unnest(
+-      ARRAY[s.care_type_code]::text[] || COALESCE(s.required_skills, ARRAY[]::text[])
+-    ) AS code
+-    WHERE code IS NOT NULL AND code <> ''
+-      AND NOT EXISTS (
+-        SELECT 1 FROM public.caregiver_skills k
+-        WHERE k.caregiver_id = _caregiver_id AND k.care_type_code = code
+-      )
+-  ) INTO v_missing;
+-  IF array_length(v_missing,1) > 0 THEN
+-    hard := hard || jsonb_build_object('code','skill','label','Missing care service skill',
+-      'detail','Not qualified for '||array_to_string(v_missing,', ')||'.');
+-  END IF;
+-
+-  SELECT ARRAY(SELECT certification_name FROM public.caregiver_certifications
+-               WHERE caregiver_id=_caregiver_id AND expiry_date IS NOT NULL AND expiry_date < s.shift_date)
+-    INTO v_expired;
+-  IF array_length(v_expired,1) > 0 THEN
+-    hard := hard || jsonb_build_object('code','certification_expired','label','Expired certification',
+-      'detail',array_to_string(v_expired,', ')||' expired before this shift date.');
+-  END IF;
+-  SELECT ARRAY(SELECT certification_name FROM public.caregiver_certifications
+-               WHERE caregiver_id=_caregiver_id AND is_verified IS NOT TRUE)
+-    INTO v_unverified;
+-  IF array_length(v_unverified,1) > 0 THEN
+-    hard := hard || jsonb_build_object('code','certification_unverified','label','Unverified certification',
+-      'detail',array_to_string(v_unverified,', ')||' has not been verified.');
+-  END IF;
+-
+-  FOR r IN
+-    SELECT o.id, o.start_time, o.end_time
+-    FROM public.shift_assignments a
+-    JOIN public.shifts o ON o.id = a.shift_id
+-    WHERE a.caregiver_id = _caregiver_id AND a.status <> 'cancelled'
+-      AND o.shift_date = s.shift_date AND o.id <> s.id
+-  LOOP
+-    IF s.start_time < r.end_time AND r.start_time < s.end_time THEN
+-      hard := hard || jsonb_build_object('code','double_booked','label','Double booked',
+-        'detail','Overlaps a shift '||to_char(r.start_time,'HH24:MI')||'-'||to_char(r.end_time,'HH24:MI')||' on this day.');
+-    ELSIF s.start_time < r.end_time + make_interval(mins => v_buffer)
+-      AND r.start_time < s.end_time + make_interval(mins => v_buffer) THEN
+-      adv := adv || jsonb_build_object('code','travel_buffer','label','Tight turnaround',
+-        'detail','Less than '||v_buffer||' minutes between this and a shift at '||to_char(r.start_time,'HH24:MI')||'.');
+-    END IF;
+-  END LOOP;
+-
+-  v_week_start := (date_trunc('week', s.shift_date::timestamp))::date;
+-  v_week_end := v_week_start + 6;
+-  SELECT COALESCE(SUM(o.duration_hours),0) INTO v_weekly
+-  FROM public.shift_assignments a
+-  JOIN public.shifts o ON o.id = a.shift_id
+-  WHERE a.caregiver_id = _caregiver_id AND a.status <> 'cancelled'
+-    AND o.shift_date BETWEEN v_week_start AND v_week_end AND o.id <> s.id;
+-  v_projected := round((v_weekly + v_hours)::numeric, 2);
+-
+-  IF v_projected > v_cap THEN
+-    soft := soft || jsonb_build_object('code','weekly_hours','label','Over weekly hours cap',
+-      'detail','Would reach '||v_projected||'h this week (cap '||v_cap||'h).');
+-  ELSIF v_projected > v_cap - 8 THEN
+-    adv := adv || jsonb_build_object('code','overtime_risk','label','Approaching overtime',
+-      'detail','Would reach '||v_projected||'h of '||v_cap||'h this week.');
+-  END IF;
+-
+-  -- CHANGED: Rule H moves from soft to hard (was: soft := soft || ...).
+-  IF EXISTS (SELECT 1 FROM public.time_off_requests t
+-             WHERE t.caregiver_id=_caregiver_id AND t.status='approved'
+-               AND s.shift_date BETWEEN t.start_date AND t.end_date) THEN
+-    hard := hard || jsonb_build_object('code','time_off','label','Approved time off',
+-      'detail','Caregiver has approved time off covering this date.');
+-  END IF;
+-
+-  -- date-specific exception overrides the weekly rule for that date
+-  SELECT * INTO v_exc FROM public.caregiver_availability_exceptions
+-   WHERE caregiver_id=_caregiver_id AND exception_date = s.shift_date;
+-
+-  IF FOUND THEN
+-    IF v_exc.is_available IS FALSE THEN
+-      soft := soft || jsonb_build_object('code','availability_exception','label','Unavailable on this date',
+-        'detail', COALESCE(NULLIF(v_exc.reason,''),'Caregiver marked this date as unavailable.'));
+-    ELSIF NOT (v_exc.start_time <= s.start_time AND v_exc.end_time >= s.end_time) THEN
+-      soft := soft || jsonb_build_object('code','availability_exception','label','Outside availability for this date',
+-        'detail','On this date the caregiver is only available '||to_char(v_exc.start_time,'HH24:MI')||'-'||to_char(v_exc.end_time,'HH24:MI')||'.');
+-    END IF;
+-  ELSE
+-    SELECT COUNT(*) INTO v_avail_rows FROM public.caregiver_availability WHERE caregiver_id=_caregiver_id;
+-    IF v_avail_rows > 0 THEN
+-      v_dow := EXTRACT(DOW FROM s.shift_date)::int;
+-      SELECT EXISTS (
+-        SELECT 1 FROM public.caregiver_availability av
+-        WHERE av.caregiver_id=_caregiver_id AND av.day_of_week=v_dow AND av.is_available IS NOT FALSE
+-          AND av.start_time <= s.start_time AND av.end_time >= s.end_time
+-      ) INTO v_covered;
+-      IF NOT v_covered THEN
+-        soft := soft || jsonb_build_object('code','availability','label','Outside declared availability',
+-          'detail','This shift falls outside the caregiver''s availability for that weekday.');
+-      END IF;
+-    END IF;
+-  END IF;
+-
+-  SELECT * INTO cl FROM public.clients WHERE id = s.client_id;
+-  -- CHANGED: Rule J moves from advisory to soft (was: adv := adv || ...). Existing
+-  -- zip-list check only -- real distance/mileage deferred to Phase 2 (see
+-  -- known-issues.md).
+-  IF cl.zip_code IS NOT NULL AND cg.service_zipcodes IS NOT NULL AND array_length(cg.service_zipcodes,1) > 0
+-     AND NOT (cl.zip_code = ANY(cg.service_zipcodes)) THEN
+-    soft := soft || jsonb_build_object('code','service_area','label','Outside service area',
+-      'detail','Client ZIP '||cl.zip_code||' is not in this caregiver''s service ZIP list.');
+-  END IF;
+-  IF cl.preferred_caregiver_id IS NOT NULL AND cl.preferred_caregiver_id <> _caregiver_id THEN
+-    adv := adv || jsonb_build_object('code','preferred_caregiver','label','Client has a preferred caregiver',
+-      'detail','Continuity of care: the client requested a specific caregiver.');
+-  END IF;
+-
+-  SELECT * INTO svc FROM public.care_types WHERE code = s.care_type_code;
+-  IF svc.requires_trade_approval THEN
+-    adv := adv || jsonb_build_object('code','specialized_service','label','Specialised care service',
+-      'detail',COALESCE(svc.name,s.care_type_code)||' requires manager approval before a trade.');
+-  END IF;
+-
+-  v_hours_until := EXTRACT(EPOCH FROM ((s.shift_date + s.start_time) - now()))/3600.0;
+-  IF v_hours_until > 0 AND v_hours_until < v_late THEN
+-    adv := adv || jsonb_build_object('code','late_trade','label','Late assignment',
+-      'detail','Shift starts in under '||v_late||' hours.');
+-  END IF;
+-  IF s.status = 'in_progress' THEN
+-    adv := adv || jsonb_build_object('code','in_progress','label','Shift in progress','detail','This shift has already started.');
+-  END IF;
+-  IF cg.reliability_score IS NOT NULL AND cg.reliability_score < 70 THEN
+-    adv := adv || jsonb_build_object('code','reliability','label','Low reliability score',
+-      'detail','Reliability score is '||cg.reliability_score||'.');
+-  END IF;
+-
+-  RETURN jsonb_build_object(
+-    'eligible', jsonb_array_length(hard) = 0,
+-    'auto_approvable', jsonb_array_length(hard) = 0 AND jsonb_array_length(soft) = 0,
+-    'hard', hard, 'soft', soft, 'advisory', adv,
+-    'weekly_hours', round(v_weekly::numeric,2), 'projected_weekly_hours', v_projected);
++  -- Phase C: the engine body lives in cp_eligibility_core (internal); NULL ctx = compute the
++  -- client-level context for this one check.
++  RETURN public.cp_eligibility_core(_shift_id, _caregiver_id, NULL);
+ END;
+ $function$
+
+### check_assignment_eligibility_bulk
+--- live
++++ phase-c
+@@ -4,9 +4,13 @@ CREATE OR REPLACE FUNCTION public.check_assignment_eligibility_bulk(_shift_id uu
+  STABLE SECURITY DEFINER
+  SET search_path TO 'public'
+ AS $function$
++DECLARE v_ctx jsonb;
+ BEGIN
++  -- Phase C: the client-level checks (plan/training version, projected units) are computed ONCE
++  -- for the shift and shared by every caregiver; the per-caregiver rules stay in the core.
++  v_ctx := public.cp_shift_client_context(_shift_id);
+   RETURN QUERY
+-  SELECT cid, public.check_assignment_eligibility(_shift_id, cid)
++  SELECT cid, public.cp_eligibility_core(_shift_id, cid, v_ctx)
+   FROM unnest(_caregiver_ids) AS cid;
+ END;
+ $function$
+
+### assign_caregiver_to_shift
+--- live
++++ phase-c
+@@ -16,6 +16,8 @@ BEGIN
+     RAISE EXCEPTION 'Shift belongs to another agency' USING ERRCODE='42501';
+   END IF;
+ 
++  -- Phase C: serialize assignments drawing on this client's authorizations (id order, as review)
++  PERFORM public.cp_lock_client_authorizations(s.client_id);
+   elig := public.check_assignment_eligibility(_shift_id, _caregiver_id);
+ 
+   IF jsonb_array_length(elig->'hard') > 0 THEN
+
+### check_caregiver_shifts_eligibility
+--- live
++++ phase-c
+@@ -12,7 +12,7 @@ BEGIN
+   END IF;
+ 
+   RETURN QUERY
+-  SELECT sid, public.check_assignment_eligibility(sid, v_cg)
++  SELECT sid, public.cp_caregiver_safe_eligibility(public.check_assignment_eligibility(sid, v_cg))  -- Phase C (R6): caregiver-safe text
+   FROM unnest(_shift_ids) AS sid;
+ END;
+ $function$
+
+### caregiver_pick_up_shift
+--- live
++++ phase-c
+@@ -18,7 +18,10 @@ BEGIN
+     RAISE EXCEPTION 'Shift is already assigned' USING ERRCODE='23514';
+   END IF;
+ 
+-  elig := public.check_assignment_eligibility(_shift_id, v_cg);
++  -- Phase C: serialize assignments drawing on this client's authorizations (id order, as review)
++  PERFORM public.cp_lock_client_authorizations(s.client_id);
++  -- Phase C (R6): the caregiver only ever sees caregiver-safe text (error message and response)
++  elig := public.cp_caregiver_safe_eligibility(public.check_assignment_eligibility(_shift_id, v_cg));
+   -- CHANGED: was `jsonb_array_length(elig->'hard') > 0 OR jsonb_array_length(elig->'soft') > 0`.
+   -- Self-pickup now blocks on hard issues only -- soft issues (availability, service-area
+   -- over the zip list) are self-consented by the caregiver's own act of picking it up.
+
+### caregiver_pickup_trade_shift
+--- live
++++ phase-c
+@@ -12,6 +12,7 @@ DECLARE
+   existing record;
+   v_id uuid;
+   v_claimed uuid;
++  v_safe jsonb;   -- Phase C (R6)
+ BEGIN
+   SELECT cg.id, cg.agency_id, cg.virtual_office_id
+     INTO v_cg
+@@ -40,11 +41,16 @@ BEGIN
+     RAISE EXCEPTION 'This trade is not available to you' USING ERRCODE='42501';
+   END IF;
+ 
++  -- Phase C: serialize assignments drawing on this client's authorizations (id order, as review)
++  PERFORM public.cp_lock_client_authorizations(s.client_id);
+   elig := public.check_assignment_eligibility(t.shift_id, v_cg.id);
++  -- Phase C (R6): the full result is kept for the manager (eligibility_snapshot, approval_reasons);
++  -- the caregiver only sees the caregiver-safe copy.
++  v_safe := public.cp_caregiver_safe_eligibility(elig);
+ 
+   IF jsonb_array_length(elig->'hard') > 0 THEN
+     RAISE EXCEPTION 'Pick-up refused: %', (
+-      SELECT string_agg(x->>'detail',' ') FROM jsonb_array_elements(elig->'hard') x
++      SELECT string_agg(x->>'detail',' ') FROM jsonb_array_elements(v_safe->'hard') x
+     ) USING ERRCODE='23514';
+   END IF;
+ 
+@@ -66,7 +72,7 @@ BEGIN
+     IF v_claimed IS NULL THEN
+       RAISE EXCEPTION 'This trade is no longer available' USING ERRCODE='23514';
+     END IF;
+-    RETURN jsonb_build_object('status', 'sent_for_approval', 'eligibility', elig);
++    RETURN jsonb_build_object('status', 'sent_for_approval', 'eligibility', v_safe);
+   END IF;
+ 
+   -- Clean: claim the trade FIRST (atomic, race-safe), only then touch shift_assignments --
+@@ -107,6 +113,6 @@ BEGIN
+ 
+   PERFORM set_config('caremuch.assignment_ctx','',true);
+ 
+-  RETURN jsonb_build_object('status', 'picked_up', 'assignment_id', v_id, 'eligibility', elig);
++  RETURN jsonb_build_object('status', 'picked_up', 'assignment_id', v_id, 'eligibility', v_safe);
+ END;
+ $function$
+
+### create_progress_note_for_shift
+--- live
++++ phase-c
+@@ -43,7 +43,7 @@ BEGIN
+     training_version, note_kind, service_type, service_date, scheduled_start, scheduled_end, units_scheduled,
+     due_at, template_id, template_version, field_snapshot)
+   VALUES (s.agency_id, s.virtual_office_id, s.client_id, s.caregiver_id, s.id, v_plan.id, v_plan.training_version,
+-    v_kind, v_svc, s.shift_date, v_start, v_end, floor(extract(epoch FROM (v_end - v_start)) / 60 / 15),
++    v_kind, v_svc, s.shift_date, v_start, v_end, cp_shift_units(s.shift_date, s.start_time, s.end_time, v_tz),
+     ((s.shift_date + 2)::timestamp AT TIME ZONE v_tz), (v_snap ->> 'template_id')::uuid, (v_snap ->> 'version')::int, v_snap)
+   RETURNING id INTO v_id;
+ 
+
+### cp_derive_authorization_units (Phase A)
+--- committed
++++ phase-c
+@@ -1,7 +1,8 @@
+ CREATE OR REPLACE FUNCTION public.cp_derive_authorization_units()
+ RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+ BEGIN
+-  NEW.units_available := NEW.units_authorized - COALESCE((
++  -- Phase C: minus the opening balance (units used before CareMuch, entered with the authorization)
++  NEW.units_available := NEW.units_authorized - NEW.units_used_before_caremuch - COALESCE((
+     SELECT SUM(n.units_used) FROM public.progress_notes n
+     WHERE n.authorization_id = NEW.id AND n.billable AND NOT n.voided), 0);
+   RETURN NEW;
+
+### create_service_authorization (B1; new signature)
+--- committed
++++ phase-c
+@@ -4,7 +4,7 @@ CREATE FUNCTION public.create_service_authorization(
+   _unit_minutes integer DEFAULT 15, _service_code text DEFAULT NULL, _modifier text DEFAULT NULL,
+   _service_description text DEFAULT NULL, _period_type public.auth_period_type DEFAULT NULL,
+   _units_per_period numeric DEFAULT NULL, _authorizing_agent_notes text DEFAULT NULL,
+-  _field_values jsonb DEFAULT '{}'::jsonb)
++  _field_values jsonb DEFAULT '{}'::jsonb, _units_used_before_caremuch numeric DEFAULT 0)
+ RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+ DECLARE
+   c record; v_num text := btrim(_auth_number); v_ver uuid; v_snap jsonb; v_id uuid;
+@@ -24,6 +24,10 @@ BEGIN
+   IF _units_authorized IS NULL OR _units_authorized <= 0 OR _units_authorized > 100000 THEN
+     RAISE EXCEPTION 'Units authorized must be greater than 0' USING ERRCODE = '22023';
+   END IF;
++  -- Phase C: opening balance at go-live (units of this authorization already used before CareMuch)
++  IF _units_used_before_caremuch IS NULL OR _units_used_before_caremuch < 0 OR _units_used_before_caremuch > _units_authorized THEN
++    RAISE EXCEPTION 'Units used before CareMuch must be between 0 and the units authorized' USING ERRCODE = '22023';
++  END IF;
+   IF _effective_date IS NULL OR _expiration_date IS NULL OR _expiration_date < _effective_date THEN
+     RAISE EXCEPTION 'Valid effective and expiration dates are required' USING ERRCODE = '22023';
+   END IF;
+@@ -49,19 +53,20 @@ BEGIN
+ 
+   INSERT INTO public.service_authorizations (agency_id, virtual_office_id, client_id, auth_number, service_code, modifier,
+     service_type, service_description, units_authorized, period_type, units_per_period, unit_minutes,
+-    effective_date, expiration_date, source_adapter, authorizing_agent_notes,
++    effective_date, expiration_date, source_adapter, authorizing_agent_notes, units_used_before_caremuch,
+     template_id, template_version, field_snapshot, field_values)
+   VALUES (c.agency_id, c.virtual_office_id, c.id, v_num, NULLIF(btrim(_service_code), ''), NULLIF(btrim(_modifier), ''),
+     _service_type, _service_description, _units_authorized, _period_type, _units_per_period, _unit_minutes,
+-    _effective_date, _expiration_date, 'manual', _authorizing_agent_notes,
++    _effective_date, _expiration_date, 'manual', _authorizing_agent_notes, _units_used_before_caremuch,
+     (v_snap ->> 'template_id')::uuid, (v_snap ->> 'version')::int, v_snap, COALESCE(_field_values, '{}'::jsonb))
+   RETURNING id INTO v_id;
+ 
+   PERFORM cp_audit(c.agency_id, c.virtual_office_id, 'authorization_created', 'service_authorization', v_id,
+-    jsonb_build_object('authorization_id', v_id, 'units_authorized', _units_authorized));
++    jsonb_build_object('authorization_id', v_id, 'units_authorized', _units_authorized,
++      'units_used_before_caremuch', _units_used_before_caremuch));
+   RETURN v_id;
+ END $$;
+ REVOKE ALL ON FUNCTION public.create_service_authorization(uuid, text, text, numeric, date, date, integer, text, text, text,
+-  public.auth_period_type, numeric, text, jsonb) FROM PUBLIC, anon;
++  public.auth_period_type, numeric, text, jsonb, numeric) FROM PUBLIC, anon;
+ GRANT EXECUTE ON FUNCTION public.create_service_authorization(uuid, text, text, numeric, date, date, integer, text, text, text,
+-  public.auth_period_type, numeric, text, jsonb) TO authenticated;
++  public.auth_period_type, numeric, text, jsonb, numeric) TO authenticated;
+
+### review_progress_note (B2)
+--- committed
++++ phase-c
+@@ -1,6 +1,6 @@
+ CREATE OR REPLACE FUNCTION public.review_progress_note(_note_id uuid, _billable boolean, _non_billable_reason text DEFAULT NULL)
+ RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+-DECLARE n record; a record; v_left numeric;
++DECLARE n record; a record; v_left numeric; v_pl numeric; v_per text;
+ BEGIN
+   SELECT * INTO n FROM public.progress_notes WHERE id = _note_id AND NOT voided FOR UPDATE;
+   PERFORM cp_require_scope(n.agency_id, n.virtual_office_id, '{manager,agency_admin}'::public.app_role[]);
+@@ -24,11 +24,14 @@ BEGIN
+   -- reviewers); the next statement then reads the committed units after any concurrent review
+   PERFORM 1 FROM public.service_authorizations
+    WHERE client_id = n.client_id AND service_type = n.service_type ORDER BY id FOR UPDATE;
+-  SELECT * INTO a FROM public.service_authorizations
+-   WHERE client_id = n.client_id AND service_type = n.service_type
+-     AND effective_date <= n.service_date AND expiration_date >= n.service_date
+-     AND units_available >= n.units_used
+-   ORDER BY expiration_date, created_at, id
++  -- Phase C: the authorization must also have room in the service date's period when it has a
++  -- per-period cap (cp_period_left: cap − units already charged in that window)
++  SELECT sa.* INTO a FROM public.service_authorizations sa JOIN public.virtual_office vo ON vo.id = sa.virtual_office_id
++   WHERE sa.client_id = n.client_id AND sa.service_type = n.service_type
++     AND sa.effective_date <= n.service_date AND sa.expiration_date >= n.service_date
++     AND sa.units_available >= n.units_used
++     AND COALESCE(cp_period_left(sa.id, sa.period_type, sa.units_per_period, vo.billing_week_start, n.service_date, '{}', '{}', '{}'), n.units_used) >= n.units_used
++   ORDER BY sa.expiration_date, sa.created_at, sa.id
+    LIMIT 1;
+   IF a.id IS NULL THEN
+     IF NOT EXISTS (SELECT 1 FROM public.service_authorizations WHERE client_id = n.client_id AND service_type = n.service_type) THEN
+@@ -36,6 +39,18 @@ BEGIN
+     ELSIF NOT EXISTS (SELECT 1 FROM public.service_authorizations WHERE client_id = n.client_id AND service_type = n.service_type
+                         AND effective_date <= n.service_date AND expiration_date >= n.service_date) THEN
+       RAISE EXCEPTION 'Not billable yet: the service date is outside every authorization''s dates' USING ERRCODE = '22023';
++    ELSIF EXISTS (SELECT 1 FROM public.service_authorizations WHERE client_id = n.client_id AND service_type = n.service_type
++                    AND effective_date <= n.service_date AND expiration_date >= n.service_date AND units_available >= n.units_used) THEN
++      -- enough units in total, but every such authorization is at its period cap
++      SELECT cp_period_left(sa.id, sa.period_type, sa.units_per_period, vo.billing_week_start, n.service_date, '{}', '{}', '{}'),
++             replace(sa.period_type::text, 'per_', '')
++        INTO v_pl, v_per
++        FROM public.service_authorizations sa JOIN public.virtual_office vo ON vo.id = sa.virtual_office_id
++       WHERE sa.client_id = n.client_id AND sa.service_type = n.service_type
++         AND sa.effective_date <= n.service_date AND sa.expiration_date >= n.service_date AND sa.units_available >= n.units_used
++       ORDER BY sa.expiration_date, sa.created_at, sa.id LIMIT 1;
++      RAISE EXCEPTION 'Not billable yet: this visit would go over the authorization''s % cap (% units needed, % left this %)',
++        CASE v_per WHEN 'day' THEN 'daily' ELSE v_per || 'ly' END, n.units_used, GREATEST(v_pl, 0), v_per USING ERRCODE = '22023';
+     ELSE
+       RAISE EXCEPTION 'Not billable yet: not enough authorized units remain (% needed)', n.units_used USING ERRCODE = '22023';
+     END IF;
+
