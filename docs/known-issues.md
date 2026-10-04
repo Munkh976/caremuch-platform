@@ -20,6 +20,12 @@ scheduling tables, just never applied to this one.
 properly would need a `virtual_office_id` column on `shift_trades` (or a derived one via
 the joined shift) plus updated RLS policies, mirroring the established pattern.
 
+**Re-confirmed 2026-10-04 by the S-OFF-1 sweep** (see "RESOLVED (part): S-OFF-1" below). The staff
+INSERT and UPDATE policies ("Agency staff and caregivers can create shift trades", "Agency staff can
+manage shift trades") are still agency-only. An office-restricted manager can create or decide a
+trade of another office through direct table writes. Still open: it needs the column/policy change
+above plus the RLS write-path audit, not a one-line guard.
+
 ## RESOLVED: a real caregiver account could never complete a trade-board pickup
 
 **Status:** Found 2026-09-16 by the caregiver Available Shifts redesign's own test, before
@@ -1171,9 +1177,13 @@ a literal, weak password hash. It is in git history for good. If that account st
 password, change it (Forgot password, or a reset link from another admin). The migration is
 already applied, so editing the file changes nothing in the database.
 
-## OPEN: `caregiver_certifications` staff policy has no office check
+## OPEN (narrowed): `caregiver_certifications` staff READ policy has no office check
 
-**Status:** Logged 2026-10-04 (Ripple Phase A review; not fixed now).
+**Status:** Logged 2026-10-04 (Ripple Phase A review). **Writes fixed in Phase B1:** staff direct
+writes are refused, and credentials are entered only through `enter_caregiver_credential`, which
+checks the caller's role and office scope (B1 suite C1). **Still open:** the staff SELECT policy
+"Agency staff read certifications in their agency" is agency-only, so an office-restricted staff
+member can read other offices' caregivers' certifications. The original note follows.
 
 The policy "Agency staff manage certifications in their agency" checks only staff role + agency
 (`caregiver_agency_id(caregiver_id) = current_agency_id()`). An office-restricted staff member can
@@ -1230,3 +1240,60 @@ DEV. Then verify:
 
     SELECT count(*) FROM public.cp_default_credential_types;
     SELECT count(*) FROM public.cp_default_service_types;
+
+## RESOLVED (part): S-OFF-1 — caller office scope in the staff scheduling write paths
+
+**Status:** Found 2026-10-04 by the Ripple D3 done-test (S8). An office-Y manager assigned a caregiver
+to an office-X shift. Fixed on DEV the same day (`d62e1eb`, migration
+`20261011120000_soff_01_office_scope_guards.sql`).
+
+**Cause:** these paths checked the caller's role and agency but never the caller's office (M-Office
+Tier 3). Phase 0 had recorded cross-office assignment as "expected", and Rule B (Phase 1B) only
+added the caregiver-office = shift-office check.
+
+**Fixed (one guard each, the `cp_staff_in_scope` / M-Office predicate, generic denial):**
+- `assign_caregiver_to_shift`, `release_shift_assignments`, `compute_earnings_for_time_entry`
+  (SECURITY DEFINER; same signatures and ACLs);
+- Edge Functions, through the shared `_shared/authz.ts` principal:
+  - `canActOn` → `admin-reset-password` and `admin-delete-user`;
+  - `enable-caregiver-login` and `enable-client-login`;
+  - redeployed with `verify_jwt` unchanged (true);
+- tests: `tests/ripple/pglite/soff.cjs`, `tests/ripple/dev/soff.cjs`, D3 S8.
+
+**Already office-scoped (sweep, no change):** RLS on `shifts`, `shift_assignments` (UPDATE),
+`time_off_requests` (decide), `time_entries` (staff), `caregivers`, `client_orders`; the Ripple RPCs
+(`cp_require_scope`); `create-user` (puts a restricted caller's users in its own office).
+Caregiver self-service (`caregiver_pick_up_shift`, trade pick-up) is bound to the caller's own
+caregiver row, and Rule B pins the caregiver's office to the shift's office.
+
+**Still open (bigger than a one-line guard), each tracked:**
+- `shift_trades` staff INSERT/UPDATE policies: agency-only (entry at the top of this file).
+- Staff write policies on `caregiver_availability`, `caregiver_availability_exceptions` and
+  `caregiver_skills` are agency-only: an office-restricted staff member can change another office's
+  caregivers' availability and skills. Needs office-scoped policies (through the caregiver's office)
+  and the RLS write-path audit (every writer, not just the named ones) before tightening.
+- `approve-caregiver-registration` (Edge Function, service role) checks role + agency only.
+  Registrations carry no office yet, so there is nothing to compare. Fix together with "FUTURE:
+  per-office caregiver registration links".
+- `convert_care_request_to_client` (SECURITY DEFINER) checks agency only. Client intake, outside
+  the scheduling/staff sweep. A one-line guard is possible (`care_requests.virtual_office_id` is
+  never NULL on DEV today) but needs a product decision first.
+- `create-user` was not redeployed: it imports the changed `_shared/authz.ts`, but uses only
+  `loadPrincipal`/`hasCallerRole`, whose behaviour for it is unchanged. Redeploy it with its next
+  change.
+
+## OPEN: Ripple care-plan module — defaults awaiting Ripple, and deferred features
+
+**Status:** Logged 2026-10-04 (backend A–D done on DEV). Current defaults (schema plan §12, §13):
+- **Q11 billing week:** Monday–Sunday, per office (`virtual_office.billing_week_start`, default 1)
+  until Ripple confirms ISK's week.
+- **Q12 review:** per-note review plus "bulk-approve clean rows" until Ripple says otherwise.
+- **Q18 late arrival / early departure:** the current rule is kept (more than 5 minutes late loses
+  the first 15-minute unit). Billing only the units actually delivered awaits Ripple.
+- **E-signature:** notes carry a typed signature and timestamp. Acceptance of that as an
+  e-signature awaits Ripple; electronic archiving is a later phase.
+- **Notifications (R9):** V1 shows computed status only (overdue notes, retraining list,
+  onboarding). Sending notifications is a later phase.
+
+Also before production (separate entries): load the care-plan default catalogs; server-side
+password minimum and leaked-password protection; custom SMTP / Mode A.

@@ -36,8 +36,12 @@ async function afterD2(F) {
   rec("ACL 2 RPCs SECURITY DEFINER + authenticated only; the evaluator has no API role; all STABLE", pass(st.length === 3 && bad.length === 0 && st.every((f) => f.v === "s")),
     st.map((f) => `${f.proname} definer=${f.d} ${f.g}`).join("; "));
   const before = JSON.parse(fs.readFileSync(UNTOUCHED_FILE, "utf8")), now = await defs();
+  // functions a LATER approved migration changed on purpose (compared against the pre-D2 snapshot)
+  const LATER = { assign_caregiver_to_shift: "S-OFF-1 (20261011120000)", release_shift_assignments: "S-OFF-1 (20261011120000)" };
   const changed = UNTOUCHED.filter((k) => before[k] !== now[k]);
-  rec("U D2 changed none of the scheduling / units functions (definition + ACL hash)", pass(changed.length === 0), changed.length ? changed.join(", ") : `${UNTOUCHED.length} identical`);
+  const unexplained = changed.filter((k) => !LATER[k]);
+  rec("U D2 changed none of the scheduling / units functions (definition + ACL hash; differences allowed only where a later approved migration changed the function)",
+    pass(unexplained.length === 0), changed.length ? `changed: ${changed.map((k) => `${k}${LATER[k] ? " by " + LATER[k] : " UNEXPLAINED"}`).join(", ")}; ${UNTOUCHED.length - changed.length} identical` : `${UNTOUCHED.length} identical`);
 
   // fixture: module on for office X; clients X1 (walked through), X2 (left empty), XY (office Y)
   await must(F.aaA.c, "seed_office_care_plan_defaults", { _office_id: F.OX });

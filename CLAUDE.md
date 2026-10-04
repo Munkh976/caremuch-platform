@@ -261,6 +261,17 @@ Before changing code:
 - Phase 5: Retention Agent + retention ML.
 - Phase 6: Agent Builder.
 
+**Ripple care-plan backend A–D done on DEV; UI next.** Separate track from the AI phases above. Done
+2026-10-04:
+- schema and role-tiered RLS (A);
+- write RPCs, progress notes and weekly billing (B1/B2);
+- compliance rules and projected units in eligibility (C);
+- onboarding status and the end-to-end done-test, plus the S-OFF-1 office-scope fix in the
+  scheduling write paths (D).
+
+Results are in the schema plan §14. Tests are in `tests/ripple/` (DEV runs need owner approval).
+Next: the UI implementation plan (slices S0–S11).
+
 ## Architecture readiness standard
 Before implementation, confirm:
 - existing architecture understood

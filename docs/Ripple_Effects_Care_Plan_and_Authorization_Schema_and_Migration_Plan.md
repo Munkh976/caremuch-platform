@@ -1201,3 +1201,69 @@ Owner-approved fix, applied to every test from now on:
 - "Now", deadlines and arrival times are always taken from the database clock, never the local
   one.
 - Each run prints the measured skew (re-run: local − DB = 1062 ms).
+
+### 14.3 Phase B2: live on DEV 2026-10-04 (`e7e32fe`)
+- **Local (PGlite):** 16/16 checks (notes N1–N12, D1, A1, A2, ACL).
+- **DEV after-suite:** green, including C1 (a real concurrency race between two reviews on one
+  authorization: exactly one charge).
+- **Rollback:** restores the exact post-B1 catalog (`docs/rollback/ripple_phase_b2_rollback.sql`).
+
+### 14.4 Phase C: live on DEV 2026-10-04 (`4119ad1`)
+Three migrations:
+- **C-01:** group sessions, plus the `care_plan_module_enabled_at` go-live stamp.
+- **C-02:**
+  - `check_assignment_eligibility` becomes a same-signature wrapper over `cp_eligibility_core`;
+  - credential, training and authorization rules for module offices;
+  - projected units: past demand after go-live, unplaced demand charged FIFO, per-period caps;
+  - the client-level context is computed once per shift in bulk;
+  - an authorization lock before evaluating, in assign / pick-up / trade pick-up;
+  - caregiver-safe text (R6).
+- **C-03:** opening balance `units_used_before_caremuch` (rule 13 for
+  `create_service_authorization`), plus the per-period cap in `review_progress_note`.
+
+Results:
+- **Local (PGlite):** 28/28.
+- **DEV after-suite:** 24/24, including CC: real concurrency, 3 rounds, exactly one of two
+  simultaneous assignments wins each round.
+- **NB1:** behaviour identical with the flags off.
+- **Rollback:** restores the exact post-B2 catalog, function bodies included.
+- **Carriage returns:** DEV stores `assign_caregiver_to_shift`, `release_shift_assignments` and
+  `compute_earnings_for_time_entry` with CR characters in their bodies. Every rollback restores them
+  byte-for-byte (E'' literal), and the proofs md5-check the restored bodies against DEV.
+  `.gitattributes` (`4992b34`) now keeps `.sql`/`.ts`/`.tsx`/`.md` LF.
+
+### 14.5 Phase D: done-definition, DEV 2026-10-04
+- **D1, tests in the repo (`7ec4c73`).** `tests/ripple/` holds the shared DEV library (fixtures, DB
+  clock, NB1, verified teardown), the DEV suites, and the PGlite harness with stubs, live snapshots
+  and rollback proofs. `tests/ripple/README.md` gives one command per suite. DEV runs need the
+  owner's approval.
+- **D2, client onboarding status (`b36243b`).** `get_client_onboarding_status` /
+  `list_clients_onboarding`: the 8 items (Bren's list), each complete / missing / expired /
+  not_applicable; `onboarded` = all complete or N/A.
+  - Manager / agency_admin, office-scoped; ids, statuses and counts only.
+  - After a renewal, in-service and training read `expired` until redone (owner-accepted).
+  - PGlite 21/21; DEV 20/20; the rollback restores the exact post-C catalog.
+- **D3, end-to-end done-test** (`tests/ripple/dev/done-test.cjs`, both done-tests of §8 plus the
+  rollout regression).
+  - **First run:** 18 pass, 1 FAIL: S8. An office-Y manager could assign a Ripple-X shift. The
+    cause is a pre-existing M-Office gap: the scheduling write functions checked the caller's
+    agency, not the caller's office.
+  - **S-OFF-1 (`d62e1eb`) fixed it:**
+    - office guards in `assign_caregiver_to_shift`, `release_shift_assignments` and
+      `compute_earnings_for_time_entry`;
+    - the caller's office check in `canActOn` (`admin-reset-password`, `admin-delete-user`),
+      `enable-caregiver-login` and `enable-client-login`;
+    - the remaining agency-only paths are logged in known-issues.
+  - **The same commit added progress-note shells per service:** `form_templates.service_type`,
+    resolved office+service → office → agency-wide.
+  - **Final D3 run:** all green, 20 checks + 1 info. Onboarding; credentials and training;
+    Manual, Smart and Auto with the three blocks; notes (on time, late 4 → 3, respite, returned)
+    with FIFO reviews and the weekly cap; batch to billed and locked; template versions; renewal
+    and retraining; isolation (S8); and the rollout regression on real data, read-only (84 pairs,
+    no difference, no Phase C code).
+- **After S-OFF-1:**
+  - **re-runs:** Phase C after 24/24; D2 after 20/20 (its "untouched functions" check now names
+    the two functions S-OFF-1 changed on purpose); S-OFF after 6/6;
+  - **PGlite:** 133 checks and 6 rollback proofs, all green.
+
+**Ripple care-plan backend A–D is done on DEV. Next: the UI (slices S0–S11).**

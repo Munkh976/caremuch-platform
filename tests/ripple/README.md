@@ -58,10 +58,14 @@ skew.
 | `node tests/ripple/dev/phase-d2.cjs after` | D2 onboarding status: each of the 8 items flips on its own; onboarded only when all pass; renewal makes in-service and training expired; list shape; denials; ACLs; the scheduling and units functions untouched |
 | `node tests/ripple/dev/done-test.cjs` | **D3 end-to-end done-test** (schema plan §8) in one scenario: onboarding; credentials and training; Manual, Smart and Auto with the three blocks; notes (on time, late, respite, returned) with FIFO reviews and the weekly cap; weekly batch to billed and locked; template versions; renewal and retraining; isolation; the rollout regression on real data (read-only) |
 
+| `node tests/ripple/dev/soff.cjs after` | S-OFF-1: an office-Y manager is refused on assign, release and compute earnings for office X, and gets 403 from `enable-caregiver-login`, `enable-client-login` and `admin-reset-password`; office-X and unrestricted managers and caregiver self pick-up still work; note shells per service with fallback; NB1 |
+
 | Command | Local (PGlite) |
 |---|---|
 | `node tests/ripple/pglite/phase-d.cjs` | D2 onboarding status on PGlite: item flips, expiry paths, list, denials, ACLs |
 | `node tests/ripple/pglite/rollback-d.cjs` | Phase D rollback restores the exact post-C catalog |
+| `node tests/ripple/pglite/soff.cjs` | S-OFF-1 + note shells: the gap reproduced before the migration, refused after; allowed paths, NB1, shell resolution and fallback, rule 13 and ACLs |
+| `node tests/ripple/pglite/rollback-soff.cjs` | S-OFF-1 + shell rollback restores the exact post-D2 catalog; restored bodies byte-identical to DEV (md5) |
 
 `before` mode is each phase's **pre-push** check: its objects are absent and its baseline is
 recorded. It is only meaningful before that phase's migrations are applied. All four phases are
