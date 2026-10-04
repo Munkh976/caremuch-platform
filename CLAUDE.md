@@ -224,8 +224,23 @@ Before changing code:
 14. Every new `SECURITY DEFINER` function must `REVOKE ALL ... FROM PUBLIC, anon` before granting `EXECUTE` to specific roles (`authenticated`, etc.) — never rely on `CREATE FUNCTION` alone. Postgres grants `EXECUTE` to `PUBLIC` by default on function creation; a `SECURITY DEFINER` function bypasses RLS, so `SECURITY DEFINER` + default `PUBLIC` `EXECUTE` is an RLS bypass reachable by anonymous (`anon`) callers. This has now bitten three separate migrations (`match_agency_knowledge`/`search_agency_knowledge` overloads in M-Office, and `check_assignment_eligibility_bulk` in Smart Scheduling Phase 1B — caught same-day each time, never shipped live). Verify every new `SECURITY DEFINER` function's grants with `aclexplode(proacl)` immediately after creating it, not just when something looks wrong — this is a checklist item for every future migration (Phase 2's RPCs included), not a one-off fix.
 15. Every new route must be wrapped in RequireRole with an explicit role list; unguarded routes are a review blocker. (`src/components/auth/RequireRole.tsx`, role sets in `src/lib/roleHome.ts`; public pages are the only exception and must be listed as such in the review. See `docs/security-fixes-2026-10-plan.md` §14.)
 
+## Security status (October 2026 batch — `docs/security-fixes-2026-10-plan.md`)
+- **Closed on DEV (2026-10-04):**
+  - role isolation inside an agency (M-SEC-1/2/3/5, RLS + display-safe RPCs);
+  - Edge Function role/agency checks (M-SEC-2b);
+  - route guard (M-SEC-4 + RequireRole, rule 15);
+  - no plaintext or staff-typed passwords — one-time audited links only (Issue 2 Mode B + M-SEC-6);
+  - stored temp passwords redacted and accounts force-reset (E5);
+  - no session row written on page load (write-on-load + E7).
+- **Deferred, logged in `docs/known-issues.md` — do not assume these are done:**
+  - **Before production:** custom SMTP / Mode A emails; Auth password minimum 8 + leaked-password protection.
+  - **Product follow-ups:** per-office registration links; role switcher; client booking submit; booking-form care-type categories; skills propose/approve flow.
+  - **Data exposure follow-ups:** open-shift `special_notes`; client `select("*")` of staff notes/medical fields.
+  - **Account sync:** staff email change desync.
+  - **Owner actions:** retire the old Lovable project `jipsobxiblzgivjmtwtq`; the owner password hash in `20251110220912`.
+
 ## Implementation order
-**Phase 0: architecture preparation — DONE.** Completed and in git history: `ai_match_score` column dropped (was always NULL), `callLLM` provider seam added, `.env`/`config.toml` cleanup + `.env` untracked, Edge Functions deployed to the dev project, demo data seeded under agency 56fbfe38, caregiver-shifts RLS gap documented in `docs/known-issues.md` (deferred, pending a product decision).
+**Phase 0: architecture preparation — DONE.** Completed and in git history: `ai_match_score` column dropped (was always NULL), `callLLM` provider seam added, `.env`/`config.toml` cleanup + `.env` untracked, Edge Functions deployed to the dev project, demo data seeded under agency 56fbfe38, caregiver-shifts RLS gap documented in `docs/known-issues.md` (since RESOLVED by Smart Scheduling Phase 1B — caregivers see their own assigned shifts plus open shifts in their own office; residual: open shifts still expose `special_notes`, see known-issues).
 
 **Phase 1: FTS-first knowledge base + unified public assistant — DONE.** Built and proven with zero external AI provider (see "AI provider strategy" above for why the original Lovable-embeddings plan was superseded):
 - Schema: `knowledge_documents`/`knowledge_chunks`, bilingual (`en`/`es`) via a `language` column + composite FK making chunk/document language mismatch structurally impossible, staff-only RLS, `my_agency_id()` (wraps `current_agency_id()`, adds caregiver/client fallback, then an explicit `_agency_id` override for anonymous public callers).

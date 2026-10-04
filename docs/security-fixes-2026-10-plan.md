@@ -1790,6 +1790,74 @@ WHERE s.id IN ('36757fa8-44e5-4dd0-aae8-760bf6907688','ea0877fd-b879-4d13-a6d5-4
 - It deletes exactly the rows it created (ids taken from its own POST bodies) and re-queries.
 - **Not run yet:** even the "before" half writes rows today, which is the bug itself.
 
+## 17. Results — Issue 2 / M-SEC-6, E5, E7, write-on-load, done-tests (2026-10-04)
+
+### 17.1 M-SEC-6 + Issue 2
+- **Pre-check (read-only):** 0 `events` rows outside the 18-value list (present types: 4, all in it).
+- **Migration:** drop + add are one `ALTER TABLE` statement (atomic on its own). Pushed as the only
+  pending migration; the live constraint has 18 values and is validated.
+- **Commit `2756b25`**, built from the staged tree alone in a `git worktree`:
+  - vite build ok; tsc has only the pre-existing errors in untouched files;
+  - no new lint errors (3 new `any` casts replaced by `AccountLinkResponse`);
+  - `deno check` clean ×5.
+- **Deployed:** create-user v15, admin-reset-password v14, enable-client-login v13,
+  enable-caregiver-login v6, approve-caregiver-registration v13; all `verify_jwt=true`.
+- **After-tests (`sec_tests_modeb.cjs after`):**
+  - P1, P2, P3, P4b, P5, R1, R2, O1, O2, O3, O4, O4b: CLOSED;
+  - P1L, P4, P6, AU: WORKS (5 audit events, no link or token stored);
+  - teardown verified.
+- **PW:** the server accepts 6 and 7 characters. Owner action logged in known-issues (minimum 8 +
+  leaked-password protection).
+- **S8:**
+  - a disposable account was created for the team address given by the owner;
+  - `resetPasswordForEmail` was accepted and `recovery_sent_at` set (2026-10-04 16:47:33 UTC);
+  - receipt is pending the owner's confirmation;
+  - the disposable account is deleted after that.
+- **Branch pushed** after the after-tests.
+
+### 17.2 E5
+- **(a) Read-only search:** the 4 values were held in memory only and never printed. 235 text/json
+  columns in 42 public tables were scanned. The only hits were `pending_notifications.body` and
+  `.payload`, in exactly the 4 known rows, so the scope was unchanged.
+- **Redaction:** one `DO` block that raises unless the count is exactly 4 (run via
+  `supabase db query --linked`). It updated 4 rows. Re-query: 0 rows in the table still hold a
+  password.
+- **Forced reset:** each account's email was checked against the approved list first, then
+  `updateUserById` set a 32-byte random password (discarded) on each: 4/4.
+  - **Deviation:** the old values were removed by the redaction before the sign-in check, so "old
+    password fails" was proven by the stored hash instead. All 4 `encrypted_password` fingerprints
+    changed.
+- **Session revocation:** one `DO` block with exact expected counts read just before it: 0 sessions,
+  0 live refresh tokens. Re-query: 0 / 0 for all 4.
+
+### 17.3 E7
+One `DO` block (raises unless exactly 2) with every guard from §16.2. Re-query: 0 rows.
+
+### 17.4 Write-on-load
+- **Commit `72b6d3c`** (the hook alone).
+- **`sec_tests_wol.cjs after`:** W1–W3 0 POSTs on load; W4 exactly 1; W5 (double-tap) exactly 1.
+- **Rows created by the test:** `bd202cd9-0af8-4e9f-8acc-cf3c1ab01085` and
+  `0e35bd6a-0549-4f4e-a41f-7237f626431d`, both deleted. Re-query: none.
+
+### 17.5 Done-tests 1–9 (§4)
+| # | Covered by | Result |
+|---|---|---|
+| 1 | `sec_tests_1` 1.1–1.8, 3.1–3.8, S1, S2, S4 | PASS (all CLOSED / WORKS) |
+| 2 | `sec_tests_1` 2.1–2.4, K1, K2, 3.9; `sec_tests_0` 0a–0g | PASS |
+| 3 | `sec_tests_0` (self-update scope freezes) + smoke S1–S3 | PASS |
+| 4 | `sec_tests_1` S1–S5, R1; `browser_pass` B5, B6 | PASS. Today/Schedule are the separate caregiver-app-shell WIP, not in these commits |
+| 5 | `sec_tests_1` S7, S8; UI U6, U13, sidebars U14 | PASS |
+| 6 | `sec_tests_ui` U1–U13 | PASS |
+| 7 | `sec_tests_modeb` (§17.1) + E5 count 0 | PASS (S8 receipt pending owner) |
+| 8 | `sec_tests_wol` W1–W5 | PASS |
+| 9 | Every suite's teardown re-query | PASS |
+
+- **`browser_pass` B4** (client booking picker) **FAIL, expected:** the pre-existing, logged
+  category filter makes step 1 empty. It is not a regression.
+- **First run of the four suites stopped at the 600 s tool limit** during `sec_tests_ui`.
+  - Its 9 users, 2 caregivers and 2 clients were found by run tag, deleted and verified gone.
+  - The suite was then re-run to completion: all pass, teardown verified.
+
 ## 13. RequireRole step — task list (accumulated)
 1. `RequireRole` wrapper plus `src/lib/roleHome.ts` (shared with `Auth.tsx`). Wrap every
    STAFF/ADMIN/SYSTEM_ADMIN route from §1.1, **including `/schedule`** (owner, Oct 1). A NULL role is

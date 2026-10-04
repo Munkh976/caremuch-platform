@@ -273,7 +273,12 @@ in the same migration:
 
 
 
-## Caregivers cannot see open/unassigned shifts (`AvailableShifts` returns 0 rows)
+## RESOLVED: Caregivers cannot see open/unassigned shifts (`AvailableShifts` returns 0 rows)
+
+**Resolved:** closed by Smart Scheduling Phase 1B (`20260915215024`: "Caregivers read their own
+assigned shifts" + "Caregivers view open shifts in their office"; product decision: all open shifts
+in the caregiver's own office). Confirmed and kept unchanged by the October 2026 security batch.
+The residual (the whole row, including notes, is visible) is the `special_notes` entry below.
 
 **Status:** Pre-existing, confirmed 2026-08-28. Not related to the `ai_match_score`
 removal, the `callLLM` refactor, or the `56fbfe38` demo-data seed — all three of
@@ -980,7 +985,7 @@ linked caregivers match their `profiles.email`. No drift yet.
 
 **Status:** Logged 2026-10-04 (owner decision Q1, `docs/security-fixes-2026-10-plan.md` §2.2, §15).
 
-**Mode B (in progress):** temporary passwords are replaced by one-time invite/reset links that staff
+**Mode B (shipped 2026-10-04, `2756b25`):** temporary passwords are replaced by one-time invite/reset links that staff
 see once and hand over themselves (`auth.admin.generateLink` sends no email). It works without any
 mail setup but still puts a credential-bearing link in a staff member's hands.
 
@@ -1103,3 +1108,65 @@ every column: `notes`, `scheduling_notes`, `care_requirements`, `medical_conditi
 be private from the client, serve the client's profile through a narrow view/RPC, following the
 `get_caregiver_visible_clients()` pattern. That needs a product decision on which fields a client
 may see.
+
+## RESOLVED: October 2026 security fixes (role isolation, plaintext passwords, write-on-load)
+
+**Status:** Closed 2026-10-04 on the DEV project `rgeldgztadebgvrdhaqa`. Plan, before/after results
+and owner decisions: `docs/security-fixes-2026-10-plan.md`. Every step was tested with real JWTs and
+disposable fixtures, with teardown verified by re-query.
+
+| What closed | Commit |
+|---|---|
+| M-SEC-2: users can't change their own agency/office/role scope; caregiver/client self-update allow-lists; agency_admin can't create or alter system_admin rows | `f2b4aa2` |
+| M-SEC-2b: role + agency checks in create-user, admin-reset-password, admin-delete-user, link-existing-accounts | `a954cfc` |
+| M-SEC-1: caregivers/clients no longer read or write other people's staff-level rows inside their agency; M-SEC-3 `get_my_trade_requests()`; M-SEC-5 display-safe client reads of caregivers; Q7 skills staff-managed | `a7eb540` |
+| M-SEC-4 + RequireRole: every staff/admin route guarded; menu seeds; hardened `?next=`; Delete-user hidden for managers | `419fed0` |
+| Issue 2 (Mode B) + M-SEC-6: no staff-typed or stored passwords; one-time invite/reset links, audited (`account_link_issued`); no cross-agency account takeover through the login functions; Forgot password | `2756b25` |
+| Write-on-load: public chat pages no longer create a `conversation_sessions` row before the first answer | `72b6d3c` |
+| E5 (data): 4 stored temporary passwords redacted from `pending_notifications`; the 4 demo accounts force-reset to unknown passwords; sessions revoked (0 were active) | data statements, plan §17 |
+| E7 (data): the 2 empty anonymous sessions from the Oct 1 capture deleted | data statement, plan §17 |
+
+The "Caregivers cannot see open/unassigned shifts" entry above was already closed by Smart
+Scheduling Phase 1B and is now marked RESOLVED.
+
+## OWNER ACTION BEFORE PRODUCTION: server-side password minimum and leaked-password protection
+
+**Status:** Measured 2026-10-04 (after-test PW, plan §15.9). Not changed: the owner keeps Auth settings.
+
+The Supabase Auth server accepts 6- and 7-character passwords (its default minimum is 6). The app
+asks for 8–72 characters on `/auth/set-password`, but only in the browser, so the API alone allows
+shorter passwords. Before production, in the Supabase dashboard (Auth → Providers → Email / Password
+security):
+- set the minimum password length to **8**;
+- enable **leaked-password protection** (HaveIBeenPwned check).
+
+## OPEN: open shifts show `special_notes` / `special_instructions` to every caregiver in the office
+
+**Status:** Logged 2026-10-04 (owner decision Q5: a follow-up slice, not the security batch).
+
+The policy "Caregivers view open shifts in their office" (`20260915215024`) returns the whole
+`shifts` row. That includes free-text `special_notes` / `special_instructions`, which can carry care
+details, to every caregiver who can see the open shift. Decision taken: caregivers keep date, time,
+service, city, client first name + last initial and `pay_rate`; the notes stay hidden until the
+caregiver is assigned. Do this through a view or a `SECURITY DEFINER` RPC (CLAUDE.md #14), and
+switch `AvailableShifts` to it.
+
+## OWNER ACTION: retire the old Lovable Cloud project `jipsobxiblzgivjmtwtq`
+
+**Status:** Logged 2026-10-04 (plan §3.1).
+
+The app runs only on `rgeldgztadebgvrdhaqa`. The old Lovable Cloud project is disconnected, but its
+URL and anon key are in git history (the old `.env`, before `a297165`), and
+`supabase/functions/mcp/index.ts` still names it as the OAuth issuer. The repo can't tell whether
+that project still exists. Owner: confirm it is paused or deleted (or rotate its keys), then fix the
+stale issuer in the `mcp` function (see also the "AUDIT NEEDED: Lovable-dashboard-authored config"
+entry above).
+
+## OWNER ACTION: owner account password hash committed in `20251110220912`
+
+**Status:** Logged 2026-10-04 (plan §2.4).
+
+`supabase/migrations/20251110220912_*.sql` (lines 20–33) seeds the owner's own `auth.users` row with
+a literal, weak password hash. It is in git history for good. If that account still uses that
+password, change it (Forgot password, or a reset link from another admin). The migration is
+already applied, so editing the file changes nothing in the database.
