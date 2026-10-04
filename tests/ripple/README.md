@@ -55,6 +55,14 @@ skew.
 | `node tests/ripple/dev/phase-b2.cjs after` | B2 on the real project, including **C1**, a real concurrency race between two reviews on one authorization |
 | `node tests/ripple/dev/phase-c.cjs after` | Phase C on the real project, including Smart assign through the `match-caregiver` edge function and **CC**, real concurrency (3 rounds): two managers assign at once and exactly one wins |
 
+| `node tests/ripple/dev/phase-d2.cjs after` | D2 onboarding status: each of the 8 items flips on its own; onboarded only when all pass; renewal makes in-service and training expired; list shape; denials; ACLs; the scheduling and units functions untouched |
+| `node tests/ripple/dev/done-test.cjs` | **D3 end-to-end done-test** (schema plan §8) in one scenario: onboarding; credentials and training; Manual, Smart and Auto with the three blocks; notes (on time, late, respite, returned) with FIFO reviews and the weekly cap; weekly batch to billed and locked; template versions; renewal and retraining; isolation; the rollout regression on real data (read-only) |
+
+| Command | Local (PGlite) |
+|---|---|
+| `node tests/ripple/pglite/phase-d.cjs` | D2 onboarding status on PGlite: item flips, expiry paths, list, denials, ACLs |
+| `node tests/ripple/pglite/rollback-d.cjs` | Phase D rollback restores the exact post-C catalog |
+
 `before` mode is each phase's **pre-push** check: its objects are absent and its baseline is
 recorded. It is only meaningful before that phase's migrations are applied. All four phases are
 now live on DEV, so use `after`.
