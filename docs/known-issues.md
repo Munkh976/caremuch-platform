@@ -1170,3 +1170,44 @@ entry above).
 a literal, weak password hash. It is in git history for good. If that account still uses that
 password, change it (Forgot password, or a reset link from another admin). The migration is
 already applied, so editing the file changes nothing in the database.
+
+## OPEN: `caregiver_certifications` staff policy has no office check
+
+**Status:** Logged 2026-10-04 (Ripple Phase A review; not fixed now).
+
+The policy "Agency staff manage certifications in their agency" checks only staff role + agency
+(`caregiver_agency_id(caregiver_id) = current_agency_id()`). An office-restricted staff member can
+therefore read and write certifications of caregivers in other offices of the same agency. Phase A
+extends this table (R3: `credential_type_id`, `effective_date`, `entered_by`) but leaves its policy
+as it is.
+
+**Fix with the Phase B credential RPC** (`upsert_caregiver_credential`, Q17 role checks):
+- move staff writes to the RPC;
+- replace the policy with an office-scoped read through the caregiver's office (M-Office
+  predicate), training tier (manager, agency_admin, hr_staff).
+
+## OPEN: any in-scope staff role can edit `virtual_office` configuration
+
+**Status:** Logged 2026-10-04 (Ripple Phase A review; not fixed now).
+
+`vo_update_staff` / `vo_insert_staff` / `vo_delete_staff` admit any `is_agency_staff` role (scheduler
+and hr_staff included) for offices in their scope. So those roles can change scheduling overrides,
+`smart_match_weights`, service area, branding and the public page content. Phase A guards only the
+new columns (`compliance_enforcement_enabled`, `care_plan_module_enabled`, `billing_week_start`),
+which are agency_admin / system_admin only.
+
+**Needed:** a manager+ allow-list guard trigger on `virtual_office` (M-SEC-2 pattern: listed
+columns for manager+, everything else frozen for lower roles), or narrower policies.
+
+## TIDY LATER: default privileges grant TRUNCATE to anon/authenticated on 44 public tables
+
+**Status:** Logged 2026-10-04 (read-only catalog check).
+
+Supabase's default privileges give `anon` and `authenticated` every table privilege, including
+TRUNCATE (which RLS does not apply to), on new public tables. Currently 44 tables grant TRUNCATE to
+`authenticated` and 6 to `anon`.
+- **Not reachable via PostgREST** (the API never issues TRUNCATE), and those roles can't log in
+  directly.
+- **Tidy later:** a migration revoking TRUNCATE (and REFERENCES / TRIGGER) from anon and
+  authenticated on existing tables, plus `ALTER DEFAULT PRIVILEGES` so new tables don't get them.
+- The Ripple Phase A tables already revoke them explicitly (schema plan §2.1).

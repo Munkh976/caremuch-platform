@@ -248,13 +248,29 @@ RLS enforces this, and the UI never filters for security.
 
 | Screen / action | system_admin | agency_admin | manager | scheduler | hr_staff | caregiver | client |
 |---|---|---|---|---|---|---|---|
-| Dashboard compliance panels | V | V | V | V (scheduling panel + read others) | V (caregiver panel) | — | — |
-| `/care-plans` list | V | V | V | V | V | — | — |
-| Care plan: IPOS / Goals edit, renew, authorizations, measures | E | E | E | V | V | — | — |
-| Care plan: intake documents | E | E | E | V | E | — | — |
-| Care plan: in-service / training-form entry | E | E | E | V | E | — | — |
-| Care plan: review / return notes, print | E | E | E | V | — | — | — |
-| Care plan: Scheduling tab assign buttons | E | E | E | E | V | — | — |
+| Dashboard compliance panels | — | V | V | V (scheduling + authorization panels only) | V (caregiver credentials/training panel only) | — | — |
+| `/care-plans` list | — | V | V | — | — | — | — |
+| Care plan: IPOS / Goals edit, renew, measures | — | E | E | — | — | — | — |
+| Authorizations (units, expiry), outside the care-plan page | — | E | E | V | — | — | — |
+| Care plan: intake documents | — | E | E | — | — | — | — |
+| In-service / training-form entry (from the caregiver profile or a training screen) | — | E | E | — | E | — | — |
+| Care plan: review / return notes, print | — | E | E | — | — | — | — |
+| Care plan: Scheduling tab assign buttons | — | E | E | — | — | — | — |
+
+**Role tiers (owner review, Oct 4: minimum necessary; schema plan §2).** The rows above follow the
+RLS read tiers:
+- **Clinical** (plans and children, notes, client documents, billing batches): manager,
+  agency_admin.
+- **Authorizations + service types:** manager, agency_admin, scheduler.
+- **Training tables:** manager, agency_admin, hr_staff.
+- **Shells / measure types:** all staff.
+
+Consequences for the screens:
+- **Scheduler:** keeps scheduling through `/schedule` and sees authorization units and expiry, but
+  not the IPOS.
+- **hr_staff:** enters credentials and training forms (Q17) from the caregiver profile and a
+  training screen; it can't open the Client Care Plan page.
+- **system_admin:** not in the clinical tier, so it sees no client clinical content.
 | Caregiver profile view | V | V | V | V | V | — (own read-only section later, S5b) | — |
 | Caregiver credentials entry | E | E | E | — | E | — | — |
 | Progress note authoring (`/caregiver-notes/:shiftId`) | — | — | — | — | — | E (own assigned shifts, draft/returned only) | — |

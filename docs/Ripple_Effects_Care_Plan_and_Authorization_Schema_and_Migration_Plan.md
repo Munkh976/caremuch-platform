@@ -126,9 +126,9 @@ M-CP-04  credentials      credential_types; ALTER caregiver_certifications (R3);
                           plan_inservice_forms, plan_training_forms, plan_training_records
 M-CP-05  units triggers   derived units_used / arrived_late / units_available  (AFTER M-CP-03)
 M-CP-06  eligibility      Phase C: new rules in check_assignment_eligibility behind the office flag
-M-CP-07  seed (dev only)  reference rows only: measure_types, credential_types, Ripple office_service_types
-                          (conditional on the dev agency/office existing; no client data; shells -> Phase B)
-(every table above: RLS on, SELECT-only staff policy, anon nothing — §2.1)
+M-CP-07  system rows      the eight measure_types as SYSTEM rows (agency_id NULL), every agency uses them
+                          (agency-specific rows -> scripts/seed/ripple_dev_reference_seed.sql, DEV only)
+(every table above: RLS on, SELECT-only role-tiered policy, anon nothing — §2, §2.1)
 ```
 
 M-CP-06 is last and stands alone: it changes the signature of an existing, security-critical
@@ -151,29 +151,44 @@ signature — confirm by diffing `pg_get_function_identity_arguments` before and
   predicate, `NOT is_office_restricted(auth.uid()) OR virtual_office_id = current_virtual_office_id()`,
   not the earlier draft's `current_virtual_office_id() IS NULL OR …`. With the live predicate, a row
   whose office is NULL **fails closed** for office-restricted staff.
-  - It is wrapped once in `cp_staff_in_scope(agency_id, virtual_office_id)`: M-SEC-1 staff check +
-    agency + live office predicate.
+  - **Role-tiered reads (owner review, Oct 4: minimum necessary).** The predicate is wrapped once in
+    `cp_staff_in_scope(agency_id, virtual_office_id, _roles app_role[])`: the caller holds one of
+    the table's roles + agency + live office predicate. The parent-scope helpers apply the same
+    role set as their table.
   - Policies are **SELECT only**: writes go through RPCs (§2.1).
-  - There is **no cross-agency `system_admin` bypass** on clinical data (owner baseline, Oct 4).
-    A system_admin sees their own agency like other staff.
+  - There is **no cross-agency `system_admin` bypass**. A system_admin reads only the tiers that
+    list it (shells, measure types).
+
+  | Tier | Roles | Tables |
+  |---|---|---|
+  | Clinical | manager, agency_admin | `care_plans` + every plan child (goals, objectives, objective_needs, objective_measures, attendees, needs, treatment_needs, dsm_recommendations, natural_supports, external_services, reviews), `progress_notes`, `progress_note_entries`, `client_documents`, `billing_batches` |
+  | Authorizations | manager, agency_admin, scheduler | `service_authorizations`, `office_service_types` |
+  | Training | manager, agency_admin, hr_staff | `credential_types`, `plan_inservice_forms`, `plan_training_forms`, `plan_training_records` |
+  | Shells (no PHI) | all agency staff | `form_templates` / `_versions` / `_fields`, `measure_types` (system rows + own agency) |
 
 ```sql
-CREATE FUNCTION public.cp_staff_in_scope(_agency_id uuid, _office_id uuid)
+CREATE FUNCTION public.cp_staff_in_scope(_agency_id uuid, _office_id uuid, _roles public.app_role[])
 RETURNS boolean LANGUAGE sql STABLE SET search_path = public AS $$
   SELECT COALESCE(
-    is_agency_staff(auth.uid())
+    EXISTS (SELECT 1 FROM unnest(_roles) r WHERE has_role(auth.uid(), r))
     AND _agency_id = current_agency_id()
     AND ((NOT is_office_restricted(auth.uid())) OR _office_id = current_virtual_office_id()),
     false)
 $$;
 
-CREATE POLICY "Staff read <table> in scope" ON public.<table>
-FOR SELECT TO authenticated USING (cp_staff_in_scope(agency_id, virtual_office_id));
+CREATE POLICY "Managers read <table> in scope" ON public.<table>
+FOR SELECT TO authenticated
+USING (cp_staff_in_scope(agency_id, virtual_office_id, '{manager,agency_admin}'::public.app_role[]));
 ```
 
-  Agency-wide catalogs with no office column (`measure_types`, `credential_types`) use
-  `cp_staff_in_agency(agency_id)`. Agency-wide shells (`form_templates.virtual_office_id IS NULL`)
-  are readable by office-restricted staff through one explicit extra clause (Q15, §3).
+  - Rows with no office (`credential_types`, agency `measure_types`, agency-wide shells) use
+    `cp_staff_in_agency(agency_id, _roles)`.
+  - System `measure_types` rows (`agency_id IS NULL`) are readable by any staff member.
+  - Agency-wide shells (`form_templates.virtual_office_id IS NULL`) are readable by
+    office-restricted staff through one explicit extra clause (Q15, §3).
+  - **UI consequence:** scheduler and hr_staff do not see the Client Care Plan page's clinical
+    content. Scheduler works from authorizations and the schedule; HR enters credentials and
+    training through Phase B RPCs.
 
 - Child tables with no own `agency_id` (goals, objectives, attendees, needs, treatment needs, DSM
   recommendations, natural supports, external services, objective measures, progress-note entries,
@@ -234,8 +249,9 @@ is a review blocker.
    billable, signatures, reviewed/returned/billed by-and-at.
    - Derived values (`units_used`, `arrived_late`, `units_available`) are computed by triggers that
      overwrite whatever a writer sends (§6).
-   - The two `virtual_office` flags have an M-SEC-2-style guard trigger, because `virtual_office`
-     keeps its existing staff UPDATE policy.
+   - The two `virtual_office` flags **and `billing_week_start`** have an M-SEC-2-style guard trigger
+     (agency_admin / system_admin only), because `virtual_office` keeps its existing staff UPDATE
+     policy.
    - If a later phase adds a direct-write policy to a care-plan table, it must come with an
      allow-list guard trigger:
      - M-SEC-2 pattern: everything not listed is frozen;
@@ -333,8 +349,10 @@ CREATE TABLE public.form_template_fields (
 }
 ```
 
-**Measure library (Layer A).** Agency-scoped catalog of data-question types; seeded with the
-eight types seen in Ripple's notes:
+**Measure library (Layer A).** A catalog of data-question types. **Corrected Oct 4 (owner review):**
+the eight generic types seen in Ripple's notes are **system rows** (`agency_id NULL`, seeded by
+M-CP-07). Any agency's staff can read them, and any agency's objectives can reference them. An agency
+may add its own rows (`agency_id` set) through a Phase B RPC. System rows are read-only to agencies.
 
 ```sql
 CREATE TYPE measure_kind AS ENUM
@@ -342,7 +360,7 @@ CREATE TYPE measure_kind AS ENUM
 
 CREATE TABLE public.measure_types (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  agency_id uuid NOT NULL,
+  agency_id uuid,                       -- NULL = system row (unique label among system rows)
   kind measure_kind NOT NULL,
   label text NOT NULL,                  -- e.g. 'Highest prompt level used'
   default_options jsonb,                -- e.g. ["Gestural","Visual","Verbal","Modeling","Partial physical"]
@@ -352,8 +370,8 @@ CREATE TABLE public.measure_types (
 );
 ```
 
-RLS: §2 shape, agency-only (no office column — the library is agency-wide, like
-`credential_types`).
+RLS (as drafted): `(agency_id IS NULL AND is_agency_staff(auth.uid())) OR
+cp_staff_in_agency(agency_id, <all staff roles>)`. There is no office column.
 
 **Spine-column guard:** a shell may relabel or reorder a `spine_column` field but
 `publish_template_version` must reject a version that **drops** a spine column the engine
@@ -361,8 +379,8 @@ requires for that kind (e.g. authorization without `units_authorized` / `effecti
 `expiration_date`; IPOS without `effective_date` / `expiration_date`). This keeps "fixed
 spine underneath" true no matter what a manager publishes.
 
-RLS: `form_templates` uses the §2 shape plus one read clause for agency-wide shells
-(`virtual_office_id IS NULL AND cp_staff_in_agency(agency_id)`). An office-restricted user can then
+RLS: `form_templates` uses the §2 shape (all-staff tier) plus one read clause for agency-wide shells
+(`virtual_office_id IS NULL AND cp_staff_in_agency(agency_id, <all staff roles>)`). An office-restricted user can then
 read the agency shell their office falls back to (Q15). `versions` and `fields` derive scope through
 `cp_form_template_readable(template_id)` / `cp_form_template_version_readable(template_version_id)`
 (created after their parents). Do NOT add agency_id to versions/fields.
@@ -778,6 +796,19 @@ shift can't be deleted.
 - `units_used` and `arrived_late` are **derived by a trigger** (§6), not set by the RPC or the UI.
   No writer sets `units_available`.
 - Lost units are reported on the dashboard and Weekly Billing.
+- **Time types (owner review, Oct 4).** `scheduled_start`, `scheduled_end` and
+  `client_arrived_at` are all `timestamptz`.
+  - `create_progress_note_for_shift` (Phase B) fills `scheduled_start` from the shift **in the
+    shift office's time zone**: `(shift.shift_date + shift.start_time) AT TIME ZONE
+    virtual_office.timezone`. `scheduled_end` is built the same way from `end_time`, plus one day
+    if it is at or before the start.
+  - It never uses a naive `shift_date + start_time`.
+  - `virtual_office.timezone` is the only zone source; `agency` has none. Verified Oct 4: every
+    live shift has an office, and the offices use America/New_York, America/Detroit and
+    America/Chicago. A shift without an office is refused.
+  - The caregiver's arrival time is entered as local time in the same office zone, and the RPC
+    converts it the same way.
+  - Boundary (tested): arrival exactly at +5:00 is **not** late; +5:01 is late.
 
 **Authorization selection at write time (arch §9.1, FIFO):** when the client has more than
 one active authorization for the note's service, the RPC selects the **oldest valid** one
@@ -959,14 +990,22 @@ plan_training_records (id, training_form_id REFERENCES plan_training_forms ON DE
 -- IPOS version covers the client).
 ```
 
-M-CP-07 (as drafted Oct 4) seeds **reference rows only**, conditional on the dev agency/office
-existing (a no-op on any other project):
-- the eight `measure_types`;
-- `credential_types` (below);
-- Ripple's `office_service_types`: `CLS0001 → cls`, `RESP0001 → respite`.
+**Reference data (owner review, Oct 4):**
+- **M-CP-07** (a migration) seeds only **system-wide rows every agency uses**: the eight
+  `measure_types` with `agency_id NULL`.
+- **Agency-specific rows** are not in migrations. They live in
+  `scripts/seed/ripple_dev_reference_seed.sql`, run on **DEV only** after the push, as an approved
+  data statement:
+  - Ripple's `credential_types` (below);
+  - its `office_service_types`: `CLS0001 → cls`, `RESP0001 → respite`.
 
-Note: the dev agency also holds the Kind Care office. These agency-wide catalogs are readable by
-Kind Care staff and gate nothing while its flag is false. `credential_types` content:
+  The script is one DO-block transaction. It refuses to run unless the dev agency and office
+  exist, and it checks the inserted and total counts (22 / 2), rolling back on any mismatch.
+- **Phase B** adds `seed_office_care_plan_defaults(_office_id)`. When an agency_admin enables the
+  care-plan module for an office, it seeds that office's editable defaults (credential types and
+  service-type mappings). Agencies edit them afterwards.
+
+`credential_types` content (DEV seed):
 - `background_check` (12 months, required): ICHAT, MDHHS Central Registry, OIG, Sanctioned
   Provider, MI Sex Offender Registry, National Sex Offender Registry (`IMG_1295`).
 - `annual_online` / `annual` / `in_person_recert` from Lauren Williams's checklist,
@@ -1040,8 +1079,16 @@ Care (still false) is unaffected.
   - `return_progress_note` (Q10) and `review_progress_notes(_ids uuid[])` (Q12 bulk);
   - `get_client_onboarding_status` (Q7/Q8);
   - the Ripple shell seed via `publish_template_version`;
-  - an `events_event_type_check` migration for the new audit event types, **before** the RPCs
-    (§2.1 item 4).
+  - **first in Phase B:** the `events_event_type_check` migration for the new audit event types,
+    pushed **before** any RPC that writes them (§2.1 item 4);
+  - `seed_office_care_plan_defaults(_office_id)`: seeds an office's editable defaults when the
+    care-plan module is enabled (agency_admin);
+  - **submit/review refusal rule:** `submit_progress_note` and `review_progress_note` refuse a
+    note when the chosen authorization's `units_available < units_used` of this note (the units
+    trigger alone would allow a negative balance), or when the service date is outside the
+    authorization's `effective_date … expiration_date`;
+  - `create_progress_note_for_shift` builds `scheduled_start`/`scheduled_end` in the office time
+    zone (§5 "Time types").
 
   All REVOKE-before-GRANT, all role-checked (Q13, Q17). Done when a manager can, via RPC, build a shell → fill an IPOS and an
   authorization → set measures on an objective → a caregiver submits a progress note for a
@@ -1105,7 +1152,9 @@ flags (§9, §11.8), noted inline where they affect a shape.
 | C13 | Late arrival keyed on `actual_start`, "Bren's threshold" unspecified | this doc §5, arch §9.1 | `client_arrived_at` recorded by the caregiver; late = > 5 min (Q9). |
 | C14 | No `inservice` shell kind, although the in-service form carries a template | this doc §3 | Added `inservice` to `form_template_kind`. |
 | C15 | `billing_batches` office nullable but unique per office/week | this doc §5 | Office NOT NULL (one batch per office per week). |
-| C16 | M-CP-07 seeded the shells by raw insert | this doc §8 | Shells move to Phase B via `publish_template_version`. M-CP-07 = reference rows only. |
+| C16 | M-CP-07 seeded the shells by raw insert; agency rows were in a migration | this doc §8 | Shells move to Phase B via `publish_template_version`. M-CP-07 = system measure types only; agency rows → DEV seed script (owner review Oct 4). |
+| C19 | One staff predicate for every table (any staff role read clinical data) | this doc §2 | Role tiers, minimum necessary (owner review Oct 4). |
+| C20 | `billing_week_start` followed the existing open `virtual_office` edit rule | this doc §2.1 | Guarded like the flags (owner review Oct 4). |
 | C17 | Notification engine (arch §2.5, §7) vs V1 dashboard | arch §2.5, §7 | V1 shows computed status only; sending is a later phase (R9). |
 | C18 | `ripple_trainer_id` names an agency in a generic schema | this doc §8 | `program_lead_id` → profiles. |
 
