@@ -64,15 +64,8 @@ export const CaregiverProfileSettings = ({ caregiverProfile, onRefresh }: Caregi
     confirmPassword: "",
   });
   const [skills, setSkills] = useState<CaregiverSkill[]>([]);
-  const { services, categoryNames } = useCareServices();
+  const { services } = useCareServices();
   const careTypes = services as unknown as CareType[];
-  const [editSkillsMode, setEditSkillsMode] = useState(false);
-  const [selectedCareType, setSelectedCareType] = useState("");
-  const [newSkillData, setNewSkillData] = useState({
-    proficiency_level: "intermediate",
-    years_experience: 0,
-    is_certified: false,
-  });
   const [suggestedZipCodes, setSuggestedZipCodes] = useState<string[]>([]);
   const [loadingZipCodes, setLoadingZipCodes] = useState(false);
 
@@ -148,62 +141,6 @@ useEffect(() => {
 
   const updateFormData = (field: string, value: any) => {
     setFormData(prev => prev ? { ...prev, [field]: value } : null);
-  };
-
-  const handleAddSkill = async () => {
-    if (!selectedCareType || !caregiverProfile?.id) {
-      toast.error("Please select a care service");
-      return;
-    }
-
-    const existingSkill = skills.find(s => s.care_type_code === selectedCareType);
-    if (existingSkill) {
-      toast.error("This skill is already added");
-      return;
-    }
-
-    try {
-      const { error } = await supabase
-        .from("caregiver_skills")
-        .insert({
-          caregiver_id: caregiverProfile.id,
-          care_type_code: selectedCareType,
-          proficiency_level: newSkillData.proficiency_level,
-          years_experience: newSkillData.years_experience,
-          is_certified: newSkillData.is_certified,
-        });
-
-      if (error) throw error;
-
-      toast.success("Skill added successfully");
-      setSelectedCareType("");
-      setNewSkillData({
-        proficiency_level: "intermediate",
-        years_experience: 0,
-        is_certified: false,
-      });
-      fetchSkills();
-    } catch (error: any) {
-      toast.error("Failed to add skill");
-      console.error(error);
-    }
-  };
-
-  const handleRemoveSkill = async (skillId: string) => {
-    try {
-      const { error } = await supabase
-        .from("caregiver_skills")
-        .delete()
-        .eq("id", skillId);
-
-      if (error) throw error;
-
-      toast.success("Skill removed successfully");
-      fetchSkills();
-    } catch (error: any) {
-      toast.error("Failed to remove skill");
-      console.error(error);
-    }
   };
 
   const handlePasswordChange = async () => {
@@ -569,29 +506,18 @@ useEffect(() => {
         </CardContent>
       </Card>
 
-      {/* Skills & Certifications */}
+      {/* Skills & Certifications — read-only for caregivers; staff manage skills (M-SEC-1 / Q7) */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <Briefcase className="h-5 w-5 text-primary" />
-                Skills & Certifications
-              </CardTitle>
-              <CardDescription>Manage the care services you can deliver</CardDescription>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setEditSkillsMode(!editSkillsMode)}
-            >
-              {editSkillsMode ? "Done" : "Edit Skills"}
-            </Button>
-          </div>
+          <CardTitle className="flex items-center gap-2">
+            <Briefcase className="h-5 w-5 text-primary" />
+            Skills & Certifications
+          </CardTitle>
+          <CardDescription>The care services you are approved to deliver</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {skills.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No skills added yet</p>
+            <p className="text-sm text-muted-foreground">No skills recorded yet</p>
           ) : (
             <div className="flex flex-wrap gap-2">
               {skills.map((skill) => {
@@ -599,102 +525,12 @@ useEffect(() => {
                 return (
                   <Badge key={skill.id} variant="secondary" className="text-sm py-1 px-3">
                     {careType?.name || skill.care_type_code}
-                    {editSkillsMode && (
-                      <button
-                        onClick={() => handleRemoveSkill(skill.id)}
-                        className="ml-2 hover:text-destructive"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    )}
                   </Badge>
                 );
               })}
             </div>
           )}
-
-          {editSkillsMode && (
-            <>
-              <Separator />
-              <div className="space-y-3">
-                <Label>Add Care Service</Label>
-                <Select value={selectedCareType} onValueChange={setSelectedCareType}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select care service" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categoryNames.map((category) => (
-                      <SelectGroup key={category}>
-                        <SelectLabel>{category}</SelectLabel>
-                        {services
-                          .filter((s) => s.category === category)
-                          .map((s) => (
-                            <SelectItem key={s.code} value={s.code}>
-                              {s.name} · {s.code}
-                            </SelectItem>
-                          ))}
-                      </SelectGroup>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="space-y-2">
-                    <Label className="text-xs">Proficiency</Label>
-                    <Select
-                      value={newSkillData.proficiency_level}
-                      onValueChange={(value) =>
-                        setNewSkillData((prev) => ({ ...prev, proficiency_level: value }))
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="beginner">Beginner</SelectItem>
-                        <SelectItem value="intermediate">Intermediate</SelectItem>
-                        <SelectItem value="advanced">Advanced</SelectItem>
-                        <SelectItem value="expert">Expert</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-xs">Years</Label>
-                    <Input
-                      type="number"
-                      min="0"
-                      value={newSkillData.years_experience}
-                      onChange={(e) =>
-                        setNewSkillData((prev) => ({
-                          ...prev,
-                          years_experience: parseInt(e.target.value) || 0,
-                        }))
-                      }
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-xs">Certified</Label>
-                    <Select
-                      value={newSkillData.is_certified ? "yes" : "no"}
-                      onValueChange={(value) =>
-                        setNewSkillData((prev) => ({ ...prev, is_certified: value === "yes" }))
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="yes">Yes</SelectItem>
-                        <SelectItem value="no">No</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <Button onClick={handleAddSkill} className="w-full">
-                  Add Skill
-                </Button>
-              </div>
-            </>
-          )}
+          <p className="text-xs text-muted-foreground">To change your skills, contact your office.</p>
         </CardContent>
       </Card>
 

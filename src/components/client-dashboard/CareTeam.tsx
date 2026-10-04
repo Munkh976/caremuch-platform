@@ -2,28 +2,16 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Users, Phone, Mail, Star } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import { fetchCaregiverPerformance } from "@/lib/caregiverPerformance";
+import { Users, Star, Building2 } from "lucide-react";
+import { fetchMyCareTeam, displayName, type CareTeamMember } from "@/lib/clientCareTeam";
 import { toast } from "sonner";
-
-interface Caregiver {
-  id: string;
-  first_name: string;
-  last_name: string;
-  email: string;
-  phone: string;
-  role: string;
-  avg_rating?: number | null;
-  rating_count?: number;
-}
 
 interface CareTeamProps {
   clientId: string | null;
 }
 
 export const CareTeam = ({ clientId }: CareTeamProps) => {
-  const [caregivers, setCaregivers] = useState<Caregiver[]>([]);
+  const [caregivers, setCaregivers] = useState<CareTeamMember[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -36,34 +24,9 @@ export const CareTeam = ({ clientId }: CareTeamProps) => {
     if (!clientId) return;
 
     try {
-      // Get caregivers assigned to this client's shifts (source of truth: shift_assignments)
-      const { data: shifts, error: shiftsError } = await supabase
-        .from("shift_assignments")
-        .select("caregiver_id, status, shifts!inner ( client_id )")
-        .neq("status", "cancelled")
-        .eq("shifts.client_id", clientId);
-
-      if (shiftsError) throw shiftsError;
-
-      if (shifts && shifts.length > 0) {
-        const caregiverIds = [...new Set(shifts.map((a: any) => a.caregiver_id))].filter(Boolean);
-
-
-        const { data: caregiversData, error: caregiversError } = await supabase
-          .from("caregivers")
-          .select("id, first_name, last_name, email, phone, role")
-          .in("id", caregiverIds);
-
-        if (caregiversError) throw caregiversError;
-        const perf = await fetchCaregiverPerformance(caregiverIds as string[]);
-        setCaregivers(
-          (caregiversData || []).map((c: any) => ({
-            ...c,
-            avg_rating: perf.get(c.id)?.avg_rating ?? null,
-            rating_count: perf.get(c.id)?.rating_count ?? 0,
-          }))
-        );
-      }
+      // M-SEC-5: one display-safe RPC, scoped to the signed-in client server-side. The old path
+      // read shift_assignments, which clients cannot see, so this tab was always empty.
+      setCaregivers(await fetchMyCareTeam());
     } catch (error: any) {
       toast.error("Failed to load care team");
       console.error(error);
@@ -72,9 +35,7 @@ export const CareTeam = ({ clientId }: CareTeamProps) => {
     }
   };
 
-  const getInitials = (firstName: string, lastName: string) => {
-    return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
-  };
+  const getInitials = (c: CareTeamMember) => `${c.first_name.charAt(0)}${c.last_initial ?? ""}`.toUpperCase();
 
   if (loading) {
     return (
@@ -102,21 +63,21 @@ export const CareTeam = ({ clientId }: CareTeamProps) => {
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
           {caregivers.map((caregiver) => (
-            <Card key={caregiver.id} className="hover-scale">
+            <Card key={caregiver.caregiver_id} className="hover-scale">
               <CardHeader>
                 <div className="flex items-start gap-4">
                   <Avatar className="h-12 w-12">
                     <AvatarFallback className="bg-primary text-primary-foreground">
-                      {getInitials(caregiver.first_name, caregiver.last_name)}
+                      {getInitials(caregiver)}
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1">
                     <CardTitle className="text-lg">
-                      {caregiver.first_name} {caregiver.last_name}
+                      {displayName(caregiver)}
                     </CardTitle>
                     <CardDescription className="flex items-center gap-2 mt-1">
                       <Badge variant="outline" className="text-xs">
-                        {caregiver.role.replace('_', ' ')}
+                        {(caregiver.employment_role ?? 'caregiver').replace('_', ' ')}
                       </Badge>
                       {caregiver.avg_rating != null ? (
                         <div className="flex items-center gap-1">
@@ -133,13 +94,9 @@ export const CareTeam = ({ clientId }: CareTeamProps) => {
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div className="flex items-center gap-2 text-sm">
-                  <Phone className="h-4 w-4 text-muted-foreground" />
-                  <span>{caregiver.phone}</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <Mail className="h-4 w-4 text-muted-foreground" />
-                  <span className="truncate">{caregiver.email}</span>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Building2 className="h-4 w-4" />
+                  <span>To reach your caregiver, contact your office.</span>
                 </div>
               </CardContent>
             </Card>

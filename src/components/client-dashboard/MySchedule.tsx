@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchMyCareTeam, type CareTeamMember } from "@/lib/clientCareTeam";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -38,15 +39,17 @@ export const MySchedule = ({ clientProfile }: MyScheduleProps) => {
   const fetchShifts = async () => {
     const { data } = await supabase
       .from("shifts")
-      .select(`
-        *,
-        caregivers(id, first_name, last_name, role)
-      `)
+      .select("*")
       .eq("client_id", clientProfile.id)
       .order("shift_date", { ascending: true })
       .order("start_time", { ascending: true });
 
-    setShifts(data || []);
+    // M-SEC-5: clients no longer read caregivers directly; attach the display-safe name
+    // (first name + last initial) from get_my_care_team(), keeping the existing render shape.
+    const team: CareTeamMember[] = await fetchMyCareTeam().catch(() => [] as CareTeamMember[]);
+    const names = new Map<string, { first_name: string; last_name: string }>();
+    team.forEach((m) => names.set(m.caregiver_id, { first_name: m.first_name, last_name: m.last_initial ? `${m.last_initial}.` : "" }));
+    setShifts((data || []).map((s: any) => ({ ...s, caregivers: s.caregiver_id ? names.get(s.caregiver_id) ?? null : null })));
     setLoading(false);
   };
 

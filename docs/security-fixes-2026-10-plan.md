@@ -1000,3 +1000,372 @@ including users created *by* the functions (11 before, 10 after). Re-query found
   custom SMTP (known-issues: Mode A).
 - Proposal: re-run S8 in the Issue 2 step against an address the owner names. None of this is
   affected by M-SEC-2b.
+
+Committed `a954cfc` and pushed to `origin/phase-3`. The push also published two earlier local
+commits that had not been pushed yet: `0898363` (client visibility) and `0ea2f99` (Available Shifts
+redesign). The owner confirmed that was fine.
+
+### 10.4 Owner acceptance (Oct 4)
+- **M-SEC-2b accepted.** `admin-delete-user` limited to agency_admin / system_admin is approved: it
+  is intentionally stricter than "manager or above". Consequence for the UI: **the Delete-user
+  button must be hidden for manager.** This is added to the RequireRole step (§13).
+- **Agency_admin password resets are done by system_admin**, which follows from the peer rule.
+- **S8 is deferred to the Issue 2 step.** The owner will supply a real test address.
+
+### 10.5 Uncommitted migration `20260917090000` — synced
+`20260917090000_caregiver_visible_clients_trade_shifts.sql` re-creates
+`get_caregiver_visible_clients()` (same zero-arg signature) with a third visibility clause. It lets
+a caregiver see the name, address and phone of clients whose shifts are on the **Trade Shifts**
+board in its own office: pending trades that don't need manager approval and were offered by
+another caregiver. It mirrors `get_caregiver_trade_shifts()`'s WHERE clause, which fixed "Unknown"
+client names on trade cards, and re-asserts REVOKE/GRANT.
+
+Verified 2026-10-04 (read-only):
+- the 3 statements recorded in `supabase_migrations.schema_migrations` equal the file, ignoring
+  comments and whitespace;
+- the live function is the single zero-arg overload and contains the file's body;
+- EXECUTE is held by `postgres`, `authenticated` and `service_role` (no PUBLIC / anon).
+
+Committed alone as `cd12ff4` ("Sync already-applied migration …"). No database change.
+
+---
+
+## 11. M-SEC-1 — staff-role checks (DRAFT, not pushed)
+
+**Migration:** `supabase/migrations/20261004120000_msec1_staff_role_checks.sql`
+
+**Rule:** prepend `is_agency_staff(auth.uid()) AND` to every "same agency ⇒ allowed" branch, keep
+the tenant and office clauses verbatim, keep every self-policy, and re-create each policy under
+its own name. No functions are touched.
+
+| Table | Policy changed | Added |
+|---|---|---|
+| `caregivers` | "Agency users can manage their caregivers" (FOR ALL) | — |
+| `caregiver_skills` | "Agency users can manage caregiver skills" (now `TO authenticated`, explicit WITH CHECK) | — |
+| `caregiver_availability` | "Agency users can manage caregiver availability" (same) | — |
+| `client_care_needs` | "Agency users can manage client care needs" (same) | — |
+| `families` | `families_select_agency_or_own`: agency branch | — |
+| `care_requests` | `care_requests_select`: agency branch | — |
+| `shift_ratings` | "Agency staff can view ratings in their agency" | **"Caregivers view ratings about themselves"** (keeps the Today rating; `caregiver_performance` is security_invoker) |
+| `shift_trades` | view / manage / create policies | **"Caregivers read their own trades"** (original or new caregiver). Caregiver INSERT is limited to their own outgoing trade, and caregivers never UPDATE. |
+
+Not touched: the two client read policies on `caregivers` and `caregiver_availability`, which
+M-SEC-5 replaces with an RPC.
+
+### 11.1 Before-tests (run `before-mutwn98v`, 2026-10-04)
+Real JWTs against disposable fixtures in agency `56fbfe38`:
+- logins for caregiver A, caregiver B, a client and a manager;
+- caregiver rows;
+- a second client (no login) with a family, care need and inquiry;
+- skills and availability;
+- 2 shifts assigned through `assign_caregiver_to_shift()`;
+- 2 ratings and 2 trades.
+
+Direct `shift_assignments` inserts are blocked by `trg_protect_assignment_columns`, so the
+assignments went through the real path, as the fixture manager, with a recorded override reason.
+Teardown deleted every fixture row and its audit `events`, and a re-query found none remaining.
+
+| # | Check (as the caregiver or client's own JWT) | Before | Must be after |
+|---|---|---|---|
+| 1.1 | caregiver reads another caregiver's row (email, phone, rate) | **OPEN** | closed |
+| 1.2 | … another caregiver's skills | **OPEN** | closed |
+| 1.3 | … another caregiver's availability | **OPEN** | closed |
+| 1.4 | … a client's care needs | closed\* | closed |
+| 1.5 | … a family | **OPEN** | closed |
+| 1.6 | … a family inquiry (care_request) | **OPEN** | closed |
+| 1.7 | … a rating about another caregiver | **OPEN** | closed |
+| 1.8 | … another caregiver's trade | **OPEN** | closed |
+| 2.1 | caregiver adds a skill to another caregiver | **OPEN** | closed |
+| 2.2 | caregiver deletes another caregiver's availability | **OPEN** | closed |
+| 2.3 | caregiver changes a client's care-need priority | closed\* | closed |
+| 2.4 | caregiver cancels another caregiver's trade | **OPEN** | closed |
+| 3.1 | client reads a caregiver's skills | **OPEN** | closed |
+| 3.2 / 3.9 | client reads / changes **another** client's care needs | closed\* | closed |
+| 3.3 | client reads another family | **OPEN** | closed |
+| 3.4 | client reads another family's inquiry | **OPEN** | closed |
+| 3.5 | client reads ratings | **OPEN** | closed |
+| 3.6 | client reads trades | **OPEN** | closed |
+| 3.7 / 3.8 | client reads a caregiver row / availability | visible | visible (M-SEC-5 closes) |
+| S1–S3 | caregiver reads own row, own skills and availability; replaces own availability (AvailabilityDialog) | works | must work |
+| S4 | caregiver sees own rating via `caregiver_performance`, and **only** its own row | **fails** (sees 8 rows) | must work (1 row) |
+| S5 | caregiver reads own trade ("My trade requests") | works; other party's name shown | works. **Name will be NULL until M-SEC-3** |
+| S6 | client reads own care needs and own inquiry | works | must work |
+| S7 | manager reads all 8 fixture rows | works | must work |
+| S8 | manager adds and removes a caregiver skill (Caregivers.tsx path) | works | must work |
+
+\* `client_care_needs` is already effectively closed: its "agency" policy finds the client's agency
+through a sub-select on `clients`, and that sub-select is itself filtered by `clients` RLS, which
+hides other clients from a caregiver or client. M-SEC-1's change there is defense in depth.
+
+### 11.2 Notes for review
+- **Pair M-SEC-1 with M-SEC-3.** Once caregivers can no longer read other caregivers' rows, the
+  "My trade requests" embed `new_caregiver:new_caregiver_id(first_name,last_name)` resolves to NULL.
+  Recommendation: push M-SEC-3 (`get_my_trade_requests()` plus the `caregiverBoard.ts` switch)
+  immediately after M-SEC-1 in the same session, or before it, so the name never disappears.
+- **Q7 (open):** "Caregivers can manage their own skills" is kept. A caregiver can still add care
+  types to their own profile (`CaregiverProfileSettings` → "Edit Skills"), and the eligibility
+  engine's `skill` rule then treats them as qualified. Should skills become staff-managed, or
+  caregiver-proposed and staff-approved? That is a product decision and is not part of M-SEC-1.
+- **Staff paths checked in code:** Caregivers, Clients, ClientInquiries, FamilyDialog,
+  ClientSchedulingDialog, ShiftTrades, TimeOffDecisionDialog, Reports, Dashboard and
+  useMenuBadgeCounts. All run as staff and pass `is_agency_staff`. S7 and S8 prove the read and
+  skill-write paths.
+- **Non-staff paths checked in code:** caregiver own skills, availability and trades; client own
+  care needs and inquiries (CareCircle). All are covered by self-policies, which are unchanged.
+
+---
+
+## 12. One batch: M-SEC-1 + skills (Q7) + M-SEC-3 + M-SEC-5 + frontend (DRAFT, not pushed)
+
+### 12.1 Q7 — caregiver skills become staff-managed (owner decision, Oct 4)
+
+**Who may write `caregiver_skills`:**
+- staff in the same agency only, i.e. any `is_agency_staff` role: system_admin, agency_admin,
+  manager, hr_staff, **and scheduler**;
+- scheduler is included because it edits skills today. `/caregivers`' Edit dialog, which deletes
+  and re-inserts skills (`Caregivers.tsx:256-312`), is shown to every staff role, scheduler included.
+
+**What changes in the database (M-SEC-1, section 2):**
+- "Caregivers can manage their own skills" (FOR ALL) is replaced by **"Caregivers view their own
+  skills"** (SELECT only).
+
+**What changes in the caregiver UI (`CaregiverProfileSettings.tsx`):**
+- the Edit Skills button, the add-skill form and the remove (×) buttons are removed;
+- skills are listed read-only with "To change your skills, contact your office.";
+- `handleAddSkill` / `handleRemoveSkill` are deleted, so the caregiver side has no write call to
+  `caregiver_skills`. Only the own-row SELECT remains.
+
+**Every path that writes `caregiver_skills` today:**
+
+| Path | Runs as | After the change |
+|---|---|---|
+| `Caregivers.tsx:256-312` (staff add/edit dialog: delete + insert) | authenticated staff | works (staff policy; S8 verifies) |
+| `CaregiverProfileSettings.tsx` Edit Skills (caregiver Profile) | caregiver | would fail; **removed from the UI** |
+| `approve-caregiver-registration` (skills from the screening answers) | service role | unaffected |
+| `import-data` (bulk import) | service role | unaffected |
+| `reset-database` (dev tool) | service role | unaffected |
+| Public caregiver registration (`submit_caregiver_registration`) | anon RPC | writes `caregiver_registrations` only, never `caregiver_skills` |
+| Any DB function | — | none writes `caregiver_skills` (checked in `pg_proc`) |
+
+No other client-side caregiver write exists. "Caregiver proposes, staff approves" is logged in
+known-issues as a later item.
+
+### 12.2 Breakage sweep — every caregiver / client / family read or write of the 8 tables
+
+Family users have **no login** in this app: family intake is anonymous, through the conversation
+RPCs. So the rows below cover caregiver and client sessions. Every Edge Function except `mcp`
+uses the service role and is unaffected.
+
+| # | Screen / path (file) | Table / call | Today | After this batch | Covered by |
+|---|---|---|---|---|---|
+| 1 | Caregiver Today / Schedule / Shifts / Profile / Time Off, `useIsCaregiverRole` | `caregivers` own row | works | works (self policy) | — (S1) |
+| 2 | `CaregiverProfileSettings` save | `caregivers` own update | works | works (self policy + M-SEC-2 allow-list) | — |
+| 3 | `CaregiverProfileSettings` skills list | `caregiver_skills` own SELECT | works | works | Q7 SELECT policy (S2) |
+| 4 | `CaregiverProfileSettings` Edit Skills | `caregiver_skills` own INSERT/DELETE | works | would fail | **UI made read-only** (Q7; K1/K2 prove the block) |
+| 5 | `AvailabilityDialog` from caregiver Profile | `caregiver_availability` own select/delete/insert | works | works | — (S3) |
+| 6 | Caregiver Today rating (`caregiverPerformance.ts`) | `caregiver_performance` view → `shift_ratings` | works (but sees all 8 caregivers) | works, own row only | new "Caregivers view ratings about themselves" (S4) |
+| 7 | Available Shifts → My trade requests (`caregiverBoard.fetchMyTradeRequests`) | `shift_trades` own + embeds `new_caregiver`, `shifts` | works | trade row works; **taker's name → NULL**; shift embed already NULL after an accepted trade | **M-SEC-3** `get_my_trade_requests()` (R1) |
+| 8 | Available Shifts: open/trade boards, pick-ups (`caregiverBoard`) | SECURITY DEFINER RPCs | works | works | — (`shiftEligibility` is imported only for its result mapper; its local fallback never runs on the caregiver side) |
+| 9 | Client Care Team tab (`CareTeam.tsx`) | `shift_assignments` → `caregivers` → `caregiver_performance` | **already empty**: clients can't read `shift_assignments` | works | **M-SEC-5** `get_my_care_team()` (R2) |
+| 10 | Client Care Circle tab (`CareCircle.tsx`) | `shift_assignments` + `caregivers` (+ own `care_requests`) | primary and backups **already empty** except the preferred caregiver | works | **M-SEC-5** `get_my_care_team()`; own `care_requests` stays on its self branch |
+| 11 | Client Schedule tab (`MySchedule.tsx`) | `shifts` own → embed `caregivers(...)` | works (via the broad client policy) | caregiver name → NULL | **M-SEC-5** names from `get_my_care_team()` |
+| 12 | Client Care Plans tab, "request a caregiver" picker (`OrdersManagement.tsx`) | `caregivers` + embedded `caregiver_availability` + `caregiver_performance` | works, but **exposes every caregiver's pay rate and zips, and prices the booking with the caregiver's pay rate** | would return nothing | **M-SEC-5** `get_bookable_caregivers(day)` (R3); the price stays the service price |
+| 13 | Client Profile / dashboard (`ProfileSettings.tsx`, `ClientDashboard.tsx:170`) | `client_care_needs` own | works | works | — (S6) |
+| 14 | `mcp` Edge Function `list-caregivers` tool | `caregivers` **as the calling user** | dev tooling for staff | a caregiver/client caller would get its own row only | — (intended) |
+
+**Not covered by M-SEC-3/5, and not caused by this batch:**
+- **(a)** The client "Care Plans" booking submit (`OrdersManagement.tsx`) inserts `client_orders`
+  and `shifts`. Clients have **no INSERT policy on either table**, so a client booking already fails
+  at submit, before and after this batch. The owner said clients book through this tab, so it needs
+  its own decision: a SECURITY DEFINER "request care" RPC, or routing the request into
+  `care_requests`. Logged in known-issues; not touched here.
+- **(b)** Nothing else found. Every remaining read in the sweep is staff-only (Dashboard, Caregivers,
+  Clients, Schedule, AssignShiftDialog, Reports, ShiftTrades, TimeOffRequests, ClientInquiries,
+  FamilyDialog, ClientSchedulingDialog, useMenuBadgeCounts, SystemAdminDashboard/PlatformAnalytics),
+  and all of those pass `is_agency_staff`.
+
+### 12.3 M-SEC-3 — `get_my_trade_requests()` (`20261004120100_msec3_get_my_trade_requests.sql`)
+- **Mechanics:** `LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public`.
+- **Scope:** rows where `original_caregiver_id` is a caregivers row with `user_id = auth.uid()`.
+- **Returns:** trade id, shift_id, status, reason, created_at, resolved_at, the shift's
+  date/start/end/title, and the taker's **first name + last initial, only when status =
+  'accepted'** (the only state AvailableShifts shows a name).
+- **Grants:** `REVOKE ALL … FROM PUBLIC, anon; GRANT EXECUTE … TO authenticated`.
+- **Frontend:** `fetchMyTradeRequests()` calls the RPC and maps it to the unchanged `MyTradeRequest`
+  shape (last name rendered as "G."), so `AvailableShifts.tsx` is untouched.
+
+### 12.4 M-SEC-5 — client caregiver reads (`20261004120200_msec5_client_caregiver_reads.sql`)
+
+**Columns returned and never returned:**
+- **Display-safe columns only:** first name, last initial, employment role label
+  (`full_time`/…), care-type codes, the aggregate rating shown today (avg + count). Plus, for the
+  care team, shift count, last/next shift date and an `is_preferred` flag.
+- **Never returned:** email, phone, address, zip codes, pay rate, emergency contacts, user_id.
+  Caregivers have no photo column.
+- **Phone and email are dropped on purpose,** although CareTeam/CareCircle rendered them. Those
+  views were empty in practice (row 9/10), and the owner's Q3 rule was "no email/phone". The UI
+  now says "To reach your caregiver, contact your office."
+
+**`get_my_care_team()`**
+- Scope: the caller's own client record(s) (`clients.user_id = auth.uid()`).
+- Returns caregivers with a non-cancelled assignment on those clients' shifts dated
+  **CURRENT_DATE − 180 days … CURRENT_DATE + 90 days**, plus the client's `preferred_caregiver_id`,
+  in the same agency.
+- **Window needed by the UI:**
+  - CareTeam and CareCircle show the client's current team. Recent history and the near future
+    covers it.
+  - MySchedule names the caregiver on every listed shift. Shifts outside the window render with
+    no name, which the existing `?.` rendering already handles.
+  - **Accepted by the owner (Oct 4): 180 / 90.** It can be widened later if a client history view
+    is needed (no client/family view in V1, Q6).
+
+**`get_bookable_caregivers(_day_of_week)`**
+- This is the booking picker. It is a different question from "assigned caregivers": the picker
+  must offer caregivers *not yet* on the client's shifts.
+- Returns active caregivers of the client's agency, and of the client's office if the client has
+  one. That office filter is new; the old picker ignored offices.
+- Filters: the caregiver lists the client's zip and has `is_available` slots that weekday. It
+  returns only that day's time windows.
+- **Decided (owner, Oct 4):** keep `get_bookable_caregivers`, with the new office filter and the
+  active-only condition. A `_day_of_week` outside 0–6 returns an empty set (no error text).
+- **Client booking submit** (no client INSERT on `client_orders`/`shifts`) stays a later decision in
+  known-issues. Suggested direction: route client requests into `care_requests`, which staff turn
+  into orders.
+
+**Policy and UI changes:**
+- **Dropped policies:** "Clients view caregivers (agency scope) 20251106" and "Clients view
+  caregiver availability (agency scope) 20251106". `caregiver_performance` then returns nothing to
+  clients, and the screens take ratings from the RPCs.
+- **Grants:** both functions `REVOKE ALL … FROM PUBLIC, anon; GRANT EXECUTE … TO authenticated`.
+- **Frontend:**
+  - new `src/lib/clientCareTeam.ts` (fetchMyCareTeam / fetchBookableCaregivers / displayName);
+  - `CareTeam.tsx`, `CareCircle.tsx` and `MySchedule.tsx` use the care-team RPC;
+  - the `OrdersManagement.tsx` picker uses the bookable RPC and **no longer overwrites the booking
+    price with the caregiver's pay rate** (it was `rate: caregiver.hourly_rate`).
+
+### 12.5 Tests (script `sec_tests_1.cjs`; before-run `before-mutxoprh`, 2026-10-04)
+
+Fixtures in agency `56fbfe38`:
+- logins for caregiver A, caregiver B, a client and a manager;
+- caregiver A serves zip 49002 and is free on Tuesday; caregiver B serves no zip;
+- a second client (no login) with a family, care need and inquiry;
+- the client's own record with a shift assigned to caregiver A;
+- shifts for the second client assigned to A and B through `assign_caregiver_to_shift()`;
+- ratings, and trades by A (taken by B) and by B.
+
+Teardown deleted every row and its audit `events`, and a re-query found none remaining.
+
+| Check | Before | Must be after |
+|---|---|---|
+| 1.1–1.3, 1.5–1.8 caregiver reads others' caregiver row / skills / availability / family / inquiry / rating / trade | **OPEN** | closed |
+| 2.1, 2.2, 2.4 caregiver adds a skill to / deletes availability of / cancels a trade of another caregiver | **OPEN** | closed |
+| **K1** caregiver adds a skill to itself · **K2** caregiver removes its own skill | **OPEN** | closed (Q7) |
+| 3.1, 3.3–3.6 client reads skills / other family / other inquiry / ratings / trades | **OPEN** | closed |
+| **3.7 / 3.8** client reads caregiver rows / availability directly | **OPEN** | closed (M-SEC-5) |
+| 1.4, 2.3, 3.2, 3.9 care needs of another client | closed\* | closed |
+| **R1** `get_my_trade_requests` (caregiver A): A's trade yes, B's trade no; taker name only once accepted | N/A (not deployed) | must work |
+| **R2** `get_my_care_team` (client): caregiver A yes, B no; no email/phone/address/zip/rate/user_id columns | N/A | must work |
+| **R3** `get_bookable_caregivers(Tuesday)` (client): caregiver A yes, B no; display-safe columns | N/A | must work |
+| **R4** caregiver calls `get_my_care_team` / client calls `get_my_trade_requests` | N/A | must return nothing |
+| S1–S3 caregiver own row, skills, availability; replaces own availability | works | must work |
+| S4 caregiver sees only its own `caregiver_performance` row (with its rating) | **fails** (8 rows) | must work (1 row) |
+| S5 caregiver reads own trade row | works | must work (name via R1) |
+| S6 client reads own care needs + own inquiry | works | must work |
+| S7 manager reads all 8 fixture rows · S8 manager adds/removes a caregiver skill | works | must work |
+
+\* already closed through `clients` RLS (§11.1).
+
+**Screen smoke tests:** R1 is the exact call behind "My trade requests". R2 is the call behind
+CareTeam, CareCircle and MySchedule names. R3 is the picker's call. After the push, a browser pass
+of the client dashboard tabs (Care Team, Care Circle, Schedule, Care Plans → picker) and the
+caregiver Profile / Shifts tabs will be done with the fixture logins and teardown.
+
+### 12.6 Push plan (one push, after owner approval)
+1. Commit the batch:
+   - migrations `20261004120000` (M-SEC-1 + Q7 skills), `20261004120100` (M-SEC-3),
+     `20261004120200` (M-SEC-5);
+   - frontend: `CaregiverProfileSettings.tsx`, `caregiverBoard.ts`, `clientCareTeam.ts`,
+     `CareTeam.tsx`, `CareCircle.tsx`, `MySchedule.tsx`, `OrdersManagement.tsx`;
+   - the plan.
+2. `supabase migration list`: confirm exactly these three are pending. Then `supabase db push`,
+   which applies them in filename order: M-SEC-1 → M-SEC-3 → M-SEC-5.
+3. Post-push verification (read-only):
+   - `pg_policies` on the 8 tables (staff check present, self-policies intact, the two client
+     policies gone);
+   - `aclexplode` on the three new functions (postgres, authenticated, service_role; no
+     PUBLIC/anon).
+4. Run `sec_tests_1.cjs after`: every must-close closed, every must-work/R working, teardown clean.
+5. Push the branch.
+
+The frontend is served from this repo (dev server / Fly deploy), so the new client calls go live
+with the next frontend run or deploy. Between `db push` and that, the old client bundle would show
+no caregiver names or picker results, and the old caregiver bundle would show no taker name. Those
+are display-only gaps on dev, with no data exposure.
+
+M-SEC-4 (menu seeds) is **not** in this batch. It stays next in the run order, before RequireRole.
+
+### 12.7 Pushed and verified (2026-10-04)
+- **Commit:** single commit `bd883bd` (amended before push so it carries only this batch). The
+  first version also swept in an unrelated, pre-existing uncommitted `fetchCaregiverOpenShifts`
+  hunk in `caregiverBoard.ts` (caregiver app shell work). That hunk was removed from the commit and
+  left in the working tree.
+- **`supabase migration list`:** exactly `20261004120000`, `20261004120100` and `20261004120200`
+  were pending. `db push` applied them in that order.
+- **Read-only checks:**
+  - every agency branch on the 8 tables carries `is_agency_staff` / `has_role`, and the self-policies
+    are intact;
+  - "Clients view caregivers (agency scope) 20251106", "Clients view caregiver availability (agency
+    scope) 20251106" and "Caregivers can manage their own skills" are **gone**;
+  - `get_my_trade_requests()`, `get_my_care_team()` and `get_bookable_caregivers(integer)` are each
+    a single overload, `prosecdef = true`, `proconfig = {search_path=public}`, with EXECUTE for
+    `postgres`, `authenticated` and `service_role` only. There is **no PUBLIC or anon**.
+
+**After-tests** (run `after-muty3xab`):
+- Fixtures were extended for the owner's checks: offices X and Y in agency A; a caregiver serving
+  only office Y; and an agency-B caregiver matching the client's zip and Tuesday, also set as the
+  client's `preferred_caregiver_id`.
+- Teardown deleted every row, office, agency, auth user and audit event, verified by re-query.
+
+| Check | Before | After |
+|---|---|---|
+| 1.1–1.3, 1.5–1.8, 2.1, 2.2, 2.4, K1, K2, 3.1, 3.3–3.8 (18 holes) | OPEN | **all CLOSED** |
+| 1.4, 2.3, 3.2, 3.9 (care needs, already closed via `clients` RLS) | closed | closed |
+| R1 `get_my_trade_requests`: own trade only; name hidden while pending, "C." initial once accepted | N/A | **works** |
+| R2 `get_my_care_team`: own caregiver only; columns `caregiver_id, first_name, last_initial, employment_role, care_type_codes, avg_rating, rating_count, shift_count, last_shift_date, next_shift_date, is_preferred` (no email/phone/address/zip/rate/user_id) | N/A | **works** |
+| R3 `get_bookable_caregivers(Tue)`: zip + availability match only; display-safe columns | N/A | **works** |
+| R4 / C1 / C2: caregiver → care team or bookable; client → trades | N/A | **empty** |
+| A1 anon calls each of the 3 RPCs | N/A | **refused** (42501 ×3) |
+| O1 client in office X vs caregiver serving only office Y (picker) | N/A | **not listed**; the office-X caregiver is listed |
+| O2 agency-A client vs agency-B caregiver (picker; care team via `preferred_caregiver_id`) | N/A | **not returned** in either |
+| D1 `get_bookable_caregivers(7)` and `(-1)` | N/A | **empty, no error** |
+| S4 caregiver sees only its own `caregiver_performance` row | failed (8–9 rows) | **1 row** (own rating) |
+| S1–S3, S5–S8 working paths | work | **work** |
+
+**Browser pass** (Playwright/Chromium against the local Vite dev server, real `/auth` logins,
+disposable client and caregivers, teardown verified; screenshots in the session scratchpad):
+
+| # | Screen | Result |
+|---|---|---|
+| B1 | Client → Care Team | **PASS.** "Zoe A.", role badge, 5.0 rating, "To reach your caregiver, contact your office."; no email or phone on the page |
+| B2 | Client → Care Circle | **PASS.** "Zoe A." as primary caregiver; no email or phone |
+| B3 | Client → Schedule | **PASS.** This week's shift names the caregiver |
+| B4 | Client → Care Plans → booking picker | **NOT REACHABLE, pre-existing.** Step 1 lists no services for any client, because the form filters care types by three hard-coded category names that no longer exist in the data (known-issues). The picker's RPC is covered by R3, O1, O2 and D1 at the API level. |
+| B5 | Caregiver → Profile | **PASS.** Skills listed; no "Edit Skills" button; "To change your skills, contact your office." |
+| B6 | Caregiver → Shifts → My Trade Requests | **PASS.** The accepted trade shows "— Ben B." |
+
+---
+
+## 13. RequireRole step — task list (accumulated)
+1. `RequireRole` wrapper plus `src/lib/roleHome.ts` (shared with `Auth.tsx`). Wrap every
+   STAFF/ADMIN/SYSTEM_ADMIN route from §1.1, **including `/schedule`** (owner, Oct 1). A NULL role is
+   denied.
+2. **Hide the Delete-user button for manager** (owner, Oct 4). `admin-delete-user` now refuses
+   managers (§10.4), so the button must not be shown to them. Places:
+   - `Users.tsx` (row Delete);
+   - `AdminUserManagement.tsx` ("Delete User" tab);
+   - the Delete actions in `Caregivers.tsx` / `Clients.tsx` if they call `admin-delete-user`
+     (check at implementation).
+
+   Show it only for agency_admin / system_admin. Peer-admin rows should also hide Reset/Delete for
+   agency_admin (target ranks are not below), so users don't click into a 403.
+3. Caregiver/client/session-only routes stay unwrapped (§1.2).

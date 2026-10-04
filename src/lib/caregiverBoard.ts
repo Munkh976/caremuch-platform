@@ -61,22 +61,43 @@ export interface MyTradeRequest {
   shifts: { shift_date: string; start_time: string; end_time: string; order_title: string | null } | null;
 }
 
+interface MyTradeRequestRow {
+  id: string;
+  shift_id: string | null;
+  status: string;
+  reason: string | null;
+  created_at: string;
+  resolved_at: string | null;
+  new_caregiver_first_name: string | null;
+  new_caregiver_last_initial: string | null;
+  shift_date: string | null;
+  start_time: string | null;
+  end_time: string | null;
+  order_title: string | null;
+}
+
 /** The caregiver's own outgoing drop requests, any status -- read-only status display.
- * No new backend needed: shift_trades' existing agency-scoped RLS already permits reading
- * the caller's own rows; filtering to original_caregiver_id = mine keeps this safely
- * self-scoped regardless of that policy's agency-wide (not office-scoped) looseness. */
+ * Served by get_my_trade_requests() (M-SEC-3): after M-SEC-1 a caregiver can no longer read
+ * another caregiver's row, so the old new_caregiver embed would resolve to null. The RPC scopes
+ * to the caller (auth.uid()) itself and returns the taker's first name + last initial only once
+ * the trade is accepted. `caregiverId` is kept for the existing call site; the RPC doesn't need it. */
 export async function fetchMyTradeRequests(caregiverId: string): Promise<MyTradeRequest[]> {
-  const { data, error } = await supabase
-    .from("shift_trades")
-    .select(
-      `id, shift_id, status, reason, created_at, resolved_at,
-       new_caregiver:new_caregiver_id ( first_name, last_name ),
-       shifts:shift_id ( shift_date, start_time, end_time, order_title )`
-    )
-    .eq("original_caregiver_id", caregiverId)
-    .order("created_at", { ascending: false });
+  const { data, error } = await supabase.rpc("get_my_trade_requests" as never);
   if (error || !data) return [];
-  return data as unknown as MyTradeRequest[];
+  return (data as unknown as MyTradeRequestRow[]).map((r) => ({
+    id: r.id,
+    shift_id: r.shift_id,
+    status: r.status,
+    reason: r.reason,
+    created_at: r.created_at,
+    resolved_at: r.resolved_at,
+    new_caregiver: r.new_caregiver_first_name
+      ? { first_name: r.new_caregiver_first_name, last_name: r.new_caregiver_last_initial ? `${r.new_caregiver_last_initial}.` : "" }
+      : null,
+    shifts: r.shift_date
+      ? { shift_date: r.shift_date, start_time: r.start_time ?? "", end_time: r.end_time ?? "", order_title: r.order_title }
+      : null,
+  }));
 }
 
 /**

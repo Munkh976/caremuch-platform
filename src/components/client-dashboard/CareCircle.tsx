@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Heart, Users, CalendarClock, Phone, Mail } from "lucide-react";
+import { Heart, Users, CalendarClock, Building2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchMyCareTeam } from "@/lib/clientCareTeam";
 import { FlexibilityBadge } from "@/components/common/FlexibilityBadge";
 import { resolveClientFlexibility } from "@/lib/flexibility";
 
@@ -11,9 +12,8 @@ import { resolveClientFlexibility } from "@/lib/flexibility";
 interface Caregiver {
   id: string;
   first_name: string;
-  last_name: string;
-  email: string | null;
-  phone: string | null;
+  last_name: string; // last initial + "." (M-SEC-5: display-safe RPC)
+  next_shift_date: string | null;
   shifts: number;
 }
 
@@ -38,18 +38,15 @@ export const CareCircle = ({ clientId }: Props) => {
     const load = async () => {
       setLoading(true);
 
-      const [{ data: client }, { data: assignments }, { data: requests }, { data: clientWindows }] =
+      const [{ data: client }, team, { data: requests }, { data: clientWindows }] =
         await Promise.all([
           supabase
             .from("clients")
             .select("preferred_caregiver_id, scheduling_flexibility")
             .eq("id", clientId)
             .maybeSingle(),
-          supabase
-            .from("shift_assignments")
-            .select("caregiver_id, status, shifts!inner ( client_id )")
-            .neq("status", "cancelled")
-            .eq("shifts.client_id", clientId),
+          // M-SEC-5: caregivers on this client's shifts + preferred caregiver, display-safe fields only
+          fetchMyCareTeam().catch(() => []),
           supabase
             .from("care_requests")
             .select("id, flexibility, created_at")
@@ -63,28 +60,18 @@ export const CareCircle = ({ clientId }: Props) => {
             .order("day_of_week"),
         ]);
 
-      const counts = new Map<string, number>();
-      ((assignments as any[]) ?? []).forEach((a) => {
-        if (a.caregiver_id) counts.set(a.caregiver_id, (counts.get(a.caregiver_id) ?? 0) + 1);
-      });
-
-      const ids = [...counts.keys()];
-      let people: Caregiver[] = [];
-      const preferredId = (client as any)?.preferred_caregiver_id ?? null;
-      const lookupIds = [...new Set([...ids, ...(preferredId ? [preferredId] : [])])];
-
-      if (lookupIds.length > 0) {
-        const { data: cgs } = await supabase
-          .from("caregivers")
-          .select("id, first_name, last_name, email, phone")
-          .in("id", lookupIds);
-        people = ((cgs as any[]) ?? []).map((c) => ({ ...c, shifts: counts.get(c.id) ?? 0 }));
-      }
-
+      const people: Caregiver[] = team.map((m) => ({
+        id: m.caregiver_id,
+        first_name: m.first_name,
+        last_name: m.last_initial ? `${m.last_initial}.` : "",
+        next_shift_date: m.next_shift_date,
+        shifts: m.shift_count,
+      }));
       // Explicit designation wins; otherwise fall back to most assignments.
       const sorted = [...people].sort((a, b) => b.shifts - a.shifts);
+      const preferred = team.find((m) => m.is_preferred);
       const chosen =
-        (preferredId ? people.find((p) => p.id === preferredId) : undefined) ?? sorted[0] ?? null;
+        (preferred ? people.find((p) => p.id === preferred.caregiver_id) : undefined) ?? sorted[0] ?? null;
       setPrimary(chosen);
       setBackups(sorted.filter((p) => p.id !== chosen?.id));
 
@@ -140,18 +127,10 @@ export const CareCircle = ({ clientId }: Props) => {
                   {primary.first_name} {primary.last_name}
                 </p>
                 <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
-                  {primary.phone && (
-                    <span className="inline-flex items-center gap-1.5">
-                      <Phone className="h-3.5 w-3.5" />
-                      {primary.phone}
-                    </span>
-                  )}
-                  {primary.email && (
-                    <span className="inline-flex items-center gap-1.5">
-                      <Mail className="h-3.5 w-3.5" />
-                      {primary.email}
-                    </span>
-                  )}
+                  <span className="inline-flex items-center gap-1.5">
+                    <Building2 className="h-3.5 w-3.5" />
+                    To reach your caregiver, contact your office.
+                  </span>
                 </div>
               </div>
             </div>
@@ -184,7 +163,7 @@ export const CareCircle = ({ clientId }: Props) => {
                   <p className="text-sm font-medium">
                     {c.first_name} {c.last_name}
                   </p>
-                  <p className="text-xs text-muted-foreground">{c.phone ?? c.email ?? "—"}</p>
+                  <p className="text-xs text-muted-foreground">{c.next_shift_date ? `Next visit ${c.next_shift_date}` : "—"}</p>
                 </div>
               </div>
               <Badge variant="outline">{c.shifts} shift{c.shifts === 1 ? "" : "s"}</Badge>

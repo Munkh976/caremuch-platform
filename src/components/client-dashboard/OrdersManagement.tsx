@@ -8,7 +8,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Calendar, Plus, Package, CheckCircle2, Clock, Users, Star, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { fetchCaregiverPerformance } from "@/lib/caregiverPerformance";
+import { fetchBookableCaregivers } from "@/lib/clientCareTeam";
 
 interface CareType {
   id: string;
@@ -37,8 +37,7 @@ interface Order {
 interface Caregiver {
   id: string;
   first_name: string;
-  last_name: string;
-  hourly_rate: number;
+  last_name: string; // last initial + "." (M-SEC-5: display-safe RPC; no pay rate, no zip list)
   avg_rating?: number | null;
   rating_count?: number;
   caregiver_availability?: {
@@ -47,7 +46,6 @@ interface Caregiver {
     end_time: string;
     is_available: boolean;
   }[];
-  service_zipcodes: string[];
 }
 
 interface OrdersManagementProps {
@@ -177,58 +175,18 @@ export const OrdersManagement = ({
 
     setLoadingCaregivers(true);
     try {
-      const { data: clientData, error: clientErr } = await supabase
-        .from("clients")
-        .select("zip_code")
-        .eq("id", clientProfile.id)
-        .single();
-      
-      if (clientErr) throw clientErr;
-
-      const clientZipCode = clientData?.zip_code;
-      if (!clientZipCode) {
-        toast.error("Client zip code not found");
-        return;
-      }
-
-      const { data: caregivers, error } = await supabase
-        .from("caregivers")
-        .select(`
-          id,
-          first_name,
-          last_name,
-          hourly_rate,
-          service_zipcodes,
-          caregiver_availability(
-            day_of_week,
-            start_time,
-            end_time,
-            is_available
-          )
-        `)
-        .eq("is_active", true);
-
-      if (error) throw error;
-
-      const filteredCaregivers = (caregivers || [])
-        .filter((cg) => {
-          const serviceZipcodes = cg.service_zipcodes || [];
-          if (!serviceZipcodes.includes(clientZipCode)) return false;
-          
-          const daySlot = cg.caregiver_availability?.find(
-            (slot: any) => slot.day_of_week === bookingData.day && slot.is_available
-          );
-          return !!daySlot;
-        });
-
-
-      const perf = await fetchCaregiverPerformance(filteredCaregivers.map((c: any) => c.id));
+      // M-SEC-5: get_bookable_caregivers() does the zip/office/availability filtering server-side
+      // for the signed-in client and returns display-safe fields only (no rate, no zip list).
+      const day = bookingData.day;
+      const filteredCaregivers: Caregiver[] = (await fetchBookableCaregivers(day)).map((c) => ({
+        id: c.caregiver_id,
+        first_name: c.first_name,
+        last_name: c.last_initial ? `${c.last_initial}.` : "",
+        avg_rating: c.avg_rating,
+        rating_count: c.rating_count,
+        caregiver_availability: c.day_windows.map((w) => ({ day_of_week: day, start_time: w.start_time, end_time: w.end_time, is_available: true })),
+      }));
       const withRatings = filteredCaregivers
-        .map((c: any) => ({
-          ...c,
-          avg_rating: perf.get(c.id)?.avg_rating ?? null,
-          rating_count: perf.get(c.id)?.rating_count ?? 0,
-        }))
         // Unrated caregivers are neutral, not zero: they sort after rated ones
         // but ahead of anyone actually rated below average.
         .sort((a: any, b: any) => {
@@ -294,7 +252,7 @@ export const OrdersManagement = ({
 
   const selectTimeSlot = (caregiver: Caregiver, time: string, period: string) => {
     const timeString = `${time} ${period}`;
-    setBookingData(prev => ({ ...prev, caregiver, time: timeString, rate: caregiver.hourly_rate }));
+    setBookingData(prev => ({ ...prev, caregiver, time: timeString }));
   };
 
   const handleSubmitBooking = async () => {
