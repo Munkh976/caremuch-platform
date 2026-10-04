@@ -1,0 +1,15 @@
+{
+ "assign_caregiver_to_shift": "00a6b8ab8cebe517dc536ce25cc2f365 {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+ "caregiver_pick_up_shift": "9b22af5a4f25ee586294d2d87a6454fa {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+ "caregiver_pickup_trade_shift": "6c9296e33879b21da5a6e9bf238a3a81 {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+ "check_assignment_eligibility": "6de817a8e37b5957f0c16beb0e6d913d {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+ "check_assignment_eligibility_bulk": "1e3e7a769fa42fec9bd0a4f55f951f35 {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+ "check_caregiver_shifts_eligibility": "cbef8a8240a8487f959204aa3e2a70ca {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+ "cp_derive_authorization_units": "681d82418735beab6c8ce6e3da4a3e69 {postgres=X/postgres,service_role=X/postgres}",
+ "cp_eligibility_core": "92569370fc6bc60fde60abc58015a9de {postgres=X/postgres,service_role=X/postgres}",
+ "cp_projected_units": "33f1dd008b98eca16bb519476e369e60 {postgres=X/postgres,service_role=X/postgres}",
+ "cp_shift_client_context": "14da11aab9799b4e97b43f25ab82bcf5 {postgres=X/postgres,service_role=X/postgres}",
+ "create_service_authorization": "e2cc0a5359e775f20e4a9f0fe25ecad3 {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+ "release_shift_assignments": "dc96ac05484cf0bb9ba18f6f80464bb0 {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+ "review_progress_note": "7705827ce70eb23c4ce6af579514b11b {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}"
+}
