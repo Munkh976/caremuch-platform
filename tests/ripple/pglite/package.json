@@ -1,0 +1,9 @@
+{
+  "name": "ripple-pglite-tests",
+  "private": true,
+  "description": "Local PGlite harness for the Ripple care-plan migrations",
+  "type": "commonjs",
+  "dependencies": {
+    "@electric-sql/pglite": "0.5.8"
+  }
+}

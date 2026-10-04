@@ -1,0 +1,12 @@
+[
+ "assign_caregiver_to_shift(_shift_id uuid, _caregiver_id uuid, _method assignment_method, _notes text, _override_reason text) definer=true EXECUTE: postgres,authenticated,service_role",
+ "caregiver_pick_up_shift(_shift_id uuid) definer=true EXECUTE: postgres,authenticated,service_role",
+ "caregiver_pickup_trade_shift(_trade_id uuid) definer=true EXECUTE: postgres,authenticated,service_role",
+ "check_assignment_eligibility(_shift_id uuid, _caregiver_id uuid) definer=true EXECUTE: postgres,authenticated,service_role",
+ "check_assignment_eligibility_bulk(_shift_id uuid, _caregiver_ids uuid[]) definer=true EXECUTE: postgres,authenticated,service_role",
+ "check_caregiver_shifts_eligibility(_shift_ids uuid[]) definer=true EXECUTE: postgres,authenticated,service_role",
+ "cp_derive_authorization_units() definer=true EXECUTE: postgres,service_role",
+ "create_progress_note_for_shift(_shift_id uuid) definer=true EXECUTE: postgres,authenticated,service_role",
+ "guard_virtual_office_flags() definer=false EXECUTE: postgres,service_role",
+ "review_progress_note(_note_id uuid, _billable boolean, _non_billable_reason text) definer=true EXECUTE: postgres,authenticated,service_role"
+]

@@ -1,0 +1,10 @@
+{
+ "eligibility_fn": "assign_caregiver_to_shift:4a84a87decd00c9eb1ab9199b0ff62ee check_assignment_eligibility:c290e24df24757669488cb6c92a584ac check_assignment_eligibility_bulk:d337fe3f8e9f45a9dee6479a2f987cef check_caregiver_shifts_eligibility:2fb0cbf4d2e1768fd0a0cb21c4906b4b",
+ "single": "eligible=true hard=[] soft=[] advisory=[]",
+ "bulk": "143 chars",
+ "caregiver_side": "1 rows",
+ "smart_match": "ok (matches array)",
+ "assign_manual": "ok; shift.caregiver_id set=true",
+ "assign_ai_suggested": "ok; shift.caregiver_id set=true",
+ "assign_auto_assigned": "ok; shift.caregiver_id set=true"
+}
