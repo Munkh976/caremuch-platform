@@ -1,0 +1,6 @@
+# Line endings: these are stored LF in the repo and checked out LF on every platform.
+# (A CRLF working copy pushed with the Supabase CLI stores carriage returns inside function bodies.)
+*.sql text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.md text eol=lf
