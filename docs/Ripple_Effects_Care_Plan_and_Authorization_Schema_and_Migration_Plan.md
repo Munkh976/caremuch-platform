@@ -1169,3 +1169,34 @@ Open observations (not changed here):
 - `caregiver_certifications` keeps its existing staff policy, which is agency-wide with no office
   predicate.
 - `virtual_office` UPDATE is open to every staff role in scope. Only the two new flags are guarded.
+
+## 14. Results
+
+### 14.1 Phase A: live on DEV 2026-10-04 (`fbb3291`)
+- **Local (PGlite):** 36/36 checks.
+- **DEV after-suite:** R1, R1b, R2, R3, U1, F1, A1/A2 and NB1 all pass.
+- **Rollback:** restores the exact catalog (`docs/rollback/ripple_phase_a_rollback.sql`).
+
+### 14.2 Phase B1: live on DEV 2026-10-04 (`537debf`)
+- **Local (PGlite):** 22/22 checks, including the forced audit failure (local only: forcing it on
+  DEV would need a schema change).
+- **Rollback:** restores the exact post-Phase-A catalog
+  (`docs/rollback/ripple_phase_b1_rollback.sql`).
+- **Defaults seed:** `scripts/seed/care_plan_defaults_dev_seed.sql`: 22 credential types
+  (20 required) and 2 service mappings.
+- **DEV after-suite** (`cp_b1_tests.cjs after`), all 19 green: NB1, H1–H7, TV1, T1, T4, T5,
+  D1 (93 denied calls), A1, X1–X3, C1 and ACL (28/28). Teardown verified.
+
+**Test-harness note (A1, first after-run).** The first after-run reported A1 FAIL on the first
+audited write. The cause was the harness, not B1:
+- the local machine clock ran about 1.37 s ahead of the database;
+- the event-count window started at "local time − 1 s", so the first event fell before it.
+
+The call itself had succeeded, and its audit insert is fail-closed in the same transaction.
+Owner-approved fix, applied to every test from now on:
+- A1 matches each audited call's event by the entity ids it touched plus `event_type`, and
+  asserts exactly one, with no other events for those ids.
+- The time window is only a secondary filter.
+- "Now", deadlines and arrival times are always taken from the database clock, never the local
+  one.
+- Each run prints the measured skew (re-run: local − DB = 1062 ms).
