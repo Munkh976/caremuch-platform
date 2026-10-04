@@ -1,5 +1,40 @@
 # Known Issues
 
+## RESOLVED: caregiver-facing shift dialogs could show a no-op "Assign Caregiver" button on the caregiver's OWN already-assigned shift
+
+**Status:** Found and fixed 2026-09-17 while verifying the shift-assignment lifecycle rule
+(manager-assign is final, no caregiver confirm step; caregiver self-pickup is the only
+caregiver-initiated path). Fixed in `ShiftDetailsDialog.tsx`.
+
+`ShiftDetailsDialog`'s "Assign Caregiver" button rendered whenever `isUnassigned` was
+true, computed as `!(shift.shift_assignments || []).some(a => a?.status !== 'cancelled')`.
+Every caregiver-facing caller (Today, My Schedule, Available Shifts) hands this dialog a
+plain object it constructed itself, with no `shift_assignments` relation attached at all
+-- so `isUnassigned` read as `true` even for a shift genuinely, currently assigned to the
+viewing caregiver. The button was a no-op there (no caller passes `onAssign`), but a
+caregiver tapping their own scheduled shift and seeing "Assign Caregiver" looks exactly
+like the kind of spurious extra step ("does this shift need something from me?") the
+lifecycle rule explicitly forbids -- manager assignment must be final with zero caregiver
+action implied.
+
+**Fix:** gated the button on `isUnassigned && onAssign` -- it only renders for the one
+caller that actually passes `onAssign` (the manager `Schedule.tsx` page), which is
+unchanged. No caregiver-facing view can show it now, functional or not.
+
+## RESOLVED: cancelled shift assignments could still show on My Schedule / Today
+
+**Status:** Found and fixed 2026-09-17, same lifecycle-verification pass.
+
+`CaregiverToday.tsx` and `CaregiverSchedule.tsx` both queried `shift_assignments` by
+`caregiver_id` with no status filter -- a `cancelled` row (e.g. from
+`release_shift_assignments()`, fired when a manager approves time off that conflicts with
+an existing assignment) would still surface on the caregiver's Today/Schedule screens as
+if it were still theirs. Not the leak the lifecycle audit was originally checking for, but
+the same class of defect: a shift the caregiver no longer has, displayed as if they still
+have it.
+
+**Fix:** both queries now add `.neq("status", "cancelled")`.
+
 ## `shift_trades` RLS is agency-wide, not office-scoped
 
 **Status:** Found 2026-09-16 while designing the caregiver Available Shifts redesign
@@ -44,6 +79,64 @@ function's authorization boundary untouched). Includes a claim-then-act race gua
 (`UPDATE shift_trades ... WHERE status='pending'` before touching `shift_assignments`),
 verified live with a genuine two-connection concurrent-claim test: exactly one caller wins,
 the loser gets a clean rejection, no duplicate/corrupted assignment rows.
+
+## FUTURE FEATURE: permanent/recurring shift pickup (touches the data model, not just the UI)
+
+**Status:** Logged 2026-09-17 during the caregiver app rebuild's Phase A/B review. Not
+built, not started -- deliberately not folded into the caregiver-app UI phases.
+
+Today a caregiver can only pick up individual, already-dated `shifts` rows (Open Shifts /
+Trade Shifts) -- there's no concept of committing to a recurring assignment ("every
+Tuesday 2-4pm, ongoing") in one action. That's a real, requested pattern, but `shifts`
+has no recurrence model at all: each shift is a single dated row, and nothing generates
+future occurrences from a rule. Making this real needs its own design pass -- a
+recurring-shift/recurrence-rule data model (and how it interacts with `shift_trades`,
+eligibility, and office scoping) plus the caregiver-facing UX on top of it -- not a
+caregiver-app-phase UI tweak layered onto the existing per-instance `shifts` table.
+
+**Deliberately out of scope for now** -- flagged so it isn't lost, not scheduled against
+any current phase (A/B/C/D of `docs/caregiver-app-design.md`).
+
+## Available Shifts never shows a released ("unassigned") shift, only "open" ones
+
+**Status:** Found 2026-09-17 while verifying the shift-assignment lifecycle (manager-assign
+vs. caregiver-pickup) end-to-end. Not fixed -- a real gap, but distinct from the lifecycle
+question that prompted the audit (nothing here creates a caregiver-confirm step or leaks
+an assigned shift into the pickup list; it's the opposite -- under-inclusion).
+
+`shifts.status` has two "pickable" values: `open` (never assigned) and `unassigned` (was
+assigned, then released -- e.g. `release_shift_assignments()`, fired when a manager
+approves time off that conflicts with an existing assignment). Every backend RPC treats
+both as pickable: `caregiver_pick_up_shift()` checks `status NOT IN ('open','unassigned')`,
+and so does `get_caregiver_visible_clients()` and the Phase 1B eligibility engine. But
+`fetchCaregiverOpenShifts()` (`src/lib/caregiverBoard.ts`) -- the single source of truth
+the Open Shifts list and the Today screen's "N shifts available" count both call -- only
+filters `.eq("status", "open")`. A released shift becomes invisible to every caregiver
+until a manager manually reassigns it; no caregiver can self-pick it up even though the
+backend would accept the attempt.
+
+**Not fixed here** -- logged so it isn't lost. The fix is a one-line filter change
+(`.in("status", ["open", "unassigned"])`), but touching it deserves its own quick
+verification pass (confirm a released shift's caregiver-facing card doesn't imply "brand
+new opportunity" when it's actually "someone's time off bumped this") rather than folding
+it into an unrelated lifecycle audit.
+
+## FUTURE UX TWEAK (low priority): default Available Shifts to a near-term date range
+
+**Status:** Logged 2026-09-17 during the caregiver app rebuild's Phase A/B review. Not
+built, not started.
+
+`AvailableShifts.tsx` currently loads and shows every future `open` shift and pending
+trade with no upper date bound -- a caregiver browsing far enough out could see shifts
+months away mixed in with next week's. There's already a manual date filter
+(`filterDate` in `AvailableShifts.tsx`), so this isn't a missing capability, just a
+possibly-better default: defaulting the initial view to a near-term window (e.g. "next 7
+days") with an explicit way to see further out, rather than showing the unbounded list by
+default.
+
+**Deliberately out of scope for now** -- a minor UX refinement, not a bug. Low priority;
+pick up opportunistically during Phase C's Available Shifts mobile pass if convenient, not
+worth a dedicated pass on its own.
 
 ## FUTURE FEATURE: caregiver-initiated "give up my shift" flow
 

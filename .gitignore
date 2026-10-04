@@ -25,3 +25,6 @@ supabase/.temp/
 *.njsproj
 *.sln
 *.sw?
+
+# Local UI screenshot capture (not committed)
+current-ui/

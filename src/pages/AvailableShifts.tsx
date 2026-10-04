@@ -9,9 +9,12 @@ import { format } from "date-fns";
 import { toast } from "sonner";
 import { ShiftDetailsDialog } from "@/components/schedule/ShiftDetailsDialog";
 import { AppLayout } from "@/components/AppLayout";
+import { CaregiverAppShell } from "@/components/caregivers/CaregiverAppShell";
+import { useIsCaregiverRole } from "@/hooks/useIsCaregiverRole";
 import { pickUpShift } from "@/lib/shiftAssignment";
 import { fetchCaregiverVisibleClients, type CaregiverVisibleClient } from "@/lib/caregiverVisibleClients";
 import {
+  fetchCaregiverOpenShifts,
   fetchCaregiverTradeShifts,
   fetchCaregiverShiftsEligibility,
   fetchMyTradeRequests,
@@ -20,17 +23,9 @@ import {
   type MyTradeRequest,
 } from "@/lib/caregiverBoard";
 import type { EligibilityResult } from "@/lib/shiftEligibility";
+import type { CaregiverOpenShift } from "@/lib/caregiverBoard";
 
-interface OpenShift {
-  id: string;
-  client_id: string;
-  shift_date: string;
-  start_time: string;
-  end_time: string;
-  duration_hours: number;
-  care_type_code: string;
-  pay_rate: number | null;
-  special_instructions: string | null;
+interface OpenShift extends CaregiverOpenShift {
   clients: CaregiverVisibleClient | null;
 }
 
@@ -46,6 +41,13 @@ const TRADE_STATUS_LABEL: Record<string, string> = {
 };
 
 const AvailableShifts = () => {
+  // available_shifts also grants manager/scheduler/admin roles read access, so route
+  // permission alone can't tell us which shell to render -- resolve actual caregiver
+  // identity instead. See src/hooks/useIsCaregiverRole.ts and
+  // docs/caregiver-app-design.md.
+  const isCaregiver = useIsCaregiverRole();
+  const Shell = isCaregiver === false ? AppLayout : CaregiverAppShell;
+
   const [openShifts, setOpenShifts] = useState<OpenShift[]>([]);
   const [tradeShifts, setTradeShifts] = useState<(CaregiverTradeShift & { clients: CaregiverVisibleClient | null })[]>([]);
   const [myTradeRequests, setMyTradeRequests] = useState<MyTradeRequest[]>([]);
@@ -78,14 +80,10 @@ const AvailableShifts = () => {
       // office (Phase 1B policy). clients is NOT embedded -- caregivers have no RLS
       // SELECT on public.clients at all; fetch the narrow, caregiver-safe view
       // separately and merge by client_id (see src/lib/caregiverVisibleClients.ts).
-      const { data: openData, error: openError } = await supabase
-        .from("shifts")
-        .select("*")
-        .eq("status", "open")
-        .gte("shift_date", format(new Date(), "yyyy-MM-dd"))
-        .order("shift_date", { ascending: true })
-        .order("start_time", { ascending: true });
-      if (openError) throw openError;
+      // fetchCaregiverOpenShifts() is the SAME function the Today screen's "N new shifts
+      // available" count calls -- don't inline this query again, or the two numbers can
+      // drift (see docs/caregiver-app-design.md).
+      const openData = await fetchCaregiverOpenShifts();
 
       // Trade Shifts: a genuinely different mechanism (shift stays assigned to the
       // caregiver giving it up; a separate shift_trades row advertises it) -- its own
@@ -190,16 +188,16 @@ const AvailableShifts = () => {
 
   if (loading) {
     return (
-      <AppLayout>
+      <Shell>
         <div className="flex items-center justify-center h-[calc(100vh-120px)]">
           <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
         </div>
-      </AppLayout>
+      </Shell>
     );
   }
 
   return (
-    <AppLayout>
+    <Shell>
       <div>
         <h1 className="text-3xl font-bold mb-2">Available Shifts</h1>
         <p className="text-muted-foreground mb-6">Pick up extra shifts to increase your earnings</p>
@@ -489,7 +487,7 @@ const AvailableShifts = () => {
 
         <ShiftDetailsDialog shift={selectedShift} open={!!selectedShift} onOpenChange={(open) => !open && setSelectedShift(null)} />
       </div>
-    </AppLayout>
+    </Shell>
   );
 };
 

@@ -11,7 +11,8 @@ import Caregivers from "./pages/Caregivers";
 import Clients from "./pages/Clients";
 import TimeOffRequests from "./pages/TimeOffRequests";
 import ShiftTrades from "./pages/ShiftTrades";
-import CaregiverDashboard from "./pages/CaregiverDashboard";
+import CaregiverToday from "./pages/CaregiverToday";
+import CaregiverSchedule from "./pages/CaregiverSchedule";
 import ClientDashboard from "./pages/ClientDashboard";
 import CaregiverRegistration from "./pages/CaregiverRegistration";
 import Assistant from "./pages/Assistant";
@@ -79,7 +80,8 @@ const App = () => (
           <Route path="/flow-builder" element={<RequireRole allow={STAFF}><FlowBuilder /></RequireRole>} />
           <Route path="/caregiver-approvals" element={<RequireRole allow={STAFF}><CaregiverApprovals /></RequireRole>} />
           <Route path="/notifications-outbox" element={<RequireRole allow={STAFF}><NotificationsOutbox /></RequireRole>} />
-          <Route path="/caregiver-dashboard" element={<CaregiverDashboard />} />
+          <Route path="/caregiver-dashboard" element={<CaregiverToday />} />
+          <Route path="/caregiver-schedule" element={<CaregiverSchedule />} />
           <Route path="/client-dashboard" element={<ClientDashboard />} />
           <Route path="/users" element={<RequireRole allow={ADMIN}><Users /></RequireRole>} />
           <Route path="/users/add" element={<RequireRole allow={ADMIN}><AddUser /></RequireRole>} />

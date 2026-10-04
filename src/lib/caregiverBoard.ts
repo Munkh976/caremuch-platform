@@ -1,5 +1,36 @@
+import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { mapServerResult, type EligibilityResult, type RawEligibilityResult } from "@/lib/shiftEligibility";
+
+/**
+ * Open Shifts section data -- genuinely unassigned shifts, RLS-scoped to the caller's own
+ * office (Phase 1B policy). SINGLE SOURCE OF TRUTH for "what's open right now": both the
+ * Shifts board and the Today screen's "N new shifts available" count call this same
+ * function so the two numbers can never drift apart (see docs/caregiver-app-design.md).
+ */
+export interface CaregiverOpenShift {
+  id: string;
+  client_id: string;
+  shift_date: string;
+  start_time: string;
+  end_time: string;
+  duration_hours: number;
+  care_type_code: string;
+  pay_rate: number | null;
+  special_instructions: string | null;
+}
+
+export async function fetchCaregiverOpenShifts(): Promise<CaregiverOpenShift[]> {
+  const { data, error } = await supabase
+    .from("shifts")
+    .select("*")
+    .eq("status", "open")
+    .gte("shift_date", format(new Date(), "yyyy-MM-dd"))
+    .order("shift_date", { ascending: true })
+    .order("start_time", { ascending: true });
+  if (error || !data) return [];
+  return data as unknown as CaregiverOpenShift[];
+}
 
 /**
  * Trade Shifts section data -- shifts colleagues have dropped for trade, in the caller's

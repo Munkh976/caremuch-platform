@@ -155,13 +155,21 @@ export const ShiftDetailsDialog = ({ shift, open, onOpenChange, onAssign }: Shif
             </div>
           )}
 
-          {/* Quick Assign Button for Unassigned Shifts */}
-          {isUnassigned && (
+          {/* Quick Assign Button for Unassigned Shifts -- staff-only action, so it's also
+              gated on onAssign actually being passed. Caregiver-facing callers (Today,
+              My Schedule, Available Shifts) never pass onAssign and also never attach a
+              shift_assignments relation to the object they hand this dialog, so
+              `isUnassigned` alone would read as true even for a shift that's genuinely
+              theirs -- this button showing there (as a no-op) is exactly the kind of
+              misleading pseudo-action-on-an-assigned-shift a caregiver should never see;
+              manager assignment is final and needs no caregiver-side step. See
+              docs/known-issues.md. */}
+          {isUnassigned && onAssign && (
             <div className="mt-6 pt-6 border-t">
               <Button
                 className="w-full gap-2"
                 onClick={() => {
-                  onAssign?.(shift);
+                  onAssign(shift);
                   onOpenChange(false);
                 }}
               >
