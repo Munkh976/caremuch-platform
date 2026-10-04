@@ -1,5 +1,14 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
+import { CREATABLE_ROLES, hasCallerRole, loadPrincipal, MANAGER_OR_ABOVE, pick, STAFF_ROLES } from "../_shared/authz.ts";
+
+// Caller-supplied userData columns allowed on the new record (M-SEC-2b). Everything else —
+// id, user_id, agency_id, virtual_office_id, is_active, preferred_caregiver_id, rates set by
+// other paths, etc. — is ignored. The app's own callers send only { staffRole } or {}.
+const CLIENT_FIELDS = ['address', 'city', 'state', 'zip_code', 'date_of_birth',
+  'emergency_contact_name', 'emergency_contact_phone'] as const;
+const CAREGIVER_FIELDS = ['address', 'city', 'state', 'zip_code', 'employment_type', 'hourly_rate',
+  'emergency_contact_name', 'emergency_contact_phone'] as const;
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -37,18 +46,16 @@ serve(async (req) => {
       throw new Error('Unauthorized');
     }
 
-    // Check caller's role - must be admin or manager
-    const { data: callerRole } = await supabaseClient.rpc('get_user_role', {
-      _user_id: caller.id
-    });
-
-    const allowedRoles = ['system_admin', 'agency_admin', 'manager'];
-    if (!callerRole || !allowedRoles.includes(callerRole)) {
+    // Owner rule A (M-SEC-2b): caller must be manager, agency_admin or system_admin, judged by the
+    // highest of ALL the caller's role rows.
+    const callerPrincipal = await loadPrincipal(supabaseClient, caller.id);
+    if (!hasCallerRole(callerPrincipal, MANAGER_OR_ABOVE)) {
       return new Response(
         JSON.stringify({ error: 'You do not have permission to create users' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+    const isSystemAdmin = callerPrincipal.role === 'system_admin';
 
     // Get caller's agency_id (and, if the caller is a Tier-3/office-restricted
     // staff member, their virtual_office_id) from profiles.
@@ -73,7 +80,55 @@ serve(async (req) => {
       );
     }
 
-    const { email, password, firstName, lastName, phone, userType, userData } = await req.json();
+    const { email, password, firstName, lastName, phone, userType, userData, agencyId, virtualOfficeId } = await req.json();
+
+    // Owner rule B (M-SEC-2b): the new user's agency is set server-side — the caller's own agency,
+    // or (system_admin only) an explicit, existing `agencyId`. Any agency_id inside userData is
+    // dropped by the allow-list below.
+    let targetAgencyId: string = callerProfile.agency_id;
+    if (agencyId !== undefined && agencyId !== null && agencyId !== callerProfile.agency_id) {
+      if (!isSystemAdmin) {
+        return new Response(
+          JSON.stringify({ error: 'Only a system administrator can create users in another agency' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      const { data: ag } = await supabaseClient.from('agency').select('id').eq('id', agencyId).maybeSingle();
+      if (!ag) {
+        return new Response(
+          JSON.stringify({ error: 'Unknown agency' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      targetAgencyId = ag.id;
+    }
+
+    // Owner rule B: office. An office-restricted caller can only create into its own office (and
+    // that remains the default, as before). Otherwise an explicit `virtualOfficeId` must belong
+    // to the target agency; none given => NULL (agency-wide), as before.
+    let targetOfficeId: string | null = callerOfficeId;
+    if (virtualOfficeId !== undefined && virtualOfficeId !== null) {
+      if (callerProfile.office_restricted && !isSystemAdmin) {
+        if (virtualOfficeId !== callerProfile.virtual_office_id) {
+          return new Response(
+            JSON.stringify({ error: 'You can only create users in your own office' }),
+            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      } else {
+        const { data: vo } = await supabaseClient
+          .from('virtual_office').select('id').eq('id', virtualOfficeId).eq('agency_id', targetAgencyId).maybeSingle();
+        if (!vo) {
+          return new Response(
+            JSON.stringify({ error: "Office does not belong to the user's agency" }),
+            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      }
+      targetOfficeId = virtualOfficeId;
+    } else if (targetAgencyId !== callerProfile.agency_id) {
+      targetOfficeId = null; // the caller's own office never applies inside another agency
+    }
 
     if (!email || !password || !firstName || !lastName || !userType) {
       return new Response(
@@ -82,6 +137,34 @@ serve(async (req) => {
       );
     }
 
+    // M-SEC-2b: validate the requested role against what THIS caller may grant, before any
+    // account is created. Previously the role came straight from the body, so a manager or
+    // agency_admin could create a system_admin.
+    if (!['client', 'caregiver', 'staff'].includes(userType)) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid user type' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    const requestedRole: string | undefined = userType === 'staff' ? userData?.staffRole : userType;
+    if (userType === 'staff' && !(STAFF_ROLES as readonly string[]).includes(requestedRole ?? '')) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid staff role' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    const creatable = CREATABLE_ROLES[callerPrincipal.role ?? ''] ?? [];
+    if (!requestedRole || !creatable.includes(requestedRole)) {
+      return new Response(
+        JSON.stringify({ error: `You do not have permission to create a ${requestedRole ?? 'user'} account` }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // M-SEC-2b: only these caller-supplied columns may reach the clients/caregivers insert
+    // (previously the whole userData object was spread in, so any column could be set).
+    const safeUserData = pick(userData, userType === 'client' ? CLIENT_FIELDS : CAREGIVER_FIELDS);
+
     // Create the auth user with admin privileges
     const { data: authData, error: createError } = await supabaseClient.auth.admin.createUser({
       email,
@@ -89,7 +172,7 @@ serve(async (req) => {
       email_confirm: true,
       user_metadata: {
         full_name: `${firstName} ${lastName}`,
-        agency_id: callerProfile.agency_id,
+        agency_id: targetAgencyId,
       }
     });
 
@@ -119,10 +202,10 @@ serve(async (req) => {
       const { data: clientData, error: clientError } = await supabaseClient
         .from('clients')
         .insert({
-          ...userData,
+          ...safeUserData,
           user_id: authData.user.id,
-          agency_id: callerProfile.agency_id,
-          virtual_office_id: callerOfficeId,
+          agency_id: targetAgencyId,
+          virtual_office_id: targetOfficeId,
         })
         .select()
         .single();
@@ -141,14 +224,14 @@ serve(async (req) => {
       const { data: caregiverData, error: caregiverError } = await supabaseClient
         .from('caregivers')
         .insert({
-          ...userData,
+          ...safeUserData,
           first_name: firstName,
           last_name: lastName,
           email,
           phone: phone || '',
           user_id: authData.user.id,
-          agency_id: callerProfile.agency_id,
-          virtual_office_id: callerOfficeId,
+          agency_id: targetAgencyId,
+          virtual_office_id: targetOfficeId,
         })
         .select()
         .single();
@@ -168,12 +251,23 @@ serve(async (req) => {
       // No additional table record needed, just user_roles
     }
 
-    // Add user role
-    await supabaseClient.from('user_roles').insert({
+    // Add user role (validated above). M-SEC-2b: check the result — previously a failed insert
+    // left an auth user with no role. On failure, roll back the record and the auth user.
+    const { error: roleError } = await supabaseClient.from('user_roles').insert({
       user_id: authData.user.id,
-      role: userType === 'staff' ? userData.staffRole : userType,
-      agency_id: callerProfile.agency_id,
+      role: requestedRole,
+      agency_id: targetAgencyId,
     });
+    if (roleError) {
+      console.error('Error assigning role:', roleError);
+      if (recordId && userType === 'client') await supabaseClient.from('clients').delete().eq('id', recordId);
+      if (recordId && userType === 'caregiver') await supabaseClient.from('caregivers').delete().eq('id', recordId);
+      await supabaseClient.auth.admin.deleteUser(authData.user.id);
+      return new Response(
+        JSON.stringify({ error: 'Failed to assign role; the account was not created' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     return new Response(
       JSON.stringify({ 

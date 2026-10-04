@@ -28,9 +28,12 @@ serve(async (req) => {
     const { data: { user: caller }, error: authError } = await admin.auth.getUser(authHeader.replace('Bearer ', ''));
     if (authError || !caller) return json({ error: 'Unauthorized' }, 401);
 
+    // M-SEC-2b: system_admin only. This backfill scans every agency's unlinked caregivers and
+    // clients, so an agency_admin run used to link (and move profiles for) other tenants' records.
+    // Its only caller is the system_admin-only AdminUtilities page.
     const { data: callerRole } = await admin.rpc('get_user_role', { _user_id: caller.id });
-    if (!callerRole || !['system_admin', 'agency_admin'].includes(callerRole)) {
-      return json({ error: 'Only administrators can run the account backfill' }, 403);
+    if (callerRole !== 'system_admin') {
+      return json({ error: 'Only a system administrator can run the account backfill' }, 403);
     }
 
     const { data: usersPage } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
@@ -47,14 +50,22 @@ serve(async (req) => {
     // different real agency, and bring profiles.agency_id in sync whenever we do link
     // (this function previously never touched profiles.agency_id at all).
     const skipped: { type: 'caregiver' | 'client'; id: string; email: string | null; reason: string }[] = [];
+    // M-SEC-2b: link only when the matched account ALREADY belongs to the record's agency. Never
+    // relink (move) a profile whose agency is NULL, the legacy shared tenant, missing, or another
+    // agency — those are reported in `skipped` for manual review instead of being moved, which
+    // closed the "plant a record with the victim's email, then run the backfill" capture path.
     const linkIfSafe = async (uid: string, recordAgencyId: string) => {
       const { data: existingProfile } = await admin
         .from('profiles').select('agency_id').eq('id', uid).maybeSingle();
-      if (existingProfile?.agency_id
-          && ![recordAgencyId, LEGACY_SYSTEM_AGENCY_ID].includes(existingProfile.agency_id)) {
+      if (!existingProfile) {
+        return { ok: false as const, reason: 'Matched account has no profile; review manually' };
+      }
+      if (!existingProfile.agency_id || existingProfile.agency_id === LEGACY_SYSTEM_AGENCY_ID) {
+        return { ok: false as const, reason: 'Matched account has no agency (NULL/legacy); review manually' };
+      }
+      if (existingProfile.agency_id !== recordAgencyId) {
         return { ok: false as const, reason: 'Matched account is already linked to another agency' };
       }
-      await admin.from('profiles').upsert({ id: uid, agency_id: recordAgencyId }, { onConflict: 'id' });
       return { ok: true as const };
     };
 

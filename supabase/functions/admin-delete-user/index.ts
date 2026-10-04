@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+import { canActOn, hasCallerRole, loadPrincipal } from "../_shared/authz.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -55,10 +56,10 @@ serve(async (req) => {
       });
     }
 
-    // Check if user has admin or agency_admin role
-    const { data: userRole } = await supabaseAdmin.rpc('get_user_role', { _user_id: user.id });
-    
-    if (!userRole || (userRole !== 'system_admin' && userRole !== 'agency_admin')) {
+    // Owner rule A (M-SEC-2b): delete stays agency_admin / system_admin only (a subset of
+    // manager-or-above), judged by the highest of ALL the caller's role rows.
+    const caller = await loadPrincipal(supabaseAdmin, user.id);
+    if (!hasCallerRole(caller, ["system_admin", "agency_admin"])) {
       return new Response(JSON.stringify({ error: "Insufficient permissions" }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -74,13 +75,14 @@ serve(async (req) => {
       });
     }
 
-    // Check if target user role can be managed by the requesting user
-    const { data: targetUserRole } = await supabaseAdmin.rpc('get_user_role', { _user_id: userId });
-    
-    // agency_admin cannot manage system_admin
-    if (userRole === 'agency_admin' && targetUserRole === 'system_admin') {
-      return new Response(JSON.stringify({ error: "Cannot manage system admin users" }), {
-        status: 403,
+    // M-SEC-2b: no self-delete; the target must be in the caller's agency (system_admin exempt)
+    // and rank strictly below the caller. Previously an agency_admin could delete any
+    // non-system_admin user in any agency.
+    const target = await loadPrincipal(supabaseAdmin, userId);
+    const verdict = canActOn(caller, target, userId);
+    if (!verdict.ok) {
+      return new Response(JSON.stringify({ error: verdict.error }), {
+        status: verdict.status,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }

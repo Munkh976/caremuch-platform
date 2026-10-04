@@ -1,0 +1,1002 @@
+# Security fixes — October 2026 (from the Oct 1 UI capture)
+
+> **Status (Oct 2): plan APPROVED with the owner's answers and additions A1–A3 (§7). E1 DONE
+> (read-only) — results in §6. Stopped for owner review of E1; next is the M-SEC-1 draft. Nothing
+> pushed, no data written.**
+> Original status line: PLAN ONLY — awaiting approval. No code, migration, configuration or data has been
+> changed. Migrations below are **drafts for review**; they are pushed only after approval, one
+> at a time, each followed by an `aclexplode(proacl)` / `pg_policies` verification. Data writes
+> (§2.5 redaction, §3.3 deletion) each need their own explicit approval with the row list shown.
+>
+> Method: static replay of every migration in `supabase/migrations` (in filename order, tracking
+> `CREATE/DROP POLICY` and `DROP TABLE`) to derive the **current** policy set per table; reading
+> every route component, Edge Function and caller; and a read-only PostgREST probe.
+> **The live JWT probe could not run:** both `SCREENSHOT_*` logins in `.env.local` now return
+> `Invalid login credentials` (passwords changed since the capture). Every RLS finding below is
+> therefore *derived from migrations* and is marked **[to confirm live]** until §4 step E1 runs.
+
+---
+
+## 0. Findings at a glance
+
+| # | Issue | Severity | Real fix | Data write needing approval |
+|---|---|---|---|---|
+| 1a | 13 staff routes have no role guard (caregiver/client can open them) | 🟠 UX/defense-in-depth | Route guard in `App.tsx` | — |
+| 1b | **Caregivers (and clients) can read *and write* other caregivers' rows**, and read families / care requests / client care needs / all ratings in their agency — policies check *agency membership*, not *staff role* | 🔴 | RLS migration M-SEC-1 | — |
+| 1c | **A caregiver can edit protected columns on their own `caregivers` row** (pay rate, status, office) and possibly **their own `profiles.agency_id`** — no WITH CHECK, no column guard | 🔴 (cross-tenant if 1c-profiles confirms) | Trigger migration M-SEC-2 | — |
+| 1d | Clients can read every caregiver in the agency incl. email, phone, **hourly_rate** (client portal) | 🟠 | Separate decision (Q3) | — |
+| 2a | Temporary passwords stored in plain text in `pending_notifications.body` **and** `payload.temp_password`, returned to the browser, shown in 3 dialogs + the outbox, kept forever | 🔴 | Invite / recovery links (Supabase Auth), no stored secret | Redact existing rows (§2.5) |
+| 2b | `admin-reset-password` has **no agency check** on the target user | 🔴 | Add tenant check in the function | — |
+| 3a | One Supabase project (`rgeldgztadebgvrdhaqa`) is dev, demo and production at once | 🟠 process | Owner decision; no config change here | — |
+| 3b | `/caregiver-registration`, `/a/:slug/apply`, and the caregiver path on `/` and `/assistant` insert a `conversation_sessions` row on page load | 🟡 | Defer insert in `useConversationFlow` | Delete the 2 capture rows (§3.3) |
+
+**Why M1 didn't catch 1b/1c:** M1 and M-Office proved **tenant** isolation (Agency A vs Agency B,
+Office X vs Office Y). They never tested **role** isolation *inside* one agency (caregiver vs
+staff). Every 1b policy is "same agency ⇒ allowed", which M1 correctly marked ✅ for its
+question (`m1-security-gate-plan.md:47-60`). This plan closes the other axis.
+
+---
+
+## 1. Issue 1 — caregiver (and client) access to staff pages and data
+
+### 1.1 Route audit (every route in `src/App.tsx`)
+
+There is **no route-level guard**; `App.tsx:55-101` mounts pages directly and `AppLayout` does
+no session/role check. Each page guards itself, inconsistently. `get_user_role(uid)` returns the
+single highest role (`system_admin > agency_admin > manager > scheduler > hr_staff > caregiver`;
+**`client` is missing from its `ORDER BY CASE`**, so it sorts last — harmless today, noted).
+
+| Route | Page | Session check | Role check | Caregiver today | Client today | Audience → proposed guard |
+|---|---|---|---|---|---|---|
+| `/dashboard` | Dashboard | ✓ | **none** | staff dashboard (screen 77) | same | staff → **STAFF** |
+| `/schedule` (+ `/live-operations`, `/quick-assign`, `/auto-schedule` redirects) | Schedule | ✓ | **none** | Schedule incl. Assign (screen 78) | same | staff → **STAFF** |
+| `/caregivers` | Caregivers | ✓ | **none** (role only toggles some buttons) | full roster, Edit/Delete (screen 79) | same | staff → **STAFF** |
+| `/clients` | Clients | ✓ | STAFF at 121-125, **but a NULL role passes** (`if (roleData)`) | redirected `/` | redirected `/` | staff → **STAFF** |
+| `/client-inquiries` | ClientInquiries | **none** | none | care requests list + actions | same; **logged-out renders too** | staff → **STAFF** |
+| `/time-off` | TimeOffRequests | ✓ | none (approve buttons gated) | agency list + create | same | staff → **STAFF** |
+| `/shift-trades` | ShiftTrades | ✓ | manager/agency_admin/system_admin/scheduler | → `/available-shifts` | → `/available-shifts` | keep in-page list; wrap **STAFF** |
+| `/flow-builder` | FlowBuilder | **none** | none | flow editor | same | staff → **STAFF** |
+| `/caregiver-approvals` | CaregiverApprovals | ✓ | none (buttons gated) | registrations list (RLS-limited) | same | staff → **STAFF** |
+| `/notifications-outbox` | NotificationsOutbox | **none** | none | outbox (RLS returns nothing to non-staff) | same | staff → **STAFF** |
+| `/care-types`, `/care-service-categories` | CareTypes | **none** | none | catalog + edit buttons | same | staff → **STAFF** |
+| `/order-management` | OrderManagement | ✓ | none | Care Plan list | same (client role has an `orders` grant) | staff → **STAFF** (Q4) |
+| `/knowledge-base` | KnowledgeBase | ✓ | none (edit gated) | doc list (RLS-limited) | same | staff → **STAFF** |
+| `/reports` | Reports | toast only | none | reports | same | staff → **STAFF** |
+| `/admin-user-management` | AdminUserManagement | **none on mount** | none | user-creation form | same | admin → **ADMIN** |
+| `/users`, `/users/add`, `/users/edit/:id` | Users/AddUser/EditUser | ✓ | admin → else `/dashboard` | bounced to staff Dashboard | same | **ADMIN** |
+| `/user-roles` | UserRoles | ✓ | admin → else `/` | `/` | `/` | **ADMIN** |
+| `/agency-settings` | AgencySettings | ✓ | admin → else `/dashboard` | bounced to Dashboard | same | **ADMIN** |
+| `/virtual-offices`, `/virtual-offices/:id` | VirtualOffices/Config | ✓ | admin+manager → else `/dashboard` | bounced to Dashboard | same | **STAFF** wrap, keep in-page list |
+| `/system-admin(-dashboard)`, `/system-roles`, `/role-permissions`, `/admin-utilities` | … | ✓ | system_admin (AdminUtilities renders before the check resolves) | bounced / `/` | same | **SYSTEM_ADMIN** |
+| `/caregiver-dashboard`, `/caregiver-schedule` | CaregiverToday/Schedule | ✓ | none; needs a `caregivers` row | own data | empty shell + toast | caregiver → session only (see 1.2 note) |
+| `/available-shifts`, `/caregiver-time-off`, `/caregiver-settings` | dual-shell pages | ✓ (AvailableShifts: toast only) | none; needs a `caregivers` row | own data | empty AppLayout | session only |
+| `/client-dashboard` | ClientDashboard | ✓ | none; needs a `clients` row | empty + toast | own data | session only |
+| `/`, `/auth`, `/a/*`, `/caregiver-registration`, `/assistant`, `/.lovable/oauth/consent`, `*` | public | — | — | — | — | unguarded (consent keeps its own `next` redirect) |
+
+Sidebar note: caregivers are seeded `schedule` read (shows "Schedule" → staff page); clients are
+seeded `schedule` and `orders` read and have **no** `client_dashboard` menu entry
+(`20251122234531:209-214`, `20260726192642:63-66`). See §1.5 optional M-SEC-4.
+
+### 1.2 Frontend guard (reuses `get_user_role` + the Clients.tsx pattern; no second mechanism)
+
+- New `src/components/auth/RequireRole.tsx` wrapping routes in `App.tsx`:
+  `getSession()` → none ⇒ `/auth?next=<path>` (Auth already honors `next`);
+  `rpc('get_user_role', {_user_id})` → **NULL is denied** (fixes the Clients.tsx hole) ⇒ `/auth`
+  with the existing "pending approval" message; role ∉ allow ⇒ the role's home + toast.
+  Renders a spinner until resolved (no content flash — the AdminUtilities problem).
+- The role → home mapping moves out of `Auth.tsx:29-41` (`routeByRole`) into
+  `src/lib/roleHome.ts` and is used by both — caregiver → `/caregiver-dashboard`, client →
+  `/client-dashboard`, system_admin → `/system-admin-dashboard`, staff → `/dashboard`. One
+  mapping, two callers.
+- Allowlists: `STAFF = system_admin, agency_admin, manager, scheduler, hr_staff`;
+  `ADMIN = system_admin, agency_admin`; `SYSTEM_ADMIN = system_admin`. Existing in-page checks
+  stay as a second layer (narrower lists on `/shift-trades`, `/virtual-offices` remain the
+  pages' own).
+- **Caregiver / client routes stay session-only** (not role-guarded): `get_user_role` collapses a
+  staff+caregiver user to the staff role, so a `['caregiver']` guard would lock such a user out of
+  their own caregiver app; these pages already show only the caller's own rows. Their data
+  exposure is closed by RLS (§1.3), not by the route.
+- This is defense-in-depth/UX. **The real fix is §1.3** — a caregiver with the anon key and their
+  JWT can call PostgREST directly regardless of any route.
+
+### 1.3 Database: what a caregiver can read/write today [derived from migrations; to confirm live]
+
+`current_agency_id()` = the caller's `profiles.agency_id` — **set for caregivers and clients
+too** (enable-caregiver-login / enable-client-login / approve-caregiver-registration upsert
+`profiles.agency_id`). So any policy of the form "row.agency_id = my profile's agency" without
+`is_agency_staff()` admits caregivers and clients.
+
+| Table | Policy that admits a caregiver | Caregiver can | Client can | Needed by caregiver app? |
+|---|---|---|---|---|
+| `caregivers` | "Agency users can manage their caregivers" — `FOR ALL`, agency (+office if restricted), **no role check** | **SELECT/INSERT/UPDATE/DELETE every caregiver in the agency** (email, phone, address, hourly_rate, reliability…) | read all via "Clients view caregivers (agency scope)" + same FOR ALL policy ⇒ **write too** | own row only (`user_id = auth.uid()`, policy already exists) |
+| `caregiver_performance` (view, `security_invoker`) | inherits `caregivers` | read all caregivers' stats | read all | own row (Today rating line) |
+| `caregiver_skills` | "Agency users can manage caregiver skills" — `FOR ALL`, agency join | **read/write any caregiver's skills** (changes eligibility outcomes) | same | own (policy exists) |
+| `caregiver_availability` | "Agency users can manage caregiver availability" — `FOR ALL` | **read/write any caregiver's availability** | same + client read policy | own (policy exists) |
+| `client_care_needs` | "Agency users can manage client care needs" — `FOR ALL` | **read/write every client's care needs** (care-type codes + priority; health-adjacent) | same | no |
+| `families` | `families_select_agency_or_own` agency branch has no `is_agency_staff` | read all families | read all families | no |
+| `care_requests` | `care_requests_select` agency branch has no `is_agency_staff` | **read all family inquiries** (contact details, needs, notes) | read all | no |
+| `shift_ratings` | "Agency staff can view ratings…" — agency only | read every rating/comment for every caregiver | read all | own ratings (via `caregiver_performance`) |
+| `shift_trades` | view/update/insert gated on "original caregiver is in my agency" | **read and UPDATE any trade in the agency** (status/approval fields) | same | own requests (`fetchMyTradeRequests`, filtered client-side) |
+| `profiles` | own row SELECT; agency_admin agency read | own only ✅ | own only ✅ | own |
+| `clients` | staff role list | none ✅ (uses `get_caregiver_visible_clients()`) | own ✅ | via RPC |
+| `shifts` | assigned-to-me; open/unassigned in my office (Phase 1B) | own + open in own office ✅ | own ✅ | yes |
+| `shift_assignments` | `my_caregiver_ids()` | own ✅ | — | yes |
+| `time_entries`, `earnings_lines`, `time_off_requests`, `caregiver_certifications`, `caregiver_preferences`, `caregiver_availability_exceptions` | own via `my_caregiver_ids()`; staff via `is_agency_staff` | own ✅ | — | yes |
+| `virtual_office`, `agency` | same agency SELECT | read office/agency config (non-sensitive) | same | branding/offices — leave |
+
+**Self-update with no column guard (1c):**
+- `caregivers` "Caregivers can update their own profile" — `FOR UPDATE USING (user_id = auth.uid())`,
+  no WITH CHECK, and the only BEFORE UPDATE triggers are `updated_at` and
+  `freeze_caregiver_performance_rating`. A caregiver can set their own `hourly_rate`, `status`,
+  `employment_type`, `virtual_office_id` (defeats eligibility Rule B), `agency_id`, `user_id`.
+- `profiles` "Users can update their own profile" — same shape, no trigger protecting
+  `agency_id` / `virtual_office_id` / `office_restricted`. **If confirmed live, any signed-in user
+  can set their own `profiles.agency_id` to another agency's UUID, and `current_agency_id()` then
+  returns that agency for every policy and RPC that relies on it — a cross-tenant escape that
+  undoes M1.** (Agency UUIDs are not secret: they appear in public-office payloads.) This is the
+  highest-priority item to confirm in E1.
+
+**Known-issues "caregiver-shifts RLS gap" folded in:** the entry "Caregivers cannot see
+open/unassigned shifts" (`known-issues.md:369`, and the CLAUDE.md Phase-0 line "caregiver-shifts
+RLS gap … deferred") was **closed by Phase 1B** — the live set is "Caregivers read their own
+assigned shifts" + "Caregivers view open shifts in their office" (`20260915215024`), product
+decision taken = *all open shifts in the caregiver's own office*. This plan **keeps** that set
+unchanged and records the entry as RESOLVED. One residual noted for a decision (Q5): the open-shift
+policy returns the **whole** `shifts` row to any caregiver in the office, including
+`special_instructions` / `special_notes` (free text that can carry care details) and `pay_rate`.
+
+### 1.4 Proposed migrations (drafts — shown for review, not pushed)
+
+Principle: **minimal change** — add the missing `is_agency_staff(auth.uid())` to the existing
+predicate, keep every self-policy, keep tenant/office clauses exactly as they are; no new grants
+to anyone; no RPC signature changes (rule 13 not triggered); every new `SECURITY DEFINER`
+function REVOKE-before-GRANT and verified (rule 14).
+
+**M-SEC-1 `2026100xxxxxx_role_scope_staff_policies.sql`** (one transaction)
+
+```sql
+-- caregivers: staff-only management; self + client read policies unchanged
+DROP POLICY IF EXISTS "Agency users can manage their caregivers" ON public.caregivers;
+CREATE POLICY "Agency staff manage caregivers in scope" ON public.caregivers
+FOR ALL TO authenticated
+USING (
+  is_agency_staff(auth.uid())
+  AND agency_id IN (SELECT p.agency_id FROM public.profiles p WHERE p.id = auth.uid())
+  AND (NOT is_office_restricted(auth.uid()) OR virtual_office_id = current_virtual_office_id())
+)
+WITH CHECK ( /* identical */ );
+
+-- caregiver_skills / caregiver_availability / client_care_needs: same edit — prepend
+-- is_agency_staff(auth.uid()) AND to the existing USING, add an identical WITH CHECK.
+-- Self policies ("Caregivers can manage their own …", "Clients can manage their own care needs") unchanged.
+
+-- families: agency branch gets the staff check; system_admin + own-family branches unchanged
+-- care_requests: agency branch gets the staff check; client/family own branches unchanged
+
+-- shift_ratings: staff read + caregiver reads ratings about themselves (keeps the Today rating)
+DROP POLICY IF EXISTS "Agency staff can view ratings in their agency" ON public.shift_ratings;
+CREATE POLICY "Agency staff view ratings in their agency" ON public.shift_ratings
+FOR SELECT TO authenticated
+USING (is_agency_staff(auth.uid()) AND agency_id = current_agency_id());
+CREATE POLICY "Caregivers view their own ratings" ON public.shift_ratings
+FOR SELECT TO authenticated
+USING (caregiver_id IN (SELECT public.my_caregiver_ids()));
+
+-- shift_trades: staff manage (agency-wide, as today — office scoping stays deferred per
+-- known-issues §38); caregivers read only trades they are party to; caregivers INSERT only
+-- their own outgoing trade (future give-up flow); caregivers never UPDATE (pickups go through
+-- the SECURITY DEFINER caregiver_pickup_trade_shift()).
+--   "Agency staff can view/manage shift trades"   -> + is_agency_staff(auth.uid())
+--   NEW "Caregivers read their own trades"         -> original_caregiver_id OR new_caregiver_id IN my_caregiver_ids()
+--   "Agency staff and caregivers can create …"     -> staff-in-agency OR original_caregiver_id IN my_caregiver_ids()
+```
+
+`caregiver_performance` needs no change: as a `security_invoker` view it follows `caregivers`.
+
+**M-SEC-2 `2026100xxxxxx_protect_self_update_columns.sql`**
+
+```sql
+-- One trigger function per table. Non-staff callers updating their OWN row may change only
+-- personal fields; scope/compensation columns are frozen. Service-role/Edge-Function writes
+-- (auth.uid() IS NULL) and staff in scope are unaffected.
+CREATE FUNCTION public.protect_profile_scope_columns() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  IF auth.uid() IS NOT NULL
+     AND NOT has_role(auth.uid(),'system_admin')
+     AND NOT (has_role(auth.uid(),'agency_admin') AND OLD.agency_id = current_agency_id())
+     AND (NEW.agency_id IS DISTINCT FROM OLD.agency_id
+          OR NEW.virtual_office_id IS DISTINCT FROM OLD.virtual_office_id
+          OR NEW.office_restricted IS DISTINCT FROM OLD.office_restricted) THEN
+    RAISE EXCEPTION 'Not allowed to change agency/office scope';
+  END IF;
+  RETURN NEW;
+END $$;
+REVOKE ALL ON FUNCTION public.protect_profile_scope_columns() FROM PUBLIC, anon, authenticated;
+CREATE TRIGGER trg_protect_profile_scope BEFORE UPDATE ON public.profiles
+FOR EACH ROW EXECUTE FUNCTION public.protect_profile_scope_columns();
+
+-- caregivers: for a non-staff caller, freeze agency_id, virtual_office_id, user_id,
+-- hourly_rate, employment_type, status, reliability_score (+ any other column in the live
+-- column list that is not on the personal allowlist used by CaregiverProfileSettings:
+-- names, email, phone, address fields, service_zipcodes, bio/photo — exact list fixed after
+-- E1 reads the live column set).
+```
+
+**M-SEC-3 `2026100xxxxxx_get_my_trade_requests.sql`** — needed because M-SEC-1 narrows
+`caregivers` to the own row, so `fetchMyTradeRequests`' embed
+`new_caregiver:new_caregiver_id(first_name,last_name)` would silently resolve to `null`
+(the exact "Unknown client" failure mode recorded in known-issues §157). Replace the embed with a
+`SECURITY DEFINER` RPC `get_my_trade_requests()` returning the caller's trades plus the other
+party's **first name + last initial only**. `REVOKE ALL ... FROM PUBLIC, anon; GRANT EXECUTE ...
+TO authenticated;` then verify with `aclexplode(proacl)`. `src/lib/caregiverBoard.ts` switches to it.
+
+**M-SEC-4 (optional, Q4) — menu seeds:** set `can_read=false` for caregiver `schedule` and
+client `schedule`/`orders` in `role_permissions`, and re-seed a `client_dashboard` module for
+the client role, so caregiver/client sidebars stop linking to staff pages.
+
+**Not in this change (needs a product decision, Q3):** clients' read of all agency caregivers
+(`CareTeam.tsx:53`, `CareCircle.tsx:78`, and `OrdersManagement.tsx:195`, which selects
+`hourly_rate` for a "request a caregiver" picker). Narrowing it to caregivers on the client's own
+shifts via an RPC would change the client portal's request flow.
+
+### 1.5 Breakage check (every authenticated-client write/read to the tightened tables)
+
+| Path | Role | After M-SEC-1/2 |
+|---|---|---|
+| `Caregivers.tsx` 239/289/388/437 (caregivers), 256/265/312 (skills) | staff | ✓ unchanged (staff pass `is_agency_staff`) |
+| `Clients.tsx` 329/340/381 (client_care_needs) | staff | ✓ |
+| `AvailabilityDialog.tsx` 115/225/245 | staff **and** caregiver (own) | ✓ staff policy + own policy |
+| `CaregiverProfileSettings.tsx` 110 (caregivers), 169/197 (skills), 133 (profiles) | caregiver own | ✓ own policies; M-SEC-2 rejects only frozen columns — verify the form never sends them (E1 grep of its update payload) |
+| `ProfileSettings.tsx` (client) 137/154 client_care_needs, clients | client own | ✓ own policies |
+| `FamilyDialog.tsx` 88, `ClientInquiries.tsx` 183/197 | staff | ✓ |
+| `ShiftTrades.tsx` 183/207/248, `TimeOffDecisionDialog.tsx` 94 | staff | ✓ |
+| `fetchMyTradeRequests` (caregiver) | caregiver | ✓ via M-SEC-3 |
+| `CaregiverToday` rating (`caregiver_performance`) | caregiver | ✓ own row + "view their own ratings" |
+| Edge Functions (approve-caregiver-registration, enable-*-login, link-existing-accounts) | service_role | ✓ bypass RLS; M-SEC-2 skips `auth.uid() IS NULL` |
+| `Caregivers.tsx:223`, `Clients.tsx:303` — staff updating *another user's* `profiles` row | staff | **already fails today** (no staff UPDATE policy on `profiles`) — pre-existing, logged, not changed here |
+| `useMenuBadgeCounts` (care_requests, shift_trades counts) | staff | ✓ |
+| Client portal reads of `caregivers` | client | ✓ unchanged (client policy kept, Q3) |
+
+---
+
+## 2. Issue 2 — passwords in the notification outbox
+
+### 2.1 Every path that stores, returns or shows a password
+
+| Path | Generates | Stored in DB | Returned to browser | Shown in UI |
+|---|---|---|---|---|
+| `enable-client-login/index.ts:66` | `Care-` + 10 hex | `pending_notifications.body` ("Temporary password: …") **and** `payload.temp_password` (102-110) | `tempPassword` (112) | `Clients.tsx:1223-1253` dialog + copy button |
+| `enable-caregiver-login/index.ts:72` | same | same (111-119) | (121) | `Caregivers.tsx:1127-1157` |
+| `approve-caregiver-registration/index.ts:127` | same (registration never collects a password) | same (254-262) | (264) | `CaregiverApprovals.tsx:543-577` |
+| `NotificationsOutbox.tsx:36,117` | — | — | — | renders `body` in full to any staff role (incl. scheduler, hr_staff); "Mark delivered" keeps the row; no delete policy ⇒ kept forever |
+| `create-user/index.ts:76-94` | admin-chosen | not stored | no | no (admin knows it) |
+| `admin-reset-password/index.ts:68-92` | admin-chosen | not stored | no | no (admin knows it) — **no tenant check on `userId`** (2b) |
+| Password change in `CaregiverProfileSettings.tsx:211-238` / client `ProfileSettings.tsx:199-226` | user | Supabase Auth only | — | "Current password" collected but never verified; 6-char min vs `validation.ts` 8–72 |
+
+No email/SMS is sent anywhere — the outbox is manual copy-paste (`NotificationsOutbox.tsx:69-72`).
+No `[auth]` section in `supabase/config.toml`; no reset/recovery route exists in the app.
+
+### 2.2 Replacement design — no password ever generated, stored or displayed by the app
+
+1. **New `/auth/set-password` route** (public): handles the Supabase Auth `PASSWORD_RECOVERY`
+   / invite session from the link, asks for a new password (8–72, `validation.ts`), calls
+   `supabase.auth.updateUser({ password })`, then routes by role (`roleHome.ts`). Auth page gets
+   a "Forgot password?" link calling `resetPasswordForEmail(email, { redirectTo })`.
+2. **enable-client-login / enable-caregiver-login / approve-caregiver-registration:**
+   - new account: `auth.admin.inviteUserByEmail(email, { redirectTo: <site>/auth/set-password, data })`
+     (Supabase emails a one-time link) — or, in fallback mode, `auth.admin.generateLink({type:'invite'})`.
+   - existing account: nothing to set (they keep their own password) — or send a recovery link on request.
+   - `pending_notifications` row keeps an audit line only: *"Account created; set-password link
+     sent to <email> on <date>"* — **no password, no link, no `temp_password` key.**
+   - HTTP response drops `tempPassword`; the three dialogs change to "An email with a link to set
+     a password was sent to …" (fallback mode: "Copy one-time link" shown once, never stored).
+3. **admin-reset-password:** replace "admin types a new password" with "send reset link"
+   (`generateLink({type:'recovery'})` / `resetPasswordForEmail`), and **add the missing tenant
+   check**: the target's `profiles.agency_id` must equal the caller's (system_admin excepted),
+   the same guard enable-*-login already have. `create-user` likewise moves to invite-by-email;
+   the dead "Require password change on first login" checkbox in `AddUser.tsx` is removed.
+4. **Email delivery is the dependency (Q1).** Supabase's built-in mailer only delivers to the
+   project's own team addresses and is heavily rate-limited; real invites need **custom SMTP**
+   configured in the Supabase dashboard (e.g. Resend/SendGrid/Postmark) plus Site URL /
+   redirect URLs. That is a dashboard configuration the owner does — this plan does not touch it.
+   - **Mode A (recommended, needs SMTP):** Supabase sends invite/recovery emails. Nothing secret
+     ever passes through the app.
+   - **Mode B (interim, no SMTP):** `generateLink` returns a one-time, expiring link that is shown
+     **once** to the admin in the dialog to deliver by hand, and never written to any table or log.
+     Strictly better than today (single-use, expiring, not stored), but the admin still handles a
+     credential — move to Mode A when SMTP exists.
+5. `NotificationsOutbox.tsx`: add `caregiver_login_created` to `kindLabels`; nothing else needed
+   once bodies carry no secrets.
+
+### 2.3 Rule 13/14 relevance
+No SQL functions change for issue 2 (Edge Functions only). If a helper RPC is added for the
+tenant check, it follows rule 14.
+
+### 2.4 Exposure that redaction alone does not fix
+- **Every temp password ever issued is still a valid credential** unless the user changed it.
+  After Mode A/B ships, the affected accounts (recipients of the redacted rows) should get a forced
+  reset: set a random unknown password via the Admin API and send a set-password link. List shown
+  for approval with §2.5.
+- The temp passwords also traveled through HTTP responses and admins' clipboards — not
+  recoverable, covered by the forced reset.
+- `supabase/migrations/20251110220912_*.sql:20-33` seeds the owner's own `auth.users` row with a
+  literal, weak password hash committed in git. If that account still uses it, change it (owner
+  action; not something this plan does).
+
+### 2.5 Redaction of rows already stored (DATA WRITE — needs approval with the count)
+
+Count first (read-only; run in E1 as system_admin or with the DB connection):
+
+```sql
+SELECT kind, (sent_at IS NOT NULL) AS delivered, agency_id, count(*)
+FROM public.pending_notifications
+WHERE payload ? 'temp_password' OR body ~* 'temporary password'
+GROUP BY 1,2,3 ORDER BY 1,2;
+-- plus the recipient list for the forced reset:
+SELECT id, kind, recipient_email, created_at FROM public.pending_notifications
+WHERE payload ? 'temp_password' OR body ~* 'temporary password' ORDER BY created_at;
+```
+
+**Row count: not yet known** — the probe login failed (see header). It will be reported in E1 and
+the write waits for approval. Proposed write (one transaction, applied as a reviewed migration so
+it is recorded in history):
+
+```sql
+UPDATE public.pending_notifications
+SET body    = regexp_replace(body, '(temporary password)\s*:?\s*\S+', '\1: [redacted 2026-10]', 'gi'),
+    payload = payload - 'temp_password'
+WHERE payload ? 'temp_password' OR body ~* 'temporary password';
+-- verify: the count query above returns 0 rows
+```
+
+---
+
+## 3. Issue 3 — Supabase projects and write-on-load
+
+### 3.1 Projects found (no configuration changed)
+
+| Project ref | Where | Described as | Used by the app now? |
+|---|---|---|---|
+| `rgeldgztadebgvrdhaqa` | `.env.local` (`VITE_SUPABASE_PROJECT_ID`, `VITE_SUPABASE_URL`); `supabase/config.toml:1`; `supabase/.temp/project-ref` + `linked-project.json` (name "caremuch") | commit `6929a20` (2026-08-27): "the new caremuch dev project"; `m1-security-gate-plan.md:6`: "the production database"; `CLAUDE.md:227` "dev project"; Ripple schema plan "dev project only" | **Yes — the only live project** (frontend, CLI link, Edge Functions) |
+| `jipsobxiblzgivjmtwtq` | `.env.local:1` comment "old/unused"; **`supabase/functions/mcp/index.ts:165`** (OAuth issuer); `known-issues.md:585,596`; old `.env` (URL + anon key) in git history before `a297165` | old Lovable Cloud project, disconnected | No — except the stale issuer in the `mcp` function (open in known-issues) |
+
+`.env.example`, `Dockerfile` (build ARGs only), `fly.toml`, `src/integrations/supabase/client.ts`
+(reads env) and `package.json` contain no other ref. **No doc or config describes a separate
+dev/staging project.**
+
+**Which holds Kind Care and Ripple data:** `rgeldgztadebgvrdhaqa` — agency `56fbfe38` with offices
+Primary Office, Kind Care Services and Ripple Effects (m-office plan, M1 §7).
+
+**Corrected (owner, Oct 1 — `docs/Ripple_UI_Plan_Decisions_2026-10-01.md`):** `rgeldgztadebgvrdhaqa`
+is the **DEV project**. **No production project exists yet**, and no real clients have been entered.
+The "production database" wording in `m1-security-gate-plan.md` (and the SEED doc / Ripple UI
+plan R13) has been corrected. No other project is to be created. The rows that *looked* real in
+`/client-inquiries` and `/caregiver-approvals` are listed in §6.4 for the owner to judge; they are
+not changed. Whether `jipsobxiblzgivjmtwtq` (the old Lovable Cloud project) still exists cannot be
+known from the repo; its anon key is in git history.
+
+Consequence for this plan: migrations and tests run on the dev project with **disposable fixtures
+and verified teardown** (the M1 pattern), never touching existing accounts' data.
+
+### 3.2 Write-on-load fix
+
+Today `useConversationFlow.ts:101-124` inserts `conversation_sessions` on mount unless
+`deferSession` is set; `ChatWidget` (`/caregiver-registration`) and `ConversationSurface`
+(`/a/:slug/apply`, and the caregiver path on `/` and `/assistant`) don't set it.
+`FamilyIntakeSurface` passes `deferSession: true` and creates the row in `ensureSession`
+on the first answer (`:137-157`, called from `answer()` :176 and `submitIntake()` :281).
+
+Change, all inside `src/hooks/useConversationFlow.ts` so every caller benefits:
+1. Make deferral the default (the mount branch only initializes state; no insert).
+2. **Single-flight `ensureSession`:** keep the in-flight promise in a ref
+   (`pendingRef.current ??= insert()`), cleared on error — today a fast double-tap or
+   multi-select Continue can call it twice before `sessionRef` is set and create two rows with
+   answers split between them.
+3. Include `current_node_id` in the deferred insert (parity with the old mount insert).
+4. `back`, `rewindTo`, `complete`, `linkRegistration` read `sessionRef.current` instead of the
+   `sessionId` state, so a one-question flow or a stale closure can't skip `flow_session_complete`
+   / `flow_session_link_registration`; the hook also returns `sessionRef.current?.id` for
+   `ChatWidget`'s `onComplete`.
+5. `FamilyIntakeSurface`'s explicit `deferSession: true` becomes redundant (kept harmlessly).
+
+No resume path depends on an early session id (no localStorage resume exists); visitors who
+leave without answering produce no row, which is the intent.
+
+### 3.3 The 2 empty anonymous rows from 2026-10-01 (DATA WRITE — needs approval)
+
+Not yet listed: `/caregiver-registration` sessions have `agency_id = NULL`, which only
+`system_admin` (or the DB connection) can read, and the probe login failed. E1 runs:
+
+```sql
+SELECT s.id, f.audience, s.agency_id, s.created_at, s.status
+FROM public.conversation_sessions s JOIN public.conversation_flows f ON f.id = s.flow_id
+WHERE s.user_id IS NULL AND s.status = 'in_progress'
+  AND s.completed_at IS NULL AND s.submitted_at IS NULL AND s.registration_id IS NULL
+  AND s.contact_name IS NULL AND s.client_name IS NULL
+  AND s.created_at >= '2026-10-01 12:00-04' AND s.created_at < '2026-10-02 06:00-04'
+  AND NOT EXISTS (SELECT 1 FROM public.conversation_answers a WHERE a.session_id = s.id)
+  AND NOT EXISTS (SELECT 1 FROM public.care_requests c WHERE c.session_id = s.id);
+```
+
+The rows found (expected 2, from screen 04 desktop + mobile) are shown to you **by id**; only on
+approval: `DELETE FROM public.conversation_sessions WHERE id IN (<the approved ids>)` with the same
+NOT-EXISTS guards repeated in the statement, then re-query to confirm 0.
+
+---
+
+## 4. Execution order (after approval) and done-tests
+
+| Step | What | Gate |
+|---|---|---|
+| **E1 — live pre-flight (read-only)** | Needs **working test logins** (update the `SCREENSHOT_*` passwords) **or** the DB password ad hoc (memory: direct `pg`, never stored). Snapshot `pg_policies` + triggers for every table in §1.3 to confirm the static replay; **confirm or refute the `profiles.agency_id` self-update escape** (catalog check, no write); read the `caregivers` column list; run the §2.5 count + recipient list and the §3.3 row list. | Report back; nothing written |
+| E2 | M-SEC-1, M-SEC-2, M-SEC-3 shown as files for review → push one at a time → verify `pg_policies` and `aclexplode(proacl)` (no `PUBLIC`/`anon` EXECUTE on the new functions) | your approval per migration |
+| E3 | Frontend: `RequireRole` + `roleHome.ts` + `App.tsx` wrapping; `caregiverBoard.ts` → `get_my_trade_requests()` | code review |
+| E4 | Issue 2 code (Edge Functions, `/auth/set-password`, dialogs, Auth "Forgot password?") in Mode A or B per Q1; deploy functions | Q1 answered |
+| E5 | §2.5 redaction (+ forced-reset list) | **your approval with the count** |
+| E6 | Write-on-load change | code review |
+| E7 | §3.3 deletion | **your approval with the ids** |
+| E8 | Tests below | — |
+| E9 | `docs/known-issues.md` (close §369/caregiver-shifts entry, add + close the role-isolation, self-update, outbox-password, reset-tenant and write-on-load entries; leave Q3/Q5 items open); CLAUDE.md's Phase-0 "caregiver-shifts RLS gap … deferred" line updated only if you want CLAUDE.md touched | — |
+
+**Done-tests (real JWTs through PostgREST, M1-style disposable fixtures, teardown verified by re-query):**
+fixtures = in agency `56fbfe38`: two disposable caregivers CG-A, CG-B (with logins), one
+disposable client CL-A (login), one disposable manager; plus one disposable second agency with
+one admin for the cross-tenant check. Run **before** E2 (expect the 🔴 rows to *fail*, proving
+the test detects the gap) and **after** (expect all pass).
+
+1. CG-A: `caregivers` returns exactly 1 row (own); `caregiver_performance` 1 row; `profiles` 1;
+   `caregiver_skills`/`caregiver_availability`/`client_care_needs`/`families`/`care_requests`
+   return none of other people's rows; `shift_ratings` only rows about CG-A; `shift_trades` only
+   trades CG-A is party to.
+2. CG-A write attempts on CG-B: UPDATE `caregivers` (hourly_rate), INSERT/DELETE
+   `caregiver_skills`, UPDATE `caregiver_availability`, UPDATE a `shift_trades` row → 0 rows
+   affected / RLS error.
+3. CG-A self-update: own phone/address succeed; own `hourly_rate`, `status`, `virtual_office_id`,
+   `agency_id` rejected; own `profiles.agency_id` → other agency rejected.
+4. CG-A app still works: Today (own shifts, hours, rating), Schedule, Available Shifts (open +
+   trade shifts, pick-up via RPC), My trade requests with the other party's name, Settings save,
+   Availability save, Time Off.
+5. Manager: Caregivers, Clients, Schedule, Trade Board, Client Inquiries, Approvals unchanged
+   (counts equal the pre-change snapshot).
+6. Routes (browser, CG-A and CL-A sessions): each STAFF/ADMIN/SYSTEM_ADMIN route → redirected to
+   `/caregiver-dashboard` / `/client-dashboard`; logged-out → `/auth?next=…`; null-role user →
+   pending message.
+7. Issue 2: enable a login for a disposable caregiver and approve a disposable registration →
+   `pending_notifications` row has no password and no `temp_password` key; HTTP response has no
+   `tempPassword`; the outbox shows none; the link sets a password and signs in;
+   `admin-reset-password` from the second agency's admin against CG-A → 403.
+   After E5: the count query returns 0.
+8. Issue 3: load `/caregiver-registration` and `/a/ripple-effects/apply` (and the caregiver path on
+   `/`) without answering → `conversation_sessions` count unchanged; answer one question → exactly
+   one row; double-tap the first answer → still one row.
+9. Teardown: fixtures deleted, re-query shows 0 rows for every fixture id.
+
+---
+
+## 5. Questions for you
+
+| # | Question |
+|---|---|
+| Q1 | Email for invites/resets: will you configure custom SMTP in the Supabase dashboard (Mode A), or ship Mode B (one-time link shown once to the admin) first? |
+| Q2 | Should a separate dev/staging Supabase project be created so tests and migrations stop running against the database with Kind Care / Ripple data? (Out of scope to do here; affects how E8 runs.) |
+| Q3 | Clients can currently read every agency caregiver incl. hourly_rate (client "request a caregiver" picker). Narrow it now (changes the client portal flow) or log it as a follow-up? |
+| Q4 | Apply M-SEC-4 (remove staff Schedule/Care Plan links from caregiver/client sidebars, add a Client Dashboard menu entry)? It also makes `/order-management` staff-only — confirm clients are not meant to create orders there (they have the Client Dashboard "Care Plans" tab). |
+| Q5 | Open-shift visibility returns the whole `shifts` row (incl. `special_notes`, `special_instructions`, `pay_rate`) to every caregiver in the office. Narrow via a view/RPC now or log for later? |
+| Q6 | E1 needs either corrected `SCREENSHOT_*` passwords in `.env.local` or the DB password pasted ad hoc (not stored; please rotate it afterwards, as last time). Which? |
+
+---
+
+## 6. E1 results — live, read-only (2026-10-02)
+
+Method: direct `pg` connection to the dev project with the password from `SUPABASE_DB_PASSWORD`
+(never printed or written). The session was forced `default_transaction_read_only = on` and
+verified before any query. Only SELECTs were issued. Visibility was simulated per user with
+`BEGIN READ ONLY; SET LOCAL ROLE authenticated; set_config('request.jwt.claims', {sub})`, then
+ROLLBACK. That runs the real RLS policies as that user. The JWT-through-PostgREST done-tests still
+run in E8 with disposable logins.
+
+### 6.1 A1 — `user_roles` / `system_roles` / `role_permissions`, and `profiles` (reported first)
+
+| Table | Live policies (writes) | Self/other escalation by a non-admin? |
+|---|---|---|
+| `user_roles` | "System admins manage all roles" (ALL); "Agency admins manage roles in their own agency" (ALL, `agency_admin AND row.agency_id = current_agency_id() AND target's profile agency = row.agency_id`); "Users can view their own roles" (SELECT) | **caregiver / client / manager / scheduler / hr_staff: NO.** They have no INSERT/UPDATE/DELETE path. 🔴 **agency_admin: YES.** The CHECK never restricts `role`, so an agency_admin can INSERT `role = 'system_admin'` for themselves or any user in their agency. That gives platform-wide, cross-tenant power. No trigger on `user_roles`. |
+| `system_roles` | "System admins can manage system roles" (ALL, CHECK null, so it uses USING) | No (system_admin only) |
+| `role_permissions` | "System admins can manage permissions" (ALL) | No (system_admin only) |
+| `profiles` | "Users can update their own profile": `FOR UPDATE TO public USING (auth.uid() = id)`, **no WITH CHECK**. Its only trigger is `update_profiles_updated_at`. `authenticated` holds UPDATE. | 🔴 **CONFIRMED.** Any signed-in user can change their own `agency_id`, `virtual_office_id` and `office_restricted`. Live columns: `id, email, full_name, phone, agency_id, business_license, subscription_tier, default_ft_min_hours, default_pt_min_hours, overtime_threshold, created_at, updated_at, virtual_office_id, office_restricted`. |
+
+**Why the `profiles` hole is the most severe finding:**
+- `current_agency_id()` = `profiles.agency_id`, and `is_agency_staff()` is role-only (`user_roles` has no agency column).
+- So **any staff user** (scheduler, hr_staff, manager…) who sets their own `profiles.agency_id` to another agency's UUID becomes staff of that agency for every policy and RPC. That undoes M1.
+- An office-restricted manager can set `office_restricted = false` and see every office. That undoes M-Office.
+- A caregiver doing the same gains the 1b access in the other agency.
+
+Both holes are fixed in **M-SEC-2** (§7). Until then they are the highest-priority open items.
+
+### 6.2 Live policies for the §1.3 tables
+The live `pg_policies` match the static migration replay in §1.3 exactly: same policy names,
+predicates and triggers. Three extra details:
+- `caregiver_skills`, `caregiver_availability` and `client_care_needs` policies are `TO public` with
+  no WITH CHECK, so their USING expression also governs INSERT.
+- `caregiver_performance` is `security_invoker=true`.
+- `caregivers` live columns include `hourly_rate, employment_type, is_active, role, reliability_score,
+  performance_rating, hire_date, agency_id, virtual_office_id, user_id, emergency_contact_*`. The
+  exact freeze-list for M-SEC-2 is taken from the full column list at drafting time.
+
+### 6.3 Simulated SELECT visibility (counts; agency `56fbfe38` dev data)
+
+| Table | All rows | Caregiver (screenshot account) | Client (first client login) | Expected after fix |
+|---|---|---|---|---|
+| caregivers | 6 | **6** (own 1) | **6** | caregiver 1; client 0 direct (M-SEC-5 RPC) |
+| caregiver_performance | 6 | **6** | **6** | caregiver 1 |
+| profiles | 8 | 1 | 1 | unchanged ✅ |
+| clients | 5 | 0 (uses RPC) | 1 | unchanged ✅ |
+| shifts | 48 | 34 (7 assigned + 27 open in office) | 26 (own) | unchanged ✅ |
+| shift_assignments | 21 | 7 | 0 | unchanged ✅ |
+| caregiver_skills | 21 (6 caregivers) | **21 (6)** | **21 (6)** | caregiver own only; client via M-SEC-5 RPC |
+| caregiver_availability | 19 (5) | **19 (5)** | **19 (5)** | caregiver own only; client per M-SEC-5 |
+| client_care_needs | 8 | 0 \* | 2 (own) | caregiver 0 |
+| families | 4 | **4** | **4** | caregiver 0; client own family only |
+| care_requests | 4 | **4** | **4** | caregiver 0; client own only |
+| shift_ratings | 0 | 0 \* | 0 | caregiver own only |
+| shift_trades | 3 | **3** | **3** | caregiver: trades they are party to; client 0 |
+| user_roles | 8 | 1 | 1 | unchanged ✅ |
+| pending_notifications | 6 | 0 | 0 | unchanged ✅ |
+
+\* 0 only because of current data (no rows in that caregiver's join path, no ratings yet). The
+policy still admits them, so the done-tests seed fixture rows to prove it.
+
+### 6.4 Rows that looked real (listed only, not changed — owner to judge)
+
+`/client-inquiries` (`care_requests`). Contact details live on the linked `conversation_sessions`:
+
+| id | created_at (UTC) | source → page | is_demo | contact email (masked) | phone |
+|---|---|---|---|---|---|
+| e9ea99d4-b4d6-4166-8919-f842624b3a59 | 2026-09-09 02:54 | `assistant_intake` → `/assistant` family path | true | t\*\*\*@gmail.com | non-555 (269…) |
+| 3a0f21fe-525c-4169-97d6-c54f686ec216 | 2026-09-09 02:59 | `public_site` → `/a/:slug/care` | true | d\*\*\*@nextsocial.com | non-555 (269…) |
+| 0db5d8b8-e7cf-4d0d-a9ab-39a288c07518 | 2026-09-09 17:31 | `public_site` → `/a/:slug/care` | false | e\*\*\*@example.com | non-555 (269…) |
+| a3541354-62da-4188-8d19-f71688662b80 | 2026-09-14 02:10 | `public_site` → `/a/:slug/care` | false | a\*\*\*@client.com | non-555 (877…) |
+
+`/caregiver-approvals` (`caregiver_registrations`, all `pending`, office Ripple `12faa863…`):
+
+| id | created_at (UTC) | page (via linked session) | email (masked) | phone |
+|---|---|---|---|---|
+| f0ee92f0-e17f-45ba-838c-c2f7cfa3bbff | 2026-09-03 00:58 | `/caregiver-registration` or `/assistant` | c\*\*\*@gmail.com | non-555 (269…) |
+| 7b839ea9-ebc7-4ef6-b863-76d1581f23c3 | 2026-09-03 00:59 | `/caregiver-registration` or `/assistant` | g\*\*\*@test.com | non-555 (269…) |
+| 5a18d35f-126d-4743-a5b9-fae566ab2f7f | 2026-09-09 02:57 | `/a/:slug/apply` | e\*\*\*@example.com | 555 |
+| 0218be0d-5acc-4217-a348-a3bf13e66377 | 2026-09-09 03:01 | `/a/:slug/apply` | c\*\*\*@gmail.com | non-555 (877…) |
+| 43217dd3-7e7e-4774-83f1-be2c576f2044 | 2026-09-09 17:35 | `/a/:slug/apply` | e\*\*\*@example.com | non-555 (269…) |
+
+(269 is the Kalamazoo/Portage MI area code; 877 is toll-free.)
+
+### 6.5 §2.5 password rows in `pending_notifications` (for E5 — count only, no write)
+
+**4 rows**, all in agency `56fbfe38`. Each holds the password in both `body` and `payload.temp_password`.
+Breakdown: 3 `caregiver_login_created` (2 undelivered, 1 delivered) and 1 `client_login_created`
+(delivered).
+
+| id | kind | recipient | created | ever signed in since? |
+|---|---|---|---|---|
+| bf56c29b-d234-4f29-936f-128778b7b1ef | caregiver_login_created | robert.miller@caremuch-demo.test | 2026-09-09 | yes |
+| a56fae11-d722-45fc-b28c-fea26e178bbf | client_login_created | betty.baker.client@caremuch-demo.test | 2026-09-09 | yes |
+| b77eb0e8-304e-4744-b367-158b8b935a02 | caregiver_login_created | maria.brown@caremuch-demo.test | 2026-09-09 | yes |
+| a549bb3f-e02c-4985-981e-5aca2417c4d2 | caregiver_login_created | michael.gonzalez@caremuch-demo.test | 2026-09-13 | **never — temp password certainly still valid** |
+
+Supabase `auth.users` has no password-changed timestamp, so whether the other three still use the
+temp password cannot be known. All four go on the forced-reset list in E5.
+
+### 6.6 §3.3 empty anonymous sessions (for E7 — listed only, no write)
+
+| id | flow audience | agency_id | created_at (UTC) | answers |
+|---|---|---|---|---|
+| 36757fa8-44e5-4dd0-aae8-760bf6907688 | caregiver_screening | NULL | 2026-10-01 21:17:48 | 0 |
+| ea0877fd-b879-4d13-a6d5-460cc6cd6332 | caregiver_screening | NULL | 2026-10-01 21:17:53 | 0 |
+
+Exactly 2, 4.6 s apart (screen 04 desktop, then mobile). No care request and no registration
+references them.
+
+---
+
+## 7. Approved changes to the plan (owner, Oct 1–2)
+
+- **Environment:** see the corrected §3.1. No new project.
+- **Q1 → Mode B now** (one-time link shown once, never stored). known-issues gets a "configure
+  custom SMTP, switch to Mode A — required before production" entry.
+- **Q3 → M-SEC-5** at the end of the batch. Clients read caregivers only through a `SECURITY DEFINER`
+  RPC returning first name, last initial and skills/care types. No email, phone, address or rate.
+  - `CareTeam.tsx`, `CareCircle.tsx` and the `OrdersManagement.tsx` picker switch to it.
+  - The client policies "Clients view caregivers (agency scope)" and "Clients view caregiver
+    availability (agency scope)" are dropped in M-SEC-5. That happens only after the draft confirms
+    no client screen reads availability directly.
+  - Shown for review.
+- **Q4 → M-SEC-4 applies.** `/order-management` is staff-only.
+- **Q5 → follow-up slice, not this batch.** Caregivers keep date, time, service, city, client first
+  name + last initial and `pay_rate` on open shifts. `special_notes` / `special_instructions` stay
+  hidden until assigned (view or RPC). Recorded in known-issues.
+- **A1 → added to M-SEC-2.** The `user_roles` agency_admin policy gets `role <> 'system_admin'` in
+  both USING and WITH CHECK, so an agency_admin can neither create nor modify/delete a
+  system_admin row. Granting `agency_admin` within one's own agency stays allowed (current product
+  behaviour).
+- **A2 → M-SEC-2 profiles trigger.** A non-system_admin caller may change `agency_id`,
+  `virtual_office_id` or `office_restricted` only if:
+  - the caller is `agency_admin`, and
+  - `OLD.agency_id = current_agency_id()` **and** `NEW.agency_id = current_agency_id()`, and
+  - `NEW.virtual_office_id` is NULL or an office whose `agency_id = current_agency_id()`.
+
+  Everyone else, including the user themselves, is rejected. Service-role writes
+  (`auth.uid() IS NULL`, the Edge Functions) are unaffected.
+- **A3:** the caregiver-shifts RLS entry is marked RESOLVED. The CLAUDE.md Phase-0 line about it is
+  updated (that line only) in the known-issues step.
+- **Route guard covers `/schedule`** (S0b approved).
+- **Run order** (stop at each push and each data write): E1 ✅ → M-SEC-1 → M-SEC-2 → M-SEC-3 →
+  M-SEC-4 (each with `pg_policies` + `aclexplode` checks) → RequireRole incl. `/schedule` →
+  Issue 2 in Mode B + `admin-reset-password` tenant check → E5 redaction + forced-reset list (wait)
+  → write-on-load fix → E7 deletion (wait) → M-SEC-5 → done-tests 1–9 before and after →
+  known-issues update.
+
+---
+
+## 8. Owner review of E1 (Oct 2) and the M-SEC-2 draft
+
+### 8.1 Decisions recorded
+- **Order:** M-SEC-2 first, then M-SEC-1, M-SEC-3, M-SEC-4.
+- **New "before" tests:**
+  - **0a:** a disposable scheduler sets its own `profiles.agency_id` to the disposable second agency.
+    It must succeed before M-SEC-2 and fail after.
+  - **0b:** a disposable agency_admin inserts a `system_admin` `user_roles` row. It must succeed
+    before and fail after.
+  - Both run with real JWTs against disposable fixtures. Teardown is verified.
+- **§6.4 rows:** keep all 9 unchanged (dev data). known-issues gets "wipe dev intake/registration
+  rows; production starts empty".
+- **E5:** approved for the 4 rows in §6.5 (redact + forced reset), run after Mode B ships. Demo
+  logins that will stop working until a set-password link is used:
+  - robert.miller@caremuch-demo.test, betty.baker.client@caremuch-demo.test,
+    maria.brown@caremuch-demo.test and michael.gonzalez@caremuch-demo.test.
+  - The screenshot manager and caregiver (Dana Reyes) accounts are not among them.
+- **E7:** approved for `36757fa8-44e5-4dd0-aae8-760bf6907688` and
+  `ea0877fd-b879-4d13-a6d5-460cc6cd6332` (NOT EXISTS guards, then re-query). It runs at its place in
+  the order, after the write-on-load fix.
+
+### 8.2 Where the `profiles` columns are used (item 2)
+
+| Column | Read by app code (src, Edge Functions) | Read by any DB function / view | Written by staff screens | Live values |
+|---|---|---|---|---|
+| `subscription_tier` | none | none | none | all `starter` |
+| `business_license` | none | none | none | all NULL |
+| `overtime_threshold` | **none.** Scheduling uses `agency.max_weekly_hours`; eligibility reads only `agency` caps | none (`check_assignment_eligibility` included) | none | all 40 |
+| `default_ft_min_hours` | none | none | none | all 35 |
+| `default_pt_min_hours` | none | none | none | all 15 |
+| `email` | `AdminUserManagement.tsx:121,173` finds reset/delete targets **by `profiles.email`**; `UserRoles.tsx` displays it | — | `Caregivers.tsx:224` (another user's row; already a no-op, since no staff UPDATE policy exists) | equals `auth.users.email` for all 8 profiles |
+
+- All five non-email columns are dead legacy fields (they came from the 2025-11-22 schema rebuild),
+  so freezing them changes nothing.
+- `profiles.email` is **not** kept in sync with auth: the app never calls `auth.updateUser({email})`.
+  Because a target lookup keys on it, it is frozen for non-admins.
+- The caregiver profile form no longer sends email: it is shown read-only with "contact your
+  office". That companion code change is in `CaregiverProfileSettings.tsx` and ships with M-SEC-2.
+- Profile writes found:
+  - Edge Functions (service role): unaffected.
+  - `CaregiverProfileSettings` (own row: full_name, phone): allowed.
+  - `Caregivers.tsx:224` / `Clients.tsx:304` (another user's row): already blocked by RLS today, unchanged.
+
+### 8.3 `caregivers` (item 3)
+- **`caregivers.role`** is an enum (`full_time` / `part_time` / `on_call`; live values 4/1/1). It is
+  display only: the badge color in `Caregivers.tsx:456`, the client Care Team label and the dev MCP
+  `list-caregivers` tool. No DB function, eligibility rule or matcher reads it. It is frozen anyway
+  (it is employment classification).
+- **Emergency fields:** the caregiver form *does* edit `emergency_contact_name/phone`, so they stay
+  self-editable.
+- **Self-editable allowlist:** first/last name, phone, address/city/state/zip, emergency contact,
+  `location_*`, `service_zipcodes`. Everything else is frozen for non-staff, including email,
+  `role`, `is_active`, `hire_date`, `performance_rating`, `reliability_score`, `hourly_rate`,
+  `employment_type`, `custom_min_hours`, `service_radius_miles`, agency, office and user_id.
+- The guard also stops a caregiver updating *another* caregiver's row immediately, ahead of M-SEC-1's
+  RLS change.
+- No DB function updates `caregivers`, `clients` or `profiles` under a user's identity. The only
+  function writing any guarded table is `assign_caregiver_role` (`user_roles`), granted to
+  `service_role` only.
+- **Drafter addition (strike if unwanted):** the same guard on `clients` for the client portal. Today
+  a client can change their own `agency_id`, `user_id`, `preferred_caregiver_id`, medical fields and so on.
+
+### 8.4 A4 — Edge Function audit (verified in source)
+
+| Function | Role check | Agency check on target | Escalation found | Fix (Issue 2 step) |
+|---|---|---|---|---|
+| `create-user` | system_admin / agency_admin / manager | new user gets the caller's agency ✓ | 🔴 **role taken from the body with no allow-list** (`:171-175`): a manager or agency_admin can create a **system_admin** (or agency_admin) with a password they chose. `userData` is spread into `caregivers`/`clients` (column injection). The `user_roles` insert error is unchecked. | Per-caller allow-list (manager → caregiver/client/scheduler/hr_staff; agency_admin → + manager/agency_admin; only system_admin → system_admin); whitelist `userData` columns; check the insert |
+| `admin-reset-password` | system_admin / agency_admin / manager | **none** | 🔴 the guard at `:81` only covers agency_admin → system_admin. **A manager can reset a system_admin's or agency_admin's password and log in as them.** An agency_admin can reset users in any agency. | Same-agency check (system_admin exempt); target's role must rank below the caller's; Mode B (send a link, never a typed password) |
+| `admin-delete-user` | system_admin / agency_admin | **none** | 🔴 an agency_admin can delete any non-system_admin user in **any agency**; no self-delete guard | Same-agency check; forbid self-delete; target rank below caller |
+| `enable-client-login` / `enable-caregiver-login` | system_admin / agency_admin / manager | record ✓ (`:48` / `:51`) | 🟠 an existing auth user is matched by email (body `email` override allowed). Profiles with NULL or legacy agency pass the cross-agency guard and are **moved into the caller's agency** with a new role. A system_admin acting cross-agency writes their own agency. | Refuse existing users not already in the caller's agency (NULL/legacy → system_admin only); drop the email override; derive agency from the record |
+| `approve-caregiver-registration` | agency_admin / manager / hr_staff + `has_permission` | only if `reg.agency_id` is set (`:85`) | 🟠 NULL-agency registrations are claimable by any agency. Same NULL/legacy profile capture. `.ilike(email)` treats `%`/`_` as wildcards (`:163`). | Require `reg.agency_id = caller agency`; `.eq` on lower-cased email; close the NULL/legacy gap |
+| `link-existing-accounts` | system_admin / agency_admin | **none (global)** | 🔴 an agency_admin run links records **across all agencies** and rewrites `profiles.agency_id` for NULL/legacy profiles (planted-email capture) | system_admin only, or filter both queries to the caller's agency; never relink NULL/legacy |
+
+`verify_jwt` is on for all seven (default; no override in `config.toml`), and every function calls
+`getUser`, so anonymous callers cannot reach them. All writes use the service role.
+
+**Recommendation for your decision:** the `create-user` and `admin-reset-password` escalations are
+live today and as severe as the `profiles` hole. M-SEC-2 does **not** cover them, because Edge
+Functions use the service role and bypass the new guards. I suggest pulling their fixes forward to
+run right after M-SEC-2 (before M-SEC-1). They are small, independent and testable with the
+same disposable fixtures (new tests 0c/0d: a manager tries to create a system_admin; a manager tries
+to reset an agency_admin). The rest of A4 stays in the Issue 2 step.
+
+---
+
+## 9. Owner decisions (Oct 2, second review) and before-test results
+
+### 9.1 Decisions
+- **M-SEC-2b** (new) runs right after M-SEC-2 and before M-SEC-1. It covers the four 🔴 Edge Function
+  escalations, with **role and agency checks only**:
+  - `create-user`: per-caller role allow-list, whitelist of `userData` columns, check the
+    `user_roles` insert.
+  - `admin-reset-password`: target must be in the caller's agency and rank below the caller.
+  - `admin-delete-user`: same-agency, no self-delete, target ranks below the caller.
+  - `link-existing-accounts`: system_admin only, or scoped to the caller's agency; never relinks
+    NULL/legacy profiles.
+
+  The typed-password → link change (Mode B) stays in the Issue 2 step. The 🟠 items
+  (`enable-*-login`, `approve-caregiver-registration`) also stay in Issue 2.
+- **Clients guard approved.** It freezes `agency_id`, `user_id`, `virtual_office_id`,
+  `preferred_caregiver_id` and every column the client ProfileSettings form does not edit. The
+  allow-list is shown below for owner sign-off.
+- **Before/after tests 0c–0f added** (0a/0b from §8.1).
+- **M-SEC-2 is not pushed** until the owner finishes reviewing the SQL.
+
+### 9.2 Clients allow-list, taken from the form
+`src/components/client-dashboard/ProfileSettings.tsx:174-186` is the only client-side write to
+`clients`. Its `.update({...})` payload is exactly:
+
+| Self-editable (allow-list) | Note |
+|---|---|
+| `first_name`, `last_name` | |
+| `phone` | |
+| `address`, `city`, `state`, `zip_code` | |
+| `emergency_contact_name`, `emergency_contact_phone` | |
+| ~~`notes`~~ | **Frozen (owner decision, Oct 2):** it is the staff "Notes" field. The client form no longer shows or sends it (`ProfileSettings.tsx`, ships with M-SEC-2). known-issues: "consider a separate client-editable field (`client_notes`)". |
+| `updated_at` | set by trigger |
+
+Frozen for the client: `id, agency_id, user_id, email, date_of_birth, care_requirements,
+medical_conditions, preferred_caregiver_id, is_active, created_at, is_demo, family_id,
+virtual_office_id, scheduling_flexibility, scheduling_notes`. Every other read of `clients` on the
+client side is a SELECT (`ClientDashboard.tsx:98`, `CareCircle.tsx:44`, `OrdersManagement.tsx:181`).
+The draft migration's clients guard already uses exactly this list.
+
+### 9.3 Before-test results (2026-10-02, run `before-mur99uwi`)
+Real JWTs (`signInWithPassword`) and real Edge Functions. Every outcome was re-checked through the
+service role, not taken from the response. The service-role key was fetched into memory from the
+logged-in Supabase CLI and never printed or stored. Fixtures:
+- a disposable agency B;
+- six disposable users: a scheduler, an agency_admin, a manager and an agency_admin target in
+  agency `56fbfe38`, a client with a `clients` row in `56fbfe38`, and a caregiver in agency B.
+
+| Test | Action (as the attacker's own JWT) | Result before | Must be after |
+|---|---|---|---|
+| 0a | scheduler sets own `profiles.agency_id` → agency B | **succeeded** (agency now B) | blocked (M-SEC-2) |
+| 0b | agency_admin inserts a `system_admin` `user_roles` row for itself | **succeeded** (1 row) | blocked (M-SEC-2) |
+| 0c | manager calls `create-user` with `staffRole: system_admin` | **succeeded** (new user holds system_admin) | blocked (M-SEC-2b) |
+| 0d | manager calls `admin-reset-password` on an agency_admin | **succeeded** (sign-in with the manager-chosen password works) | blocked (M-SEC-2b) |
+| 0e | agency_admin of A calls `admin-delete-user` on a user in agency B | **succeeded** (user deleted) | blocked (M-SEC-2b) |
+| 0f | client sets own `clients.agency_id` → agency B | **succeeded** (agency now B) | blocked (M-SEC-2) |
+
+Immediate repair inside the run:
+- 0a and 0f were reverted.
+- The system_admin rows from 0b and 0c were deleted.
+- The user created by 0c was removed at teardown.
+
+**Teardown:** 7 auth users (6 fixtures plus the one 0c created), their profiles and roles, the
+client row and agency B were deleted. A re-query found none remaining, including a sweep of
+`profiles` for the run's email suffix. The after-run uses the same script
+(`sec_tests_0.cjs after`).
+
+### 9.4 INSERT/DELETE bypass check (owner item 2) → guard (5) added to M-SEC-2
+
+| Table | INSERT/DELETE-capable policies (live) | Own-row delete + re-insert, or insert with arbitrary agency/office/user_id? |
+|---|---|---|
+| `profiles` | none | No. Only service_role / the `on_auth_user_created` trigger write. |
+| `user_roles` | system_admin; agency_admin in own agency | No. Bounded by the policy (and `role <> system_admin` after M-SEC-2). |
+| `clients` | "Admins and managers can manage clients" (system_admin / agency_admin / manager; own agency/office) | Non-staff cannot. **Staff can insert with any `user_id`** (attaching a foreign login) and, if agency-wide, any `virtual_office_id`. |
+| `caregivers` | "Agency users can manage their caregivers", FOR ALL with **no role check** | 🔴 **Yes, for any agency member.** A caregiver or client can INSERT a caregivers row with any `user_id` (their own → they count as a caregiver to `my_caregiver_ids()`) and any office. They can also DELETE any caregiver row, including deleting their own and re-inserting it with a new `hourly_rate`, which bypasses the UPDATE guard. |
+
+Fix: `guard_person_record_insert_delete()`, a BEFORE INSERT OR DELETE trigger on `caregivers` and
+`clients`.
+- **Exempt:** service role and system_admin.
+- **Non-staff:** may not insert or delete at all.
+- **Staff:** insert only into their own agency, with a NULL office or one of their agency's offices,
+  and a NULL `user_id` or a user whose profile is in their agency. Delete only rows of their own
+  agency.
+
+It is SECURITY DEFINER, because a manager can't read another user's `profiles` row under RLS; its
+EXECUTE is revoked. The existing staff paths stay compatible: `Caregivers.tsx:290`, `Clients.tsx:360`
+(own agency, no `user_id`), `convert_care_request_to_client` (office from the care request) and the
+service-role Edge Functions.
+
+**New before/after test 0g:** (i) a client inserts a `caregivers` row with `user_id` = itself;
+(ii) a caregiver deletes its own `caregivers` row. Both must succeed before and fail after.
+
+### 9.5 Rollback for M-SEC-2 (kept here, not in the migration)
+
+```sql
+-- 1. Remove the guards
+DROP TRIGGER IF EXISTS trg_guard_profiles_update          ON public.profiles;
+DROP TRIGGER IF EXISTS trg_guard_caregivers_update        ON public.caregivers;
+DROP TRIGGER IF EXISTS trg_guard_clients_update           ON public.clients;
+DROP TRIGGER IF EXISTS trg_guard_caregivers_insert_delete ON public.caregivers;
+DROP TRIGGER IF EXISTS trg_guard_clients_insert_delete    ON public.clients;
+DROP FUNCTION IF EXISTS public.guard_profiles_update();
+DROP FUNCTION IF EXISTS public.guard_caregivers_update();
+DROP FUNCTION IF EXISTS public.guard_clients_update();
+DROP FUNCTION IF EXISTS public.guard_person_record_insert_delete();
+
+-- 2. Restore the exact previous user_roles policy (20260913214228_m1_agency_scope_admin_policies.sql:26-37)
+DROP POLICY IF EXISTS "Agency admins manage roles in their own agency" ON public.user_roles;
+CREATE POLICY "Agency admins manage roles in their own agency"
+ON public.user_roles FOR ALL TO authenticated
+USING (
+  has_role(auth.uid(), 'agency_admin')
+  AND agency_id = current_agency_id()
+  AND agency_id = (SELECT p.agency_id FROM public.profiles p WHERE p.id = user_roles.user_id)
+)
+WITH CHECK (
+  has_role(auth.uid(), 'agency_admin')
+  AND agency_id = current_agency_id()
+  AND agency_id = (SELECT p.agency_id FROM public.profiles p WHERE p.id = user_roles.user_id)
+);
+```
+Rolling back reopens all of §6.1 / §9.3, so it is for an emergency regression only. Revert the two
+`.tsx` changes with it if the guards are removed (they are harmless to leave in place).
+
+### 9.6 M-SEC-2 pushed and verified (2026-10-02) — commit `f2b4aa2`
+
+`supabase migration list` showed `20261002120000` as the only pending migration, so `db push`
+applied only it. Post-push checks (read-only):
+- **`pg_policies` user_roles:** "Agency admins manage roles in their own agency" now carries
+  `role <> 'system_admin'::app_role` in both USING and WITH CHECK. The other two policies are unchanged.
+- **`pg_trigger`:** five enabled BEFORE triggers.
+  - `trg_guard_profiles_update` (UPDATE)
+  - `trg_guard_caregivers_update` (UPDATE)
+  - `trg_guard_clients_update` (UPDATE)
+  - `trg_guard_caregivers_insert_delete` (INSERT, DELETE)
+  - `trg_guard_clients_insert_delete` (INSERT, DELETE)
+- **`aclexplode`:** the four guard functions have EXECUTE for `postgres` (owner) and `service_role`
+  only. There is **no `PUBLIC`, `anon` or `authenticated`**, so CLAUDE.md #14 holds.
+  - Deviation from "owner-only": the extra `service_role` grant comes from Supabase's default
+    privileges on new functions in `public`.
+  - It is inert: Postgres refuses to call a trigger function except as a trigger.
+  - **ACCEPTED DEVIATION (owner, Oct 4):** keep the `service_role` EXECUTE. Trigger functions can't
+    be called directly, so it grants nothing.
+
+After-tests (run `after-msec2-mura5zj2`, plus a re-run with the staff smoke test):
+
+| Test | Before | After M-SEC-2 | Blocked by |
+|---|---|---|---|
+| 0a scheduler moves own profile to agency B | succeeded | **blocked** | profiles guard: "Only name and phone can be changed on your own profile" |
+| 0b agency_admin grants itself system_admin | succeeded | **blocked** | RLS: new row violates policy for `user_roles` |
+| 0c manager creates system_admin (create-user) | succeeded | still open (expected) | M-SEC-2b |
+| 0d manager resets agency_admin password | succeeded | still open (expected) | M-SEC-2b |
+| 0e agency_admin deletes agency-B user | succeeded | still open (expected) | M-SEC-2b |
+| 0f client moves own clients row to agency B | succeeded | **blocked** | clients guard: "Only your contact details can be changed here" |
+| 0g-i client inserts a caregivers row for itself | succeeded | **blocked** | insert/delete guard: "Only staff can create or delete caregivers records" |
+| 0g-ii caregiver deletes its own caregivers row | succeeded | **blocked** | same |
+| S1 caregiver saves own profile (form payload) | OK | **OK** | — |
+| S2 client saves own profile (form payload) | OK | **OK** | — |
+| S3 manager adds + deletes a caregiver and a client (staff UI path) | — | **OK** | — |
+
+Teardown is verified by re-query after every run, with nothing left.
+
+---
+
+## 10. M-SEC-2b — Edge Function role/agency checks (DEPLOYED 2026-10-04, see §10.3)
+
+Files (uncommitted):
+- `supabase/functions/_shared/authz.ts` (new)
+- `create-user/index.ts`
+- `admin-reset-password/index.ts`
+- `admin-delete-user/index.ts`
+- `link-existing-accounts/index.ts`
+
+All five parse and bundle with esbuild. Deno isn't installed here, so `deno check` hasn't run. The
+Mode B link change and the 🟠 functions are **not** touched (Issue 2 step).
+
+**Shared rules (`_shared/authz.ts`):**
+- **Caller and target role** come from **all** of the user's `user_roles` rows, taking the highest
+  by rank. This deliberately avoids `get_user_role()`, which leaves `client` out of its ordering.
+  Ranks: system_admin 100 > agency_admin 80 > manager 60 > scheduler = hr_staff 40 > caregiver 20 >
+  client 10.
+- **`canActOn(caller, target)`** allows an action only when all of these hold:
+  - the target exists;
+  - it isn't the caller (unless `allowSelf`);
+  - the target ranks **strictly below** the caller;
+  - unless the caller is system_admin, both the caller and the target have the same non-NULL agency.
+- **`CREATABLE_ROLES`:**
+  - manager → scheduler, hr_staff, caregiver, client;
+  - agency_admin → those + manager, agency_admin;
+  - system_admin → all.
+
+| Function | Change |
+|---|---|
+| `create-user` | Rejects an unknown `userType` or a non-staff `staffRole`. Checks the requested role against `CREATABLE_ROLES[caller]` **before** creating the auth user. `userData` is filtered through an allow-list (client: address/city/state/zip/date_of_birth/emergency contact; caregiver: address/city/state/zip/employment_type/hourly_rate/emergency contact); id, user_id, agency_id, office and is_active are always ignored. The `user_roles` insert result is checked; on failure the record and auth user are rolled back and a 500 is returned. |
+| `admin-reset-password` | After the existing caller-role check (system_admin / agency_admin / manager): `canActOn` (same agency, target ranks below). Still accepts a typed password until Mode B. |
+| `admin-delete-user` | After the existing caller-role check (system_admin / agency_admin): `canActOn`, which also refuses self-delete. |
+| `link-existing-accounts` | **system_admin only** (its only caller is the system_admin AdminUtilities page). It links only when the matched account's profile **already** has the record's agency. NULL, legacy, missing or other-agency profiles are never moved; they are returned in `skipped` with a reason. |
+
+**Behaviour changes you will notice (all intended by the "rank below caller" rule):**
+- **Peer actions are now refused.** An agency_admin can no longer reset or delete another
+  agency_admin, and a system_admin can no longer reset or delete another system_admin through these
+  functions. `Users.tsx` "Reset password"/"Delete" on a peer admin will show the 403 message.
+- **A manager can reset only** scheduler, hr_staff, caregiver and client accounts in their own
+  agency. That covers `Caregivers.tsx` and `Clients.tsx`.
+- **A manager can no longer create** manager or agency_admin accounts.
+
+**After-tests for M-SEC-2b** (same script, added before deploy):
+- **Must be blocked:** 0c, 0d, 0e, plus **0h**: an agency_admin calls `link-existing-accounts` → 403.
+- **Must still work** (new smoke tests S4–S6):
+  - S4: a manager creates a caregiver via `create-user`;
+  - S5: a manager resets a caregiver's password in its own agency;
+  - S6: an agency_admin deletes a caregiver in its own agency.
+
+**Deploy (after approval):** `supabase functions deploy create-user admin-reset-password
+admin-delete-user link-existing-accounts`. The `_shared` file is bundled with each function.
+
+### 10.1 Owner conditions A–E (Oct 4) — how the code meets them
+
+| # | Condition | Where it holds |
+|---|---|---|
+| A | Only manager / agency_admin / system_admin may call create-user, admin-reset-password, admin-delete-user. scheduler, hr_staff, caregiver and client always get 403. | `hasCallerRole(caller, MANAGER_OR_ABOVE)` is the first check in create-user and admin-reset-password. admin-delete-user is narrower still (`system_admin`, `agency_admin`). The caller's role is the highest of **all** their role rows. |
+| B | create-user sets agency_id server-side (caller's agency; system_admin may pass an existing `agencyId`). Any `agency_id` in userData is ignored. An office must belong to that agency, and an office-restricted caller may use only its own office. | `targetAgencyId` / `targetOfficeId` in create-user. A non-system_admin passing another `agencyId` gets 403. `pick()` drops `agency_id`, `virtual_office_id`, `user_id` etc. from userData. An explicit `virtualOfficeId` is checked against `virtual_office.agency_id`; a restricted caller must equal its own office. |
+| C | Target rank = highest of all its role rows. A target with no profile or NULL agency is refused unless the caller is system_admin. | `loadPrincipal()` (all `user_roles` rows; a profile-less target gets `agencyId = null`). `canActOn()` refuses a NULL-agency target for every non-system_admin. |
+| D | Cross-agency and unknown targets return the same generic 403. | `canActOn()` returns `GENERIC_DENY` ("You do not have permission to manage this user", 403) for unknown, malformed id, other agency and not-lower-rank. Only "your own account" has its own message. |
+| E | No change to `verify_jwt` or any function setting in `supabase/config.toml`. | `git diff supabase/config.toml` is empty. |
+
+Type check: Deno 2.9.6 (installed via `npm i -g deno`), `deno check` on the four functions plus
+`_shared/authz.ts` → exit 0, no errors. No fixes were needed beyond A–E.
+
+### 10.2 Rollback for M-SEC-2b
+The four functions are untouched in git up to `f2b4aa2`, and the before-run (§10.3) behaved exactly
+as that code reads. Supabase keeps no version history I can roll back to, so the rollback is to
+redeploy them from that commit:
+```bash
+git checkout f2b4aa2 -- supabase/functions/create-user supabase/functions/admin-reset-password \
+  supabase/functions/admin-delete-user supabase/functions/link-existing-accounts
+npx supabase functions deploy create-user admin-reset-password admin-delete-user link-existing-accounts \
+  --project-ref rgeldgztadebgvrdhaqa
+git checkout HEAD -- supabase/functions   # restore the working tree afterwards
+```
+The old versions don't import `_shared/authz.ts`, so that file can stay in place. Rolling back
+reopens 0c, 0d, 0e, 0h and T2.
+
+### 10.3 Deployed and tested (2026-10-04)
+Deployed only `create-user`, `admin-reset-password`, `admin-delete-user` and
+`link-existing-accounts` to `rgeldgztadebgvrdhaqa` (new versions 14/13/13/13). `verify_jwt` is
+still `true` on all four.
+
+Tests used real JWTs and the deployed functions against disposable fixtures:
+- agency B;
+- in agency `56fbfe38`: a manager, two agency_admins, an hr_staff and two caregivers with rows;
+- in agency B: one caregiver.
+
+Every outcome was confirmed by re-query. Teardown swept every auth user with the run's email suffix,
+including users created *by* the functions (11 before, 10 after). Re-query found none remaining.
+
+| Test | Before (runs `before-mutwea8g`) | After (runs `after-mutwg83f`) |
+|---|---|---|
+| 0c manager creates a system_admin | **ALLOWED**: 200, account created with system_admin | **BLOCKED**: 403 "You do not have permission to create a system_admin account", no account |
+| 0d manager resets an agency_admin's password | **ALLOWED**: 200, login with the new password works | **BLOCKED**: 403 generic, login fails |
+| 0e agency_admin of A deletes a user in agency B | **ALLOWED**: 200, user deleted | **BLOCKED**: 403 generic, user still exists |
+| 0h agency_admin calls link-existing-accounts | **ALLOWED**: 200 (pre-check: 0 real records linkable, so nothing was written) | **BLOCKED**: 403 "Only a system administrator can run the account backfill" |
+| T1 hr_staff resets a caregiver's password | blocked: 403 "Insufficient permissions" | **BLOCKED**: same; login fails |
+| T2 agency_admin resets another agency_admin | **ALLOWED**: 200, login works | **BLOCKED**: 403 generic, login fails |
+| T3 manager create-user with `userData.agency_id = B` | created in **A** (the server value overrode the spread) | created in **A**. `agency_id` in userData is now dropped by the allow-list; profile, caregivers row and role row are all in A |
+| T4 manager deletes itself | blocked: 403 (manager may not call delete) | **BLOCKED**: same; manager still exists |
+| S4 manager creates a caregiver | works | **WORKS**: profile, caregivers row and `caregiver` role row all in A |
+| S5 manager resets a caregiver's password | works | **WORKS**: caregiver logs in with it |
+| S6 agency_admin deletes a caregiver in its own agency | works | **WORKS** |
+| S7 agency_admin creates a manager in its own agency | works | **WORKS**: `manager` role in A |
+| S8 caregiver "Forgot password" request | not run (independent of M-SEC-2b) | **NOT VERIFIED.** Supabase Auth refused the request: `400 Email address "…@caremuch-sectest.test" is invalid`. The `.test` fixture domain isn't deliverable, so GoTrue rejects it before any email step. |
+
+**S8 notes:**
+- The app has **no Forgot-password UI** today (§2.1; added in the Issue 2 step). S8 exercised the
+  same Supabase Auth endpoint that UI will call.
+- Verifying it needs a deliverable address that is allowed to receive the project's default-SMTP
+  mail, i.e. a project team address. Supabase's built-in mailer only sends to those. Or it needs
+  custom SMTP (known-issues: Mode A).
+- Proposal: re-run S8 in the Issue 2 step against an address the owner names. None of this is
+  affected by M-SEC-2b.
