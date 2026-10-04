@@ -1,0 +1,1028 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Ripple Effects Console</title>
+<style>
+  /* Faithful build of Lauren's three hand-drawn screens: Dashboard, Client 1 Care Plan, Caregiver — plus client login view. */
+  :root{
+    --bg:#f5f7f9; --surface:#ffffff; --surface-2:#eef2f6; --line:#d9e0e7;
+    --fg:#19232e; --muted:#5c6b79; --faint:#8592a0;
+    --accent:#1f7a6d; --accent-soft:#e2f0ed; --accent-ink:#0f4f46;
+    --ok:#2f8f5b; --ok-soft:#e6f4ec; --yellow:#c8901a; --yellow-soft:#fbf1d8;
+    --red:#c33f33; --red-soft:#f9e5e2; --info:#3766a8; --info-soft:#e7eff9;
+    --radius:10px; --shadow:0 1px 2px rgba(20,35,50,.06),0 2px 8px rgba(20,35,50,.05);
+    --f-head:"Fraunces",Georgia,serif; --f-body:"Inter",system-ui,sans-serif;
+    --f-mono:"IBM Plex Mono",ui-monospace,monospace;
+  }
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+    --bg:#0f151b; --surface:#171f28; --surface-2:#1e2833; --line:#2a3742;
+    --fg:#e7edf2; --muted:#9db0c0; --faint:#6d7e8e;
+    --accent:#4fbfae; --accent-soft:#173630; --accent-ink:#a9e5db;
+    --ok:#54b57e; --ok-soft:#14291e; --yellow:#d7a53f; --yellow-soft:#2e2712;
+    --red:#e0776b; --red-soft:#33201d; --info:#6f9fe0; --info-soft:#172433;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 2px 10px rgba(0,0,0,.25);color-scheme:dark;
+  }}
+  :root[data-theme="dark"]{
+    --bg:#0f151b; --surface:#171f28; --surface-2:#1e2833; --line:#2a3742;
+    --fg:#e7edf2; --muted:#9db0c0; --faint:#6d7e8e;
+    --accent:#4fbfae; --accent-soft:#173630; --accent-ink:#a9e5db;
+    --ok:#54b57e; --ok-soft:#14291e; --yellow:#d7a53f; --yellow-soft:#2e2712;
+    --red:#e0776b; --red-soft:#33201d; --info:#6f9fe0; --info-soft:#172433;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 2px 10px rgba(0,0,0,.25);color-scheme:dark;
+  }
+  *{box-sizing:border-box}
+  body{background:var(--bg);color:var(--fg);font-family:var(--f-body);line-height:1.5;font-size:14px;-webkit-font-smoothing:antialiased}
+  h1,h2,h3{font-family:var(--f-head);font-weight:600;text-wrap:balance;margin:0}
+  .tnum{font-variant-numeric:tabular-nums}
+
+  .app{display:grid;grid-template-columns:230px 1fr;min-height:100%}
+  .rail{background:var(--surface);border-right:1px solid var(--line);display:flex;flex-direction:column;gap:2px;
+    padding:18px 12px;position:sticky;top:env(safe-area-inset-top,0px);align-self:start;height:100vh}
+  .brand{display:flex;align-items:center;gap:9px;padding:4px 8px 14px}
+  .brand .dot{width:26px;height:26px;border-radius:8px;background:var(--accent);display:grid;place-items:center;color:#fff;font-family:var(--f-head);font-weight:600;flex:none}
+  .brand b{font-size:14px;line-height:1.15}
+  .brand span{display:block;font-size:11px;color:var(--faint)}
+  .navlabel{font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:var(--faint);padding:12px 10px 4px}
+  .nav{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;color:var(--muted);cursor:pointer;
+    border:0;background:none;width:100%;text-align:left;font-size:13.5px;font-family:inherit}
+  .nav:hover{background:var(--surface-2);color:var(--fg)}
+  .nav.on{background:var(--accent-soft);color:var(--accent-ink);font-weight:600}
+  .nav .ic{width:17px;height:17px;flex:none}
+  main{min-width:0;padding:22px clamp(16px,3vw,30px) 60px}
+  .top{display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap;margin-bottom:20px}
+  .top h1{font-size:23px}
+  .top p{margin:3px 0 0;color:var(--muted);font-size:13px}
+  .officepick{display:inline-flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:7px 11px;font-size:12.5px;box-shadow:var(--shadow)}
+  .officepick b{color:var(--accent-ink)}
+  .themetog{background:var(--surface);border:1px solid var(--line);border-radius:8px;width:34px;height:34px;cursor:pointer;color:var(--muted);display:grid;place-items:center}
+
+  .panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+  .phead{display:flex;align-items:center;gap:12px;padding:13px 16px;border-bottom:1px solid var(--line)}
+  .phead h2{font-size:15px}
+  .phead .sp,.top .sp{margin-left:auto}
+  .pbody{padding:14px 16px}
+  .btn{font-family:inherit;font-size:13px;font-weight:500;border-radius:8px;padding:8px 13px;border:1px solid var(--line);
+    background:var(--surface);color:var(--fg);cursor:pointer;display:inline-flex;align-items:center;gap:7px}
+  .btn:hover{border-color:var(--accent)}
+  .btn.pri{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.sm{padding:5px 9px;font-size:12px}
+
+  .pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:2px 9px;border-radius:20px;white-space:nowrap}
+  .pill .d{width:6px;height:6px;border-radius:50%;background:currentColor;flex:none}
+  .p-ok{background:var(--ok-soft);color:var(--ok)} .p-yellow{background:var(--yellow-soft);color:var(--yellow)}
+  .p-red{background:var(--red-soft);color:var(--red)} .p-info{background:var(--info-soft);color:var(--info)}
+  .p-mut{background:var(--surface-2);color:var(--muted)}
+  .star{color:var(--red);font-weight:700}
+
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);font-weight:600;padding:9px 12px;border-bottom:1px solid var(--line)}
+  td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+  tr:last-child td{border-bottom:0}
+  tbody tr:hover{background:var(--surface-2)}
+  .tnowrap{white-space:nowrap}
+  .sub{color:var(--faint);font-size:12px}
+  .who{display:flex;align-items:center;gap:9px}
+  .av{width:28px;height:28px;border-radius:50%;background:var(--accent-soft);color:var(--accent-ink);display:grid;place-items:center;font-size:11px;font-weight:700;flex:none}
+
+  .screen{display:none} .screen.on{display:block}
+  .stack{display:flex;flex-direction:column;gap:16px}
+  .sec-eyebrow{display:flex;align-items:center;gap:9px;margin:2px 0 2px}
+  .sec-eyebrow .n{width:22px;height:22px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-size:12px;font-weight:700;flex:none;font-family:var(--f-head)}
+  .sec-eyebrow h2{font-size:16px}
+
+  /* dashboard */
+  .kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:6px}
+  .tile{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:14px 15px;box-shadow:var(--shadow);border-left:3px solid var(--line)}
+  .tile.s-red{border-left-color:var(--red)} .tile.s-yellow{border-left-color:var(--yellow)} .tile.s-ok{border-left-color:var(--ok)} .tile.s-info{border-left-color:var(--info)}
+  .tile .lab{font-size:11px;color:var(--muted)}
+  .tile .big{font-family:var(--f-head);font-size:27px;font-weight:600;margin-top:5px;font-variant-numeric:tabular-nums}
+  .tile .foot{font-size:11.5px;color:var(--faint);margin-top:2px}
+  .subhd{font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--faint);font-weight:700;margin:3px 0 2px;display:flex;gap:8px;align-items:center}
+  .listline{display:flex;align-items:center;gap:11px;padding:9px 4px;border-bottom:1px solid var(--line)}
+  .listline:last-child{border-bottom:0}
+  .listline .meta{min-width:0;flex:1}
+  .listline .nm{font-weight:600;font-size:13px}
+  .listline .days{margin-left:auto;text-align:right;font-size:12px;font-variant-numeric:tabular-nums;flex:none}
+  .ordernote{font-size:11px;color:var(--faint);font-style:italic;margin-top:6px}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin-top:12px}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .legend i{width:9px;height:9px;border-radius:2px;display:inline-block}
+
+  /* care plan */
+  .cp-grid{display:grid;grid-template-columns:1fr 300px;gap:16px}
+  .authhead{display:flex;gap:20px;flex-wrap:wrap;font-size:13px}
+  .authhead div span{color:var(--muted)} .authhead div b{font-variant-numeric:tabular-nums}
+  .svc-table td,.svc-table th{padding:11px 12px}
+  .barmini{height:6px;border-radius:4px;background:var(--surface-2);overflow:hidden;margin-top:5px;max-width:130px}
+  .barmini>i{display:block;height:100%;border-radius:4px;background:var(--accent)}
+  .goal{border:1px solid var(--line);border-radius:9px;margin-bottom:11px;overflow:hidden}
+  .goal .gh{display:flex;gap:10px;padding:11px 13px;background:var(--surface-2);align-items:flex-start}
+  .goal .gn{width:22px;height:22px;border-radius:6px;background:var(--accent);color:#fff;display:grid;place-items:center;font-size:12px;font-weight:700;flex:none;font-family:var(--f-head)}
+  .obj{padding:9px 13px 9px 46px;border-top:1px solid var(--line);font-size:12.5px}
+  .obj .ol{font-weight:600;color:var(--accent-ink);font-size:11.5px;margin-right:6px}
+  .obj-sel{cursor:pointer;border-left:2px solid transparent}
+  .obj-sel:hover{background:var(--surface-2)}
+  .obj-sel.sel{background:var(--accent-soft);border-left-color:var(--accent)}
+  .goal[data-goal] .gh{cursor:pointer}
+  .flowbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--info-soft);color:var(--info);border-radius:8px;padding:9px 12px;font-size:12px;margin-bottom:14px}
+  .flowbar b{font-weight:700}
+  .flowbar .arrow{opacity:.6}
+  .idrow{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--line);font-size:13px;gap:10px}
+  .idrow:last-child{border-bottom:0}
+  .idrow span{color:var(--muted)}
+  .docitem{display:flex;align-items:center;gap:9px;padding:7px 0;font-size:12.5px;border-bottom:1px solid var(--line)}
+  .docitem:last-child{border-bottom:0}
+  .team{display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px solid var(--line)}
+  .team:last-child{border-bottom:0}
+
+  /* caregiver */
+  .cg-grid{display:grid;grid-template-columns:1fr 288px;gap:16px}
+  .credrow td{font-size:12.5px}
+  .checkline{display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--line)}
+  .checkline:last-child{border-bottom:0}
+  .checkline .tick{width:18px;height:18px;border-radius:5px;border:1.5px solid var(--ok);color:var(--ok);display:grid;place-items:center;flex:none;font-size:11px}
+  .checkline .tick.warn{border-color:var(--red);color:var(--red)}
+  .dates{margin-left:auto;text-align:right;font-size:11.5px;color:var(--muted);flex:none}
+  .dates b{color:var(--fg);font-variant-numeric:tabular-nums}
+
+  /* care-plan v2: document spine + tabbed sections */
+  .cprec{display:grid;grid-template-columns:260px 1fr;gap:16px}
+  .spine{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);align-self:start;position:sticky;top:calc(env(safe-area-inset-top,0px) + 8px)}
+  .spine .shd{padding:12px 14px;border-bottom:1px solid var(--line);font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px}
+  .spine .grp{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);font-weight:700;padding:10px 14px 4px}
+  .docrow{display:flex;align-items:center;gap:9px;padding:8px 14px;font-size:12.5px;cursor:pointer;border-left:2px solid transparent}
+  .docrow:hover{background:var(--surface-2)}
+  .docrow.on{background:var(--accent-soft);border-left-color:var(--accent);color:var(--accent-ink);font-weight:600}
+  .docrow .st{width:15px;height:15px;border-radius:4px;flex:none;display:grid;place-items:center;font-size:9px;color:#fff}
+  .st.done{background:var(--ok)} .st.miss{background:var(--red)} .st.wait{background:var(--yellow)}
+  .docrow .lk{margin-left:auto;font-size:10px;color:var(--faint)}
+  .cptab{display:flex;gap:4px;border-bottom:1px solid var(--line);padding:0 4px;overflow-x:auto}
+  .cptab button{border:0;background:none;font-family:inherit;font-size:13px;padding:12px 12px;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;white-space:nowrap;display:flex;align-items:center;gap:7px}
+  .cptab button .tn{width:19px;height:19px;border-radius:50%;background:var(--surface-2);display:grid;place-items:center;font-size:11px;font-weight:700}
+  .cptab button.on{color:var(--accent-ink);border-bottom-color:var(--accent);font-weight:600}
+  .cptab button.on .tn{background:var(--accent);color:#fff}
+  .cptab-body{padding:16px}
+  .cpsec{display:none} .cpsec.on{display:block}
+  .prov{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--faint);background:var(--surface-2);border-radius:20px;padding:3px 10px;margin-bottom:12px}
+  .prov b{color:var(--accent-ink)}
+  .provlink{cursor:pointer;border:1px solid var(--line)}
+  .provlink:hover{border-color:var(--accent);color:var(--fg)}
+  .provlink .tv{background:var(--accent-soft);color:var(--accent-ink);border-radius:5px;padding:0 6px;font-weight:700;font-family:var(--f-mono)}
+  .provlink .go{color:var(--accent);font-weight:700}
+  .crumb{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted);margin-bottom:12px;flex-wrap:wrap}
+  .crumb a{color:var(--accent-ink);cursor:pointer;font-weight:600}
+  .crumb a:hover{text-decoration:underline}
+  .crumb .sep{opacity:.5}
+  .drill{border:1px solid var(--line);border-radius:9px;padding:11px 13px;margin-bottom:9px;cursor:pointer;display:flex;align-items:center;gap:11px}
+  .drill:hover{border-color:var(--accent);background:var(--surface-2)}
+  .drill .arw{margin-left:auto;color:var(--faint);flex:none}
+  .prog{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:2px 9px;border-radius:20px}
+  .prog.done{background:var(--ok-soft);color:var(--ok)} .prog.inprog{background:var(--info-soft);color:var(--info)} .prog.notstart{background:var(--surface-2);color:var(--muted)}
+  .chk{display:flex;align-items:flex-start;gap:9px;padding:9px 0;border-bottom:1px solid var(--line);font-size:12.5px}
+  .chk:last-child{border-bottom:0}
+  .chk .box{width:17px;height:17px;border-radius:4px;border:1.5px solid var(--line);flex:none;display:grid;place-items:center;font-size:10px;margin-top:1px}
+  .chk .box.on{background:var(--ok);border-color:var(--ok);color:#fff}
+  .needrow{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);font-size:12.5px}
+  .needrow:last-child{border-bottom:0}
+  .needrow .dom{font-weight:600;flex:none;width:170px}
+  .dsm td{font-size:12.5px}
+  .clientlogin{max-width:620px;margin:0 auto}
+  .cl-hero{background:linear-gradient(135deg,var(--accent-soft),var(--surface));border:1px solid var(--line);border-radius:14px;padding:20px;margin-bottom:16px}
+  .appt{display:flex;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}
+  .appt:last-child{border-bottom:0}
+  .appt .cal{width:44px;text-align:center;flex:none;background:var(--surface-2);border-radius:8px;padding:6px 0}
+  .appt .cal .m{font-size:10px;text-transform:uppercase;color:var(--red);font-weight:700}
+  .appt .cal .d{font-size:17px;font-weight:700;font-family:var(--f-head)}
+
+  .note{display:flex;gap:9px;background:var(--surface-2);border-radius:8px;padding:10px 12px;font-size:12px;line-height:1.45;margin-bottom:16px;color:var(--muted)}
+  .note svg{flex:none;margin-top:1px;color:var(--accent)}
+  .roletog{display:inline-flex;background:var(--surface-2);border-radius:8px;padding:3px;gap:2px}
+  .roletog button{border:0;background:none;font-family:inherit;font-size:12px;padding:5px 11px;border-radius:6px;cursor:pointer;color:var(--muted)}
+  .roletog button.on{background:var(--surface);color:var(--fg);font-weight:600;box-shadow:var(--shadow)}
+
+  @media(max-width:960px){.cp-grid,.cg-grid,.cprec{grid-template-columns:1fr}.kpi{grid-template-columns:repeat(2,1fr)}.spine{position:static}}
+  @media(max-width:680px){
+    .app{grid-template-columns:1fr}
+    .rail{position:fixed;z-index:40;left:0;top:0;bottom:0;width:220px;transform:translateX(-100%);transition:transform .2s;height:100%}
+    .rail.open{transform:none}.menutog{display:grid!important}
+  }
+  .menutog{display:none;place-items:center;width:34px;height:34px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--fg);cursor:pointer}
+  .scrim{display:none;position:fixed;inset:0;background:rgba(10,15,20,.4);z-index:35}.scrim.on{display:block}
+  [hidden]{display:none!important}
+  /* v7: read-only provenance, source chips, shell editor */
+  .prov .tv{background:var(--accent-soft);color:var(--accent-ink);border-radius:5px;padding:0 6px;font-weight:700;font-family:var(--f-mono)}
+  .prov .lock{opacity:.7}
+  .srcchip{display:inline-block;font-size:10px;font-weight:600;letter-spacing:.02em;padding:1px 7px;border-radius:20px;margin-left:6px;white-space:nowrap;vertical-align:1px}
+  .src-instr{background:var(--info-soft);color:var(--info)} .src-need{background:var(--yellow-soft);color:var(--yellow)} .src-man{background:var(--surface-2);color:var(--muted)}
+  .stor{font-family:var(--f-mono);font-size:10.5px;padding:1px 7px;border-radius:5px;background:var(--surface-2);color:var(--muted);white-space:nowrap}
+  .stor.spine{background:var(--accent-soft);color:var(--accent-ink)}
+  .ext{border:1px dashed var(--line);border-radius:9px;padding:10px 13px;margin-top:8px;font-size:12.5px;color:var(--muted)}
+  .ext summary{cursor:pointer;font-weight:600;color:var(--fg)}
+  .narr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:16px}
+  .narr div{border:1px solid var(--line);border-radius:9px;padding:9px 11px;font-size:12.5px}
+  .narr div b{display:block;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--faint);margin-bottom:3px}
+  .layer{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:3px 9px;border-radius:20px}
+  .layer.a{background:var(--info-soft);color:var(--info)} .layer.b{background:var(--ok-soft);color:var(--ok)}
+  .tplrow{cursor:pointer} .tplrow.sel{background:var(--accent-soft)}
+  .tpledit{display:none} .tpledit.on{display:block}
+  .rule{font-family:var(--f-mono);font-size:11.5px;background:var(--surface-2);border-radius:8px;padding:10px 12px;line-height:1.6;white-space:pre-wrap;overflow-x:auto}
+  @media(max-width:640px){.narr{grid-template-columns:1fr}}
+  .cp-grid>*,.cg-grid>*,.cprec>*,.stack>*{min-width:0}
+  @media(max-width:960px){.cp-grid{grid-template-columns:1fr!important}}
+  .listline .meta,.who>div{min-width:0;overflow-wrap:anywhere}
+  /* v8: progress notes + measures */
+  .chips{display:inline-flex;flex-wrap:wrap;gap:4px}
+  .chip{font-size:11px;padding:2px 9px;border-radius:20px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+  .chip.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+  .meas{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:6px 0;font-size:12.5px}
+  .mlab{color:var(--fg);min-width:0}
+  .ans{color:var(--fg);background:var(--surface-2);border-radius:6px;padding:2px 8px}
+  .blank{color:var(--faint);border-bottom:1px dashed var(--line);min-width:90px;display:inline-block}
+  .tally{font-family:var(--f-mono);font-weight:700;border:1px solid var(--line);border-radius:6px;padding:1px 9px}
+  .ladder{width:100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:3px 12px;font-size:12px;color:var(--muted)}
+  .ladder .box,.trials .box{width:15px;height:15px;border-radius:4px;border:1.5px solid var(--line);display:inline-grid;place-items:center;font-size:9px;margin-right:6px;vertical-align:-3px}
+  .ladder .box.on{background:var(--ok);border-color:var(--ok);color:#fff}
+  .trials{width:100%;display:flex;flex-direction:column;gap:5px}
+  .trials>div{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+  .caution{background:var(--yellow-soft);color:var(--fg);border-radius:8px;padding:7px 10px;font-size:12px;margin:4px 0}
+  .obblock{border:1px solid var(--line);border-radius:9px;padding:10px 12px;margin:8px 0}
+  .obhd{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:13px}
+  .obhd .ol{font-weight:700;color:var(--accent-ink);font-family:var(--f-mono)}
+  .pngoal{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);margin:14px 0 2px}
+  .isk{font-size:12px;color:var(--muted);margin:4px 0}
+  .isk summary{cursor:pointer;color:var(--info);font-weight:600}
+  .instr{margin:4px 0 0;padding-left:18px;font-size:12.5px;color:var(--muted)}
+  .instr li{margin:2px 0}
+  .mrow{display:flex;gap:8px;align-items:baseline;padding:6px 0;border-bottom:1px solid var(--line);font-size:12.5px}
+  .mtype{flex:none;font-size:10.5px;font-weight:600;background:var(--info-soft);color:var(--info);border-radius:5px;padding:1px 7px;white-space:nowrap}
+  .hdrgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 14px;font-size:12px}
+  .hdrgrid div{display:flex;flex-direction:column;min-width:0}
+  .hdrgrid span{color:var(--faint);font-size:10.5px;text-transform:uppercase;letter-spacing:.05em}
+  #obj-panel .subhd,#note-view .subhd{flex-wrap:wrap;gap:4px 8px}
+  @media print{
+    body.pn *{visibility:hidden!important}
+    body.pn #note-view,body.pn #note-view *{visibility:visible!important}
+    body.pn #note-view{position:absolute;left:0;top:0;width:100%;border:0;box-shadow:none}
+    body.pn .noprint,body.pn #note-view button{display:none!important}
+  }
+  .notecard{border:1px solid var(--line);border-radius:9px;padding:9px 11px;margin-bottom:8px;cursor:pointer}
+  .notecard:hover{border-color:var(--accent)} .notecard.sel{border-color:var(--accent);background:var(--accent-soft)}
+  .billbox{border:1px dashed var(--yellow);border-radius:9px;padding:10px 12px;margin-top:10px}
+  #goal-list .obj{padding-left:13px}
+  @media(max-width:640px){.ladder,.hdrgrid{grid-template-columns:1fr}}
+</style>
+
+<div class="app">
+  <aside class="rail" id="rail">
+    <div class="brand"><div class="dot">R</div><div><b>Ripple Effects</b><span>Manager Console</span></div></div>
+    <div class="navlabel">Operations</div>
+    <button class="nav on" data-s="dash">
+      <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>Dashboard</button>
+    <button class="nav" data-s="client">
+      <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5"/><path d="M9 13h7M9 17h7"/></svg>Client Care Plan</button>
+    <button class="nav" data-s="caregiver">
+      <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3.4"/><path d="M5.5 20c.7-3.5 3.3-5.5 6.5-5.5s5.8 2 6.5 5.5"/></svg>Caregiver</button>
+    <button class="nav" data-s="bill">
+      <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h8M8 17h5"/></svg>Weekly Billing</button>
+    <div class="navlabel">Configuration</div>
+    <button class="nav" data-s="tpl">
+      <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 9v12"/></svg>Form Templates</button>
+    <div style="margin-top:auto;padding:12px 10px;font-size:11px;color:var(--faint);line-height:1.5">Built from Lauren's<br>mockups · demo data</div>
+  </aside>
+  <div class="scrim" id="scrim"></div>
+
+  <main>
+    <div class="top">
+      <button class="menutog" id="menutog" aria-label="Menu"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+      <div><h1 id="scr-title">Dashboard</h1><p id="scr-sub">Caregivers, clients, and scheduling — what needs attention.</p></div>
+      <div class="sp"></div>
+      <div class="officepick" id="officepick"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-5h6v5"/></svg>Office: <b>Ripple Effects — Portage</b></div>
+      <div class="roletog" id="roletog" hidden><button class="on" data-role="mgr">Manager view</button><button data-role="client">Client login</button></div>
+      <button class="themetog" id="themetog" aria-label="Theme"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z"/></svg></button>
+    </div>
+
+    <!-- ================= DASHBOARD (IMG_1297) ================= -->
+    <section class="screen on" id="s-dash">
+      <div class="kpi">
+        <div class="tile s-ok"><div class="lab">Caregivers @ 100%</div><div class="big tnum">79%<span style="font-size:14px;color:var(--faint)"> · 11/14</span></div><div class="foot">all requirements current</div></div>
+        <div class="tile s-red"><div class="lab">Overdue items</div><div class="big tnum">2</div><div class="foot">training + background check</div></div>
+        <div class="tile s-yellow"><div class="lab">Units at risk of expiring</div><div class="big tnum">$3,120</div><div class="foot">unused, across 5 authorizations</div></div>
+        <div class="tile s-info"><div class="lab">Clients pending docs</div><div class="big tnum">3</div><div class="foot">missing documentation</div></div>
+      </div>
+
+      <!-- (1) Caregivers -->
+      <div class="sec-eyebrow" style="margin-top:20px"><div class="n">1</div><h2>Caregivers</h2><span class="sp"></span><span class="pill p-ok"><i class="d"></i>79% at 100%</span></div>
+      <div class="cp-grid" style="grid-template-columns:1fr 1fr">
+        <div class="panel">
+          <div class="phead"><h2 style="font-size:14px">Training — deadlines approaching</h2><span class="sp"></span></div>
+          <div class="pbody" style="padding:6px 14px 12px">
+            <div class="listline"><span class="star">★</span><div class="meta"><div class="nm">CPR / First Aid — Marcus Bell</div><div class="sub">expired 3 days ago</div></div><span class="pill p-red days">Overdue</span></div>
+            <div class="listline"><span class="pill p-red" style="padding:2px 6px"><i class="d"></i></span><div class="meta"><div class="nm">Recipient Rights — Dana Okafor</div><div class="sub">expires in 21 days</div></div><span class="days" style="color:var(--red)"><b class="tnum">30d</b></span></div>
+            <div class="listline"><span class="pill p-yellow" style="padding:2px 6px"><i class="d"></i></span><div class="meta"><div class="nm">HIPAA — Priya Anand</div><div class="sub">expires in 48 days</div></div><span class="days" style="color:var(--yellow)"><b class="tnum">60d</b></span></div>
+            <div class="ordernote">Listed in order of expiration. 60 days before due = yellow · 30 days = red · overdue = ★</div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="phead"><h2 style="font-size:14px">Background checks — approaching</h2><span class="sp"></span></div>
+          <div class="pbody" style="padding:6px 14px 12px">
+            <div class="listline"><span class="star">★</span><div class="meta"><div class="nm">MDHHS Central Registry — J. Ruiz</div><div class="sub">expired 1 day ago</div></div><span class="pill p-red days">Overdue</span></div>
+            <div class="listline"><span class="pill p-red" style="padding:2px 6px"><i class="d"></i></span><div class="meta"><div class="nm">ICHAT — Marcus Bell</div><div class="sub">expires in 26 days</div></div><span class="days" style="color:var(--red)"><b class="tnum">30d</b></span></div>
+            <div class="listline"><span class="pill p-yellow" style="padding:2px 6px"><i class="d"></i></span><div class="meta"><div class="nm">OIG — Dana Okafor</div><div class="sub">expires in 55 days</div></div><span class="days" style="color:var(--yellow)"><b class="tnum">60d</b></span></div>
+            <div class="ordernote">Listed in order of expiration. Same 60 / 30 / overdue thresholds.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- (2) Clients -->
+      <div class="sec-eyebrow" style="margin-top:20px"><div class="n">2</div><h2>Clients</h2></div>
+      <div class="cp-grid" style="grid-template-columns:1fr 1fr">
+        <div class="panel">
+          <div class="phead"><h2 style="font-size:14px">Pending — missing documentation</h2><span class="sp"></span><span class="pill p-yellow"><i class="d"></i>3</span></div>
+          <div class="pbody" style="padding:6px 14px 12px">
+            <div class="listline"><div class="av">MS</div><div class="meta"><div class="nm">Client M.S.</div><div class="sub">missing: allergies, insurance form</div></div></div>
+            <div class="listline"><div class="av">RK</div><div class="meta"><div class="nm">Client R.K.</div><div class="sub">missing: release of information</div></div></div>
+            <div class="listline"><div class="av">TW</div><div class="meta"><div class="nm">Client T.W.</div><div class="sub">missing: assessment</div></div></div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="phead"><h2 style="font-size:14px">Authorizations — active clients</h2><span class="sp"></span></div>
+          <div class="pbody" style="padding:6px 14px 12px">
+            <div class="listline"><span class="pill p-red" style="padding:2px 6px"><i class="d"></i></span><div class="meta"><div class="nm">Client J.R. — CLS #A-3391</div><div class="sub">expires in 9 days · 88 units left · <b style="color:var(--red)">$1,320 at risk</b></div></div><span class="days" style="color:var(--red)"><b class="tnum">30d</b></span></div>
+            <div class="listline"><span class="pill p-yellow" style="padding:2px 6px"><i class="d"></i></span><div class="meta"><div class="nm">Client A.L. — Respite #A-3402</div><div class="sub">expires in 44 days · 64 units left · <b style="color:var(--yellow)">$960 at risk</b></div></div><span class="days" style="color:var(--yellow)"><b class="tnum">60d</b></span></div>
+            <div class="listline"><span class="pill p-yellow" style="padding:2px 6px"><i class="d"></i></span><div class="meta"><div class="nm">Client T.W. — CLS #A-3410</div><div class="sub">expires in 52 days · 40 units left · <b style="color:var(--yellow)">$600 at risk</b></div></div><span class="days" style="color:var(--yellow)"><b class="tnum">60d</b></span></div>
+            <div class="ordernote">Listed in order of authorization expiration. Call the family to schedule and use the units before they expire — use it or lose it.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- (3) Scheduling -->
+      <div class="sec-eyebrow" style="margin-top:20px"><div class="n">3</div><h2>Scheduling</h2></div>
+      <div class="panel"><div class="pbody">
+        <div class="listline"><span class="pill p-yellow" style="padding:2px 6px"><i class="d"></i></span><div class="meta"><div class="nm">Progress notes overdue</div><div class="sub">past the day-after deadline · Client T.W. 09/28 (Marcus) · Client A.L. 09/27 (Dana)</div></div><button class="btn sm">Open</button></div>
+        <div class="listline" style="border:0"><span class="pill p-red" style="padding:2px 6px"><i class="d"></i></span><div class="meta"><div class="nm">Missing coverage</div><div class="sub">Client J.R. · Thu 2:00–4:00 PM CLS — no caregiver assigned</div></div><button class="btn sm">Find caregiver</button></div>
+      </div></div>
+
+      <div class="legend">
+        <span><i style="background:var(--yellow)"></i> 60 days before expiration</span>
+        <span><i style="background:var(--red)"></i> 30 days before expiration</span>
+        <span><span class="star">★</span> Overdue</span>
+      </div>
+    </section>
+
+    <!-- ================= CLIENT 1 CARE PLAN (IMG_1296) ================= -->
+    <section class="screen" id="s-client">
+      <!-- manager view -->
+      <div id="client-mgr">
+        <div class="note" style="margin-bottom:14px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 8h10M7 12h10M7 16h6"/><rect x="3" y="3" width="18" height="18" rx="2"/></svg><div>Everything on this page is <b>this client's record</b> — fully editable. Each section is shaped by an agency shell (see the small read-only badge), but shells are only edited in <b>Configuration → Form Templates</b>. Each visit (shift) gets <b>one note</b>: a <b>CLS progress note</b> covering every Ripple objective (ISK Instructions for Staff from the IPOS + each objective's <b>data questions</b>), or a <b>respite note</b> with a session narrative. Notes print for the client file.</div></div>
+        <div class="cprec">
+          <!-- DOCUMENT SPINE -->
+          <aside class="spine">
+            <div class="shd"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5"/></svg>Client J.R. — record</div>
+            <div class="grp">Plan · versioned with the IPOS</div>
+            <div class="docrow on" data-tab="ipos"><span class="st done">✓</span>IPOS <span class="sub" style="font-size:10.5px">v2 · annual</span><span class="lk">→ auth+goals</span></div>
+            <div class="docrow" data-tab="goals"><span class="st done">✓</span>Goals &amp; objectives<span class="lk">→ notes</span></div>
+            <div class="docrow" data-tab="notes"><span class="st wait">!</span>Progress notes <span class="sub" style="font-size:10.5px">CLS + respite</span><span class="lk">→ billing</span></div>
+            <div class="grp">Onboarding · 6 of 8 complete</div>
+            <div class="docrow" data-tab="ipos"><span class="st done">✓</span>IPOS</div>
+            <div class="docrow"><span class="st done">✓</span>Assessment</div>
+            <div class="docrow" data-tab="sched"><span class="st done">✓</span>In-service form signed</div>
+            <div class="docrow"><span class="st miss">!</span>Client forms <span class="sub" style="font-size:10.5px">4 of 5 · allergies</span></div>
+            <div class="docrow"><span class="st done">✓</span>Safety / behavior plan <span class="sub" style="font-size:10.5px">n/a</span></div>
+            <div class="docrow" data-tab="sched"><span class="st miss">!</span>Training forms <span class="sub" style="font-size:10.5px">2 of 3</span></div>
+            <div class="docrow" data-tab="ipos"><span class="st done">✓</span>Authorization</div>
+            <div class="docrow" data-tab="notes"><span class="st done">✓</span>CLS progress note set up</div>
+            <div style="padding:10px 14px"><div class="sub" style="font-size:11px;font-style:italic">Bren's 8 required items. Client forms = consent, insurance, emergency contacts, allergies, release of information — each its own shell, updated on its own track.</div></div>
+          </aside>
+
+          <!-- STRUCTURED RECORD: backbone tabs -->
+          <div class="panel" style="min-width:0">
+            <div class="cptab">
+              <button class="on" data-tab="ipos">IPOS</button>
+              <button data-tab="goals">Goals</button>
+              <button data-tab="notes">Progress notes</button>
+              <button data-tab="sched">Scheduling</button>
+            </div>
+            <div class="cptab-body">
+
+              <!-- IPOS tab -->
+              <div class="cpsec on" id="cp-ipos">
+                <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+                  <span class="prov" style="margin:0"><span class="lock">🔒</span> built from <span class="tv">IPOS shell v4</span> + <span class="tv">Authorization shell v4</span> · filled for this client</span>
+                  <span class="sp" style="margin-left:auto"></span>
+                  <button class="btn sm">Edit this client's IPOS</button>
+                  <button class="btn sm">Renew (new plan version)</button>
+                </div>
+
+                <div class="subhd" style="margin-bottom:8px">Authorizations <span style="text-transform:none;color:var(--faint);font-weight:400">· this agency · from KARE</span></div>
+                <div class="authbox" style="border:1px solid var(--line);border-radius:9px;padding:12px 13px;margin-bottom:8px">
+                  <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px">
+                    <div><b>Ripple Effects Community Inclusion Center</b><div class="an" style="font-family:var(--f-mono);font-size:11px;color:var(--faint)">#A-3391 · draws first (oldest valid)</div></div>
+                    <div class="authhead" style="font-size:12.5px"><div><span style="color:var(--muted)">Effective</span><br><b class="tnum">08/15/2025</b></div><div><span style="color:var(--muted)">Expires</span><br><b class="tnum">08/14/2026</b></div></div>
+                  </div>
+                </div>
+
+                <div class="subhd" style="margin:14px 0 8px">Services authorized <span style="text-transform:none;color:var(--faint);font-weight:400">· units authorized → billed → remaining</span></div>
+                <div style="overflow-x:auto">
+                <table class="svc-table">
+                  <thead><tr><th>Service</th><th class="tnum">Authorized</th><th class="tnum">Billed</th><th class="tnum">Remaining</th><th class="tnum">At risk</th><th></th></tr></thead>
+                  <tbody>
+                    <tr class="drill-svc" data-go="goals" style="cursor:pointer">
+                      <td><b>CLS</b><div class="sub">Community Living Supports · has goals →</div></td>
+                      <td class="tnum">120</td><td class="tnum">32</td>
+                      <td class="tnum" style="color:var(--red);font-weight:600">88 <span class="sub">· 22 hrs</span><div class="barmini"><i style="width:27%"></i></div></td>
+                      <td class="tnum" style="color:var(--red);font-weight:600">$1,320</td>
+                      <td><span class="pill p-red"><i class="d"></i>9d</span></td>
+                    </tr>
+                    <tr>
+                      <td><b>Respite</b><div class="sub">no goals (service only)</div></td>
+                      <td class="tnum">160</td><td class="tnum">40</td>
+                      <td class="tnum" style="font-weight:600">120 <span class="sub">· 30 hrs</span><div class="barmini"><i style="width:75%"></i></div></td>
+                      <td class="tnum sub">—</td>
+                      <td><span class="pill p-ok"><i class="d"></i>OK</span></td>
+                    </tr>
+                  </tbody>
+                </table>
+                </div>
+                <div class="ordernote" style="margin-bottom:6px">Oldest valid authorization drawn first. CLS: 88 units ($1,320) expiring in 9 days — call the family. Click <b>CLS</b> to open its goals.</div>
+                <details class="ext" style="margin-bottom:16px"><summary>Other providers in this plan · 2 — reference only</summary>
+                  <div style="margin-top:8px">Case Management · quarterly units · <span class="sub">never counted toward this agency's units or scheduling</span></div>
+                  <div style="margin-top:4px">Outpatient clinic · eligibility assessment · <span class="sub">reference only</span></div>
+                </details>
+
+                <div class="subhd" style="margin-bottom:8px">Person-centered summary <span style="text-transform:none;color:var(--faint);font-weight:400">· this client's words · editable</span></div>
+                <div class="narr">
+                  <div><b>Hopes &amp; dreams</b>Ride the bus to the library on his own.</div>
+                  <div><b>Strengths</b>Friendly, follows routines well, loves music.</div>
+                  <div><b>Needs</b>Practice with money, transit, and asking for help.</div>
+                  <div><b>Preferences</b>Afternoon sessions; quiet places.</div>
+                </div>
+
+                <div class="subhd" style="margin-bottom:8px">MichiCANS DSM service recommendations <span style="text-transform:none;color:var(--faint);font-weight:400">· MichiCANS dated 07/30/2025</span></div>
+                <div style="overflow-x:auto"><table class="dsm" style="margin-bottom:14px">
+                  <thead><tr><th>Service</th><th>Outcome</th></tr></thead>
+                  <tbody>
+                    <tr><td>Community Living Supports</td><td><span class="pill p-ok"><i class="d"></i>01 — aligns with needs; in plan</span></td></tr>
+                    <tr><td>Peer support</td><td><span class="pill p-mut">03 — recommended; guardian declined</span></td></tr>
+                  </tbody>
+                </table></div>
+
+                <div class="subhd" style="margin-bottom:8px">Needs identified by MichiCANS</div>
+                <div class="needrow"><span class="dom">Behavioral / Emotional</span><span class="sub">Level of need 2 — coping in busy settings · addressed in current plan</span></div>
+                <div class="needrow" style="margin-bottom:14px"><span class="dom">Centerpiece strengths</span><span class="sub">Family supports · interpersonal</span></div>
+
+                <div class="subhd" style="margin-bottom:8px">Other needs not identified by MichiCANS</div>
+                <div class="needrow"><span class="dom">Life Functioning</span><span class="sub">Daily-living skill support needed.</span></div>
+                <div class="needrow"><span class="dom">Cultural Factors</span><span class="sub">None identified.</span></div>
+                <div class="needrow"><span class="dom">Risk Factors &amp; Behaviors</span><span class="sub">Supervision near traffic.</span></div>
+                <div class="needrow" style="margin-bottom:14px"><span class="dom">Caregiver Resources &amp; Needs</span><span class="sub">Parents need scheduled respite.</span></div>
+
+                <div class="subhd" style="margin-bottom:8px">Needs to address in treatment <span style="text-transform:none;color:var(--faint);font-weight:400">· linked to the objectives that address them</span></div>
+                <div style="overflow-x:auto"><table class="dsm">
+                  <thead><tr><th>Domain</th><th>New need</th><th>Treatment recommendation</th><th>Linked objective</th></tr></thead>
+                  <tbody>
+                    <tr><td>Transportation</td><td>☐</td><td>Practice community outings with fading prompts</td><td><span class="pill p-info">3B</span></td></tr>
+                    <tr><td>Safety / Risk Factors</td><td>☐</td><td>Close supervision during transitions</td><td><span class="pill p-info">1B</span></td></tr>
+                    <tr><td>Relationships</td><td>☑</td><td>Addressed in current plan</td><td><span class="pill p-mut">1B</span></td></tr>
+                  </tbody>
+                </table></div>
+              </div>
+
+              <!-- GOALS tab (v8): objectives + ISK instructions + per-objective data measures -->
+              <div class="cpsec" id="cp-goals">
+                <span class="prov"><span class="lock">🔒</span> built from <span class="tv">IPOS shell v4</span> · IPOS v2 · goals entered by Bren from the ISK IPOS · every new IPOS version → in-service + staff retraining</span>
+                <div class="cp-grid" style="grid-template-columns:1.15fr 1fr">
+                  <div>
+                    <div class="subhd" style="margin-bottom:8px">CLS — goals <span style="text-transform:none;color:var(--faint);font-weight:400">· delivered by this agency · sequence kept</span></div>
+                    <div id="goal-list"></div>
+                    <div class="subhd" style="margin:14px 0 2px">Respite — <span style="text-transform:none;font-weight:400;color:var(--faint)">no goals</span></div>
+                    <p class="sub" style="font-size:11.5px;margin:2px 0 10px">Each respite visit gets its own <b>Respite Progress Note</b> (header + session narrative). Respite is never recorded on the CLS note.</p>
+                    <details class="ext"><summary>Other providers' objectives · 2 — reference only, not on the progress note</summary>
+                      <div style="margin-top:8px"><b>Case management</b> · monthly check-in to monitor progress</div>
+                      <div style="margin-top:4px"><b>Evaluator</b> · eligibility assessment by end of plan year</div>
+                    </details>
+                  </div>
+                  <div>
+                    <div class="panel" style="box-shadow:none;position:sticky;top:8px" id="obj-panel"></div>
+                    <p class="sub" style="font-size:11px;margin-top:8px">Select any objective to see its instructions, its data questions, and how recent visits went. The list keeps its order; nothing collapses.</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- PROGRESS NOTES tab (v8): one note per visit (shift), all objectives inside -->
+              <div class="cpsec" id="cp-notes">
+                <span class="prov"><span class="lock">🔒</span> built from <span class="tv">Progress Note shell v1</span> + <span class="tv">Respite Note shell v1</span> · one note per visit (shift)</span>
+                <div class="flowbar"><b>1 visit (shift)</b><span class="arrow">→</span><b>1 note</b> (CLS: every objective · Respite: narrative)<span class="arrow">→</span>signed day of / day after<span class="arrow">→</span>weekly billing review</div>
+                <div class="cp-grid" style="grid-template-columns:minmax(0,.8fr) minmax(0,1.4fr)">
+                  <div>
+                    <div class="subhd" style="margin-bottom:6px">Visits &amp; notes</div>
+                    <div id="note-list"></div>
+                    <div class="ordernote">Due the day of the visit or the day after. Status: Draft → Submitted → Reviewed → Billed (weekly).</div>
+                  </div>
+                  <div class="panel" style="box-shadow:none;min-width:0" id="note-view"></div>
+                </div>
+              </div>
+
+              <!-- SCHEDULING tab: client summary + filter/search (default Trained/Effective), links to full module -->
+              <div class="cpsec" id="cp-sched">
+                <span class="prov"><span class="lock">🔒</span> built from <span class="tv">Training form shell v2</span> · only caregivers trained on IPOS v2 can deliver</span>
+                <div style="display:flex;gap:9px;flex-wrap:wrap;margin-bottom:12px">
+                  <div style="flex:1;min-width:180px;display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:8px;padding:7px 11px">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="color:var(--faint)"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+                    <span class="sub">Search caregivers…</span>
+                  </div>
+                  <div class="roletog"><button class="on">Trained / effective</button><button>All caregivers</button></div>
+                </div>
+                <div class="subhd" style="margin-bottom:8px">Who can deliver this plan</div>
+                <div class="team"><div class="av">P1</div><div class="meta"><div style="font-weight:600;font-size:13px">Priya Anand</div><div class="sub">Mon/Wed/Fri · trained on IPOS v2 · CPR current</div></div><span class="pill p-ok" style="margin-left:auto"><i class="d"></i>Can deliver</span></div>
+                <div class="team"><div class="av">DR</div><div class="meta"><div style="font-weight:600;font-size:13px">Dana Reyes</div><div class="sub">Tue/Thu · trained on IPOS v2 · all current</div></div><span class="pill p-ok" style="margin-left:auto"><i class="d"></i>Can deliver</span></div>
+                <div class="team"><div class="av">MB</div><div class="meta"><div style="font-weight:600;font-size:13px">Marcus Bell</div><div class="sub">Trained · CPR expired</div></div><span class="pill p-red" style="margin-left:auto"><i class="d"></i>Blocked</span></div>
+                <div class="subhd" style="margin:16px 0 8px">This client's shifts <span style="text-transform:none;color:var(--faint);font-weight:400">· summary</span></div>
+                <div class="checkline"><span class="tick">✓</span><div class="meta"><div class="nm" style="font-size:12.5px">Tue 09/30 1:00–4:00 PM · CLS · Priya</div><div class="sub">1 shift = 12 units · progress note: draft</div></div></div>
+                <div class="checkline"><span class="pill p-red" style="padding:2px 6px"><i class="d"></i></span><div class="meta"><div class="nm" style="font-size:12.5px">Thu 2:00–4:00 PM · CLS · unassigned</div><div class="sub">missing coverage · 8 units</div></div><button class="btn sm">Assign (Smart)</button></div>
+                <button class="btn sm" style="margin-top:12px;width:100%">Open full Schedule Management →</button>
+                <p class="ordernote">Per-client summary only. Assign opens the existing Manual / Smart / Auto Assign flow, pre-filtered to this client; full scheduling lives in Schedule Management. The same eligibility check runs everywhere.</p>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- client login view -->
+      <div id="client-login" hidden>
+        <div class="clientlogin">
+          <div class="cl-hero">
+            <div class="sub" style="margin-bottom:4px">Welcome back</div>
+            <h1 style="font-size:22px">Jordan's care plan</h1>
+            <p style="margin:6px 0 0;color:var(--muted)">Your services, upcoming visits, and hours remaining.</p>
+          </div>
+          <div class="panel" style="margin-bottom:16px">
+            <div class="phead"><h2 style="font-size:14px">Your services</h2></div>
+            <div class="pbody">
+              <div class="idrow"><span>Community Living Supports (CLS)</span><b>22 hrs left</b></div>
+              <div class="idrow"><span>Respite</span><b>30 hrs left</b></div>
+              <p class="sub" style="margin:10px 0 0">Your CLS hours expire on Aug 14. Call us at 269-257-9060 to schedule and use your remaining hours.</p>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="phead"><h2 style="font-size:14px">Upcoming visits</h2></div>
+            <div class="pbody">
+              <div class="appt"><div class="cal"><div class="m">Oct</div><div class="d">2</div></div><div><div style="font-weight:600">CLS session with Priya</div><div class="sub">2:00 – 4:00 PM · at the center</div></div></div>
+              <div class="appt"><div class="cal"><div class="m">Oct</div><div class="d">4</div></div><div><div style="font-weight:600">Respite with Priya</div><div class="sub">10:00 AM – 1:00 PM · at the center</div></div></div>
+              <div class="appt"><div class="cal"><div class="m">Oct</div><div class="d">7</div></div><div><div style="font-weight:600">CLS session with Marcus</div><div class="sub">2:00 – 4:00 PM · at the center</div></div></div>
+            </div>
+          </div>
+          <p class="sub" style="text-align:center;margin-top:14px">This is what the client or family sees when they log in — a simple view of their own plan, not the manager's controls.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= CAREGIVER (IMG_1295) ================= -->
+    <section class="screen" id="s-caregiver">
+      <div class="note"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg><div>Each item carries an <b>effective date</b> and <b>expiration date</b>; background checks and general training run <b>annually</b>, and both the supervisor and caregiver are notified before expiration.</div></div>
+      <div class="cg-grid">
+        <div class="stack">
+          <div class="panel">
+            <div class="phead"><div class="who"><div class="av" style="width:34px;height:34px">PA</div><div><h2>Priya Anand</h2><div class="sub">Caregiver <span style="color:var(--faint)">(shown as “DSP” at Ripple)</span> · onboarded 02/2025</div></div></div><span class="sp"></span><span class="pill p-ok"><i class="d"></i>100% ready</span></div>
+          </div>
+
+          <!-- (1) Onboarding background checks -->
+          <div class="panel">
+            <div class="phead"><div class="sec-eyebrow" style="margin:0"><div class="n">1</div><h2 style="font-size:14px">Onboarding — background checks</h2></div><span class="sp"></span><span class="pill p-mut">annual</span></div>
+            <div style="overflow-x:auto"><table>
+              <thead><tr><th>Check</th><th>Effective</th><th>Expires</th><th>Status</th></tr></thead>
+              <tbody>
+                <tr class="credrow"><td>a. ICHAT</td><td class="tnum">03/01/2025</td><td class="tnum">03/01/2026</td><td><span class="pill p-ok"><i class="d"></i>Current</span></td></tr>
+                <tr class="credrow"><td>b. MDHHS Central Registry</td><td class="tnum">03/01/2025</td><td class="tnum">03/01/2026</td><td><span class="pill p-ok"><i class="d"></i>Current</span></td></tr>
+                <tr class="credrow"><td>c. OIG</td><td class="tnum">03/01/2025</td><td class="tnum">03/01/2026</td><td><span class="pill p-ok"><i class="d"></i>Current</span></td></tr>
+                <tr class="credrow"><td>d. Sanctioned provider</td><td class="tnum">03/01/2025</td><td class="tnum">03/01/2026</td><td><span class="pill p-ok"><i class="d"></i>Current</span></td></tr>
+                <tr class="credrow"><td>e. MI sex offender</td><td class="tnum">03/01/2025</td><td class="tnum">03/01/2026</td><td><span class="pill p-ok"><i class="d"></i>Current</span></td></tr>
+                <tr class="credrow"><td>f. National sex offender</td><td class="tnum">03/01/2025</td><td class="tnum">03/01/2026</td><td><span class="pill p-ok"><i class="d"></i>Current</span></td></tr>
+              </tbody>
+            </table></div>
+          </div>
+
+          <!-- (2) General training -->
+          <div class="panel">
+            <div class="phead"><div class="sec-eyebrow" style="margin:0"><div class="n">2</div><h2 style="font-size:14px">Training — general</h2></div><span class="sp"></span><span class="pill p-mut">annual</span></div>
+            <div style="overflow-x:auto"><table>
+              <thead><tr><th>Training</th><th>Effective</th><th>Expires</th><th>Status</th></tr></thead>
+              <tbody>
+                <tr class="credrow"><td>a. CPR / First Aid</td><td class="tnum">02/15/2025</td><td class="tnum">02/15/2026</td><td><span class="pill p-ok"><i class="d"></i>Current</span></td></tr>
+                <tr class="credrow"><td>b. Recipient Rights</td><td class="tnum">03/11/2025</td><td class="tnum">03/11/2026</td><td><span class="pill p-ok"><i class="d"></i>Current</span></td></tr>
+                <tr class="credrow"><td>c. Bloodborne Pathogens</td><td class="tnum">01/20/2025</td><td class="tnum">01/20/2026</td><td><span class="pill p-yellow"><i class="d"></i>60d</span></td></tr>
+                <tr class="credrow"><td>d. HIPAA</td><td class="tnum">03/05/2025</td><td class="tnum">03/05/2026</td><td><span class="pill p-ok"><i class="d"></i>Current</span></td></tr>
+                <tr class="credrow"><td>e. Trauma Informed Care</td><td class="tnum">03/05/2025</td><td class="tnum">03/05/2026</td><td><span class="pill p-ok"><i class="d"></i>Current</span></td></tr>
+              </tbody>
+            </table></div>
+          </div>
+
+          <!-- (3) Training for patient -->
+          <div class="panel">
+            <div class="phead"><div class="sec-eyebrow" style="margin:0"><div class="n">3</div><h2 style="font-size:14px">Training for patient (per-client)</h2></div></div>
+            <div class="pbody" style="padding:6px 14px 12px">
+              <div class="checkline"><span class="tick">✓</span><div class="meta"><div class="nm" style="font-size:12.5px">a. Patient 1 — Client J.R.</div><div class="sub">IPOS v2 · trained by B. Mumbower after CM in-service · signed 08/18/2025</div></div><span class="pill p-ok">Signed</span></div>
+              <div class="checkline"><span class="tick">✓</span><div class="meta"><div class="nm" style="font-size:12.5px">b. Patient 2 — Client A.L.</div><div class="sub">IPOS v3 · trained by B. Mumbower · signed 06/05/2025</div></div><span class="pill p-ok">Signed</span></div>
+              <div class="checkline"><span class="tick warn">!</span><div class="meta"><div class="nm" style="font-size:12.5px">c. Patient 3 — Client M.S.</div><div class="sub">IPOS renewed → v2 (same goals) · retraining needed</div></div><span class="pill p-red">Blocks assignment</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- right: (4) availability + notification -->
+        <div class="stack">
+          <div class="panel">
+            <div class="phead"><div class="sec-eyebrow" style="margin:0"><div class="n">4</div><h2 style="font-size:14px">Availability / schedule</h2></div></div>
+            <div class="pbody" style="padding:8px 14px 12px">
+              <div class="idrow"><span>Mon</span><b>9:00 AM – 3:00 PM</b></div>
+              <div class="idrow"><span>Wed</span><b>9:00 AM – 3:00 PM</b></div>
+              <div class="idrow"><span>Fri</span><b>9:00 AM – 1:00 PM</b></div>
+              <div class="idrow"><span>Weekend</span><b>On-call</b></div>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="phead"><h2 style="font-size:14px">Notifications</h2></div>
+            <div class="pbody" style="padding:8px 14px 12px">
+              <div class="checkline" style="padding:8px 0"><span class="pill p-yellow" style="padding:2px 6px"><i class="d"></i></span><div class="meta"><div class="nm" style="font-size:12.5px">Bloodborne Pathogens due</div><div class="sub">60 days out · supervisor + caregiver notified</div></div></div>
+              <div class="checkline" style="padding:8px 0"><span class="pill p-red" style="padding:2px 6px"><i class="d"></i></span><div class="meta"><div class="nm" style="font-size:12.5px">Sign IPOS training — Client M.S.</div><div class="sub">blocks assignment to this client</div></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ================= WEEKLY BILLING (v9: replaces Bren's spreadsheet) ================= -->
+    <section class="screen" id="s-bill">
+      <div class="note"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h8M8 17h5"/></svg><div>Ripple bills ISK <b>every week</b>. This page replaces the billing spreadsheet: every visit in the week with its progress note, units scheduled and billable, ready for <b>Bren's review</b> before billing. Units only — the late-arrival rule removes the first 15-minute unit.</div></div>
+      <div class="kpi">
+        <div class="tile s-info"><div class="lab">Visits this week</div><div class="big tnum">46</div><div class="foot">Sep 22 – Sep 28</div></div>
+        <div class="tile s-ok"><div class="lab">Ready to bill</div><div class="big tnum">41</div><div class="foot">note signed + reviewed</div></div>
+        <div class="tile s-yellow"><div class="lab">Notes missing / late</div><div class="big tnum">3</div><div class="foot">due the day of or day after</div></div>
+        <div class="tile s-red"><div class="lab">Units lost to late arrival</div><div class="big tnum">5</div><div class="foot">first unit of 5 visits</div></div>
+      </div>
+      <div class="panel" style="margin-top:16px">
+        <div class="phead" style="flex-wrap:wrap"><h2 style="font-size:14px">Week of Sep 22 – 28, 2025</h2><span class="sp"></span><button class="btn sm">‹ Prev week</button><button class="btn sm">Export for ISK billing</button><button class="btn pri sm">Mark reviewed rows billed</button></div>
+        <div style="overflow-x:auto"><table>
+          <thead><tr><th>Client</th><th>Service · auth</th><th class="tnum">Visits</th><th>Notes</th><th class="tnum">Units sched.</th><th class="tnum">Units billable</th><th>Review</th></tr></thead>
+          <tbody>
+            <tr><td><b>J.R.</b></td><td>CLS · #A-3391</td><td class="tnum">3</td><td><span class="pill p-ok">3 / 3 signed</span></td><td class="tnum">28</td><td class="tnum">27 <span class="sub">(1 late)</span></td><td><span class="pill p-ok">✓ Bren</span></td></tr>
+            <tr><td><b>J.R.</b></td><td>Respite · #A-3392</td><td class="tnum">1</td><td><span class="pill p-ok">1 / 1 signed</span></td><td class="tnum">12</td><td class="tnum">12</td><td><span class="pill p-ok">✓ Bren</span></td></tr>
+            <tr><td><b>A.L.</b></td><td>Respite · #A-3402</td><td class="tnum">2</td><td><span class="pill p-yellow">1 / 2 · 1 late</span></td><td class="tnum">16</td><td class="tnum">8</td><td><span class="pill p-mut">waiting on note</span></td></tr>
+            <tr><td><b>T.W.</b></td><td>CLS · #A-3410</td><td class="tnum">4</td><td><span class="pill p-red">2 / 4 · 2 missing</span></td><td class="tnum">32</td><td class="tnum">16</td><td><span class="pill p-mut">waiting on notes</span></td></tr>
+            <tr><td><b>M.S.</b></td><td>CLS · #A-3415</td><td class="tnum">2</td><td><span class="pill p-info">2 / 2 submitted</span></td><td class="tnum">16</td><td class="tnum">15 <span class="sub">(1 late)</span></td><td><button class="btn sm">Review</button></td></tr>
+          </tbody>
+        </table></div>
+        <p class="sub" style="padding:10px 16px 12px;margin:0">One row per client × authorization. A visit counts only when its progress note (CLS) or respite note is signed and reviewed. Billed units draw from the oldest valid authorization first.</p>
+      </div>
+    </section>
+
+    <!-- ================= TEMPLATE BUILDER ================= -->
+    <section class="screen" id="s-tpl">
+      <div class="note"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 8v8M8 12h8"/><circle cx="12" cy="12" r="9"/></svg><div>These are the agency's <b>blank shells</b> — the structure every client record is filled from. Editing a shell publishes a <b>new version</b> for <i>new</i> records; records already filled keep the version they were filled with, and client content is never edited here. This is the <b>only</b> place shells change.</div></div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px">
+        <span class="layer a">Layer A · Agency shells — here</span>
+        <span class="sub">→ filled into →</span>
+        <span class="layer b">Layer B · Client records — Client Care Plan page</span>
+      </div>
+      <div class="panel" style="margin-bottom:16px">
+        <div class="phead"><h2 style="font-size:14px">Shells · version control</h2><span class="sp"></span><button class="btn pri sm">＋ New shell</button></div>
+        <div style="overflow-x:auto"><table>
+          <thead><tr><th>Shell</th><th>Kind</th><th>Current</th><th class="tnum">Records filled</th><th>Office</th></tr></thead>
+          <tbody>
+            <tr class="tplrow sel" data-ed="ipos"><td><b>IPOS</b><div class="sub">sections, goals/objectives, treatment-needs grid</div></td><td><span class="pill p-mut">ipos</span></td><td class="tnum">v4 · <span style="color:var(--yellow)">v5 draft</span></td><td class="tnum">38 <span class="sub">(v3: 9 · v4: 29)</span></td><td class="sub">Ripple — Portage</td></tr>
+            <tr class="tplrow" data-ed="note"><td><b>CLS Progress Note</b><div class="sub">one per CLS visit · header · objective blocks · billing</div></td><td><span class="pill p-mut">progress note</span></td><td class="tnum">v1</td><td class="tnum">1,204</td><td class="sub">Ripple — Portage</td></tr>
+            <tr class="tplrow" data-ed="resp"><td><b>Respite Progress Note</b><div class="sub">one per respite visit · header · session narrative · billing</div></td><td><span class="pill p-mut">progress note</span></td><td class="tnum">v1</td><td class="tnum">388</td><td class="sub">Ripple — Portage</td></tr>
+            <tr class="tplrow" data-ed="lib"><td><b>Measure library</b><div class="sub">data question types for CLS objectives</div></td><td><span class="pill p-mut">measures</span></td><td class="tnum">8 types</td><td class="tnum">169 uses</td><td class="sub">Ripple — Portage</td></tr>
+            <tr class="tplrow" data-ed="auth"><td><b>Authorization form</b><div class="sub">from KARE · official record of units</div></td><td><span class="pill p-mut">authorization</span></td><td class="tnum">v4</td><td class="tnum">61</td><td class="sub">Ripple — Portage</td></tr>
+            <tr class="tplrow" data-ed="train"><td><b>IPOS Training form</b><div class="sub">ISK 33.01_01F · step 2: program lead → each caregiver · per IPOS version</div></td><td><span class="pill p-mut">training</span></td><td class="tnum">v2</td><td class="tnum">97</td><td class="sub">Ripple — Portage</td></tr>
+            <tr class="tplrow" data-ed="insvc"><td><b>IPOS In-service form</b><div class="sub">step 1: CM → Ripple program lead · per IPOS version</div></td><td><span class="pill p-mut">training</span></td><td class="tnum">v1</td><td class="tnum">44</td><td class="sub">Ripple — Portage</td></tr>
+            <tr class="tplrow" data-ed="intake"><td><b>Client forms &amp; assessment</b> <span class="sub">· 6 shells</span><div class="sub">consent · insurance · emergency contacts · allergies · release of information · assessment</div></td><td><span class="pill p-mut">intake</span></td><td class="tnum">v1–v3</td><td class="tnum">212</td><td class="sub">Ripple — Portage</td></tr>
+          </tbody>
+        </table></div>
+        <p class="sub" style="padding:10px 16px 2px">Select a shell to see how it's built. Each shell is office-scoped — Kind Care has its own.</p>
+      </div>
+
+      <div class="cp-grid">
+        <div>
+          <!-- IPOS shell editor -->
+          <div class="panel tpledit on" id="ed-ipos">
+            <div class="phead"><h2 style="font-size:14px">IPOS shell · v5 (draft)</h2><span class="sp"></span><span class="pill p-mut">field → where it's stored</span></div>
+            <div class="pbody" style="padding:4px 0">
+              <div class="subhd" style="padding:9px 16px;background:var(--surface-2)">Plan header</div>
+              <div class="docitem" style="padding:10px 16px"><b style="flex:1">Plan effective / expiration date</b><span class="stor spine">spine column</span><span class="pill p-red" style="margin-left:8px">Required</span></div>
+              <div class="docitem" style="padding:10px 16px"><b style="flex:1">Next review date · review schedule</b><span class="stor spine">spine column</span></div>
+              <div class="subhd" style="padding:9px 16px;background:var(--surface-2)">Person-centered summary</div>
+              <div class="docitem" style="padding:10px 16px"><b style="flex:1">Hopes &amp; dreams · Strengths · Needs · Abilities · Preferences</b><span class="stor">field value</span></div>
+              <div class="subhd" style="padding:9px 16px;background:var(--surface-2)">MichiCANS &amp; needs</div>
+              <div class="docitem" style="padding:10px 16px"><b style="flex:1">DSM outcome codes <span class="sub" style="font-weight:400">· option list 01–05</span></b><span class="stor">child rows</span></div>
+              <div class="docitem" style="padding:10px 16px"><b style="flex:1">Treatment-needs grid <span class="sub" style="font-weight:400">· 18 domains</span></b><span class="stor">child rows</span></div>
+              <div class="subhd" style="padding:9px 16px;background:var(--surface-2)">Goals &amp; objectives</div>
+              <div class="docitem" style="padding:10px 16px"><b style="flex:1">Goal · objective · service · responsible party</b><span class="stor">child rows</span></div>
+              <div class="docitem" style="padding:10px 16px"><b style="flex:1">ISK Instructions for Staff</b><span class="stor">child rows</span><span class="pill p-info" style="margin-left:8px">shown on progress note</span></div>
+              <div class="subhd" style="padding:9px 16px;background:var(--surface-2)">Fixed text</div>
+              <div class="docitem" style="padding:10px 16px;border:0"><b style="flex:1">Appeal rights · signature attestation · default discharge criteria</b><span class="stor">static text</span></div>
+              <div style="padding:12px 16px;display:flex;gap:9px;flex-wrap:wrap"><button class="btn pri sm">Publish v5</button><button class="btn sm">Save draft</button><span class="sub" style="align-self:center">Spine columns can be relabeled, never removed.</span></div>
+            </div>
+          </div>
+          <!-- Service Note shell -->
+          <div class="panel tpledit" id="ed-note">
+            <div class="phead"><h2 style="font-size:14px">CLS Progress Note shell · v1</h2><span class="sp"></span><span class="pill p-ok">live</span></div>
+            <div class="pbody" style="padding:4px 0">
+              <div class="subhd" style="padding:9px 16px;background:var(--surface-2)">1 · Header — once per visit (shift)</div>
+              <div class="docitem" style="padding:10px 16px"><b style="flex:1">Date of service · start / end time</b><span class="stor spine">from the shift</span></div>
+              <div class="docitem" style="padding:10px 16px"><b style="flex:1">Note completed on · staff : client ratio · location</b><span class="stor spine">spine column</span></div>
+              <div class="docitem" style="padding:10px 16px"><b style="flex:1">Staff name · staff signature</b><span class="stor spine">spine column</span></div>
+              <div class="subhd" style="padding:9px 16px;background:var(--surface-2)">2 · One block per objective — repeated for every Ripple objective</div>
+              <div class="docitem" style="padding:10px 16px"><b style="flex:1">Goal · objective · service</b><span class="stor">from the IPOS</span></div>
+              <div class="docitem" style="padding:10px 16px"><b style="flex:1">ISK Instructions for Staff</b><span class="stor">from the IPOS · read-only</span></div>
+              <div class="docitem" style="padding:10px 16px"><b style="flex:1">Notes <span class="sub" style="font-weight:400">(include reinforcers)</span></b><span class="stor">free text</span></div>
+              <div class="docitem" style="padding:10px 16px"><b style="flex:1">Data <span class="sub" style="font-weight:400">· questions chosen per objective from the measure library</span></b><span class="stor">per client</span></div>
+                            <div class="subhd" style="padding:9px 16px;background:var(--surface-2)">3 · For billing only <span class="pill p-info" style="margin-left:6px">feeds weekly billing</span></div>
+              <div class="docitem" style="padding:10px 16px;border:0"><b style="flex:1">Case # · units scheduled · units billed · biller · signature</b><span class="stor spine">units engine</span></div>
+            </div>
+          </div>
+          <div class="panel tpledit" id="ed-lib">
+            <div class="phead"><h2 style="font-size:14px">Measure library · question bank</h2><span class="sp"></span><button class="btn pri sm">＋ New measure</button></div>
+            <div class="pbody">
+              <p class="sub" style="margin:0 0 10px">Reusable data questions. When Bren enters a client's ISK goals, she picks each objective's questions from here; recurring questions live here once.</p>
+              <div style="overflow-x:auto"><table>
+                <thead><tr><th>Measure type</th><th>Caregiver answers</th><th class="tnum">Used on</th></tr></thead>
+                <tbody>
+                  <tr><td><b>Yes / No / N/A</b></td><td class="sub">Did the client participate / practice …?</td><td class="tnum">64 objectives</td></tr>
+                  <tr><td><b>Prompt level</b></td><td class="sub">Gestural · Visual · Verbal · Modeling · Partial physical</td><td class="tnum">31</td></tr>
+                  <tr><td><b>Graded steps</b></td><td class="sub">Mark each exposure step tolerated</td><td class="tnum">6</td></tr>
+                  <tr><td><b>Frequency tally</b></td><td class="sub">Count per visit (e.g. prompted / independent interactions)</td><td class="tnum">18</td></tr>
+                  <tr><td><b>Repeated trials</b></td><td class="sub">Yes/No/N/A × n tries + activity or strategy</td><td class="tnum">12</td></tr>
+                  <tr><td><b>Short answer</b></td><td class="sub">Strategy used · activity · skill practiced</td><td class="tnum">22</td></tr>
+                  <tr><td><b>Narrative</b></td><td class="sub">Describe 1–3 positive interactions</td><td class="tnum">9</td></tr>
+                  <tr><td><b>Staff note</b></td><td class="sub">Display-only caution (e.g. stop if distressed)</td><td class="tnum">7</td></tr>
+                </tbody>
+              </table></div>
+                          </div>
+          </div>
+          <!-- Authorization shell -->
+          <div class="panel tpledit" id="ed-auth">
+            <div class="phead"><h2 style="font-size:14px">Authorization form shell · v4</h2><span class="sp"></span><span class="pill p-ok">live</span></div>
+            <div class="pbody" style="padding:4px 0">
+              <div class="docitem" style="padding:10px 16px"><b style="flex:1">Authorization number</b><span class="stor spine">auth_number</span></div>
+              <div class="docitem" style="padding:10px 16px"><b style="flex:1">Service · code · modifier</b><span class="stor spine">service_type</span></div>
+              <div class="docitem" style="padding:10px 16px"><b style="flex:1">Units per period · unit type</b><span class="stor spine">units_authorized</span></div>
+              <div class="docitem" style="padding:10px 16px"><b style="flex:1">Effective / expiration</b><span class="stor spine">dates</span></div>
+              <div class="docitem" style="padding:10px 16px;border:0"><b style="flex:1">Authorizing agent notes</b><span class="stor">field value</span></div>
+            </div>
+          </div>
+          <!-- Training shell -->
+          <div class="panel tpledit" id="ed-train">
+            <div class="phead"><h2 style="font-size:14px">IPOS Training form shell · v2</h2><span class="sp"></span><span class="pill p-ok">live</span></div>
+            <div class="pbody">
+              <div class="idrow"><span>Client · plan type · plan effective date · IPOS version</span><span class="stor spine">header</span></div>
+              <div class="idrow"><span>Per caregiver: training date · PCP meeting / outside PCP</span><span class="stor">child rows</span></div>
+              <div class="idrow"><span>Primary clinician · trainer (Ripple program lead)</span><span class="stor">child rows</span></div>
+              <div class="idrow"><span>Caregiver signature date</span><span class="stor spine">gates scheduling</span></div>
+              <p class="sub" style="margin:10px 0 0">Filled before a caregiver's first visit with a client, and again for every new IPOS version — annual renewal or goals change — after the In-service form is signed.</p>
+            </div>
+          </div>
+          <!-- Respite Note shell -->
+          <div class="panel tpledit" id="ed-resp">
+            <div class="phead"><h2 style="font-size:14px">Respite Progress Note shell · v1</h2><span class="sp"></span><span class="pill p-ok">live</span></div>
+            <div class="pbody" style="padding:4px 0">
+              <div class="subhd" style="padding:9px 16px;background:var(--surface-2)">1 · Header — same as the CLS note</div>
+              <div class="docitem" style="padding:10px 16px"><b style="flex:1">Client · date of service · note completed on · staff : client ratio</b><span class="stor spine">from the shift</span></div>
+              <div class="docitem" style="padding:10px 16px"><b style="flex:1">Start / end time · location · staff name · staff signature</b><span class="stor spine">spine column</span></div>
+              <div class="subhd" style="padding:9px 16px;background:var(--surface-2)">2 · Session narrative — no goals</div>
+              <div class="docitem" style="padding:10px 16px"><b style="flex:1">Describe the session: activities, client responses, interventions used, anything notable</b><span class="stor">free text</span></div>
+              <div class="subhd" style="padding:9px 16px;background:var(--surface-2)">3 · For billing only</div>
+              <div class="docitem" style="padding:10px 16px;border:0"><b style="flex:1">Case # · units scheduled · units billed · biller · signature</b><span class="stor spine">weekly billing</span></div>
+            </div>
+          </div>
+          <!-- In-service form shell -->
+          <div class="panel tpledit" id="ed-insvc">
+            <div class="phead"><h2 style="font-size:14px">IPOS In-service form shell · v1</h2><span class="sp"></span><span class="pill p-ok">live</span></div>
+            <div class="pbody">
+              <div class="idrow"><span>Client · IPOS version · plan type · effective date</span><span class="stor spine">header</span></div>
+              <div class="idrow"><span>Case manager (caseworker) who trained</span><span class="stor">field value</span></div>
+              <div class="idrow"><span>Ripple trainer (program lead) · date · signature</span><span class="stor spine">step 1 of training</span></div>
+              <p class="sub" style="margin:10px 0 0">Step 1: the CM trains Ripple's program lead on the new IPOS, who signs this form. Step 2: the program lead trains each caregiver (IPOS Training form). Both happen for every new IPOS version — renewal or goals change.</p>
+            </div>
+          </div>
+          <!-- Intake shells -->
+          <div class="panel tpledit" id="ed-intake">
+            <div class="phead"><h2 style="font-size:14px">Client forms &amp; assessment · 6</h2></div>
+            <div class="pbody">
+              <div class="idrow"><span>Consent for treatment</span><b class="tnum">v2 · required</b></div>
+              <div class="idrow"><span>Insurance form</span><b class="tnum">v3 · required</b></div>
+              <div class="idrow"><span>Emergency contacts</span><b class="tnum">v1 · required</b></div>
+              <div class="idrow"><span>Allergies</span><b class="tnum">v1 · required</b></div>
+              <div class="idrow"><span>Assessment</span><b class="tnum">v2 · required</b></div>
+              <div class="idrow"><span>Release of information</span><b class="tnum">v1 · expires yearly</b></div>
+              <p class="sub" style="margin:10px 0 0">Own track: updating one never re-versions the client's IPOS.</p>
+            </div>
+          </div>
+        </div>
+        <div class="panel" style="align-self:start" id="hist">
+          <div class="phead"><h2 style="font-size:14px">IPOS · version history</h2></div>
+          <div class="pbody" style="padding:6px 14px 12px">
+            <div class="idrow"><span>v5 · draft</span><span class="pill p-yellow">editing</span></div>
+            <div class="idrow"><span>v4 · current · 29 records</span><span class="pill p-ok">live</span></div>
+            <div class="idrow"><span>v3 · 9 records</span><span class="sub">kept · still renders</span></div>
+            <div class="idrow"><span>v2 · 0 records</span><span class="sub">archived</span></div>
+            <p class="sub" style="margin-top:10px">A record filled on v3 keeps rendering in v3's shape. Engines read fixed columns, so scheduling and the dashboard keep working whatever the form looks like.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+(function(){
+  var titles={
+    dash:["Dashboard","Caregivers, clients, and scheduling — what needs attention."],
+    client:["Client 1 — Care Plan","Authorization, services, goals, and the service-note loop."],
+    caregiver:["Caregiver","Onboarding, training, per-patient training, and availability."],
+    bill:["Weekly Billing","Every visit in the week, its note, and the units to bill — reviewed by Bren."],
+    tpl:["Form Templates","Agency shells — the blank structure every client record is filled from. Version-controlled."]
+  };
+  var navs=document.querySelectorAll('.nav');
+  var roletog=document.getElementById('roletog');
+  function show(id){
+    document.querySelectorAll('.screen').forEach(function(s){s.classList.toggle('on',s.id==='s-'+id);});
+    navs.forEach(function(n){n.classList.toggle('on',n.dataset.s===id);});
+    var t=titles[id]||titles.dash;
+    document.getElementById('scr-title').textContent=t[0];
+    document.getElementById('scr-sub').textContent=t[1];
+    roletog.hidden = (id!=='client');
+    // reset client role to manager
+    setRole('mgr');
+    closeRail();
+  }
+  navs.forEach(function(n){n.addEventListener('click',function(){show(n.dataset.s);});});
+
+  function setRole(r){
+    document.getElementById('client-mgr').hidden = (r!=='mgr');
+    document.getElementById('client-login').hidden = (r!=='client');
+    roletog.querySelectorAll('button').forEach(function(b){b.classList.toggle('on',b.dataset.role===r);});
+  }
+  roletog.querySelectorAll('button').forEach(function(b){b.addEventListener('click',function(){setRole(b.dataset.role);});});
+
+  // care-plan tabs + document-spine cross-links
+  function cpTab(tab){
+    document.querySelectorAll('.cpsec').forEach(function(s){s.classList.toggle('on',s.id==='cp-'+tab);});
+    document.querySelectorAll('.cptab button').forEach(function(b){b.classList.toggle('on',b.dataset.tab===tab);});
+    document.querySelectorAll('.docrow').forEach(function(d){d.classList.toggle('on',d.dataset.tab===tab);});
+  }
+  document.querySelectorAll('.cptab button').forEach(function(b){b.addEventListener('click',function(){cpTab(b.dataset.tab);});});
+  document.querySelectorAll('.docrow').forEach(function(d){d.addEventListener('click',function(){if(d.dataset.tab)cpTab(d.dataset.tab);});});
+  // service row -> Goals tab
+  document.querySelectorAll('.drill-svc').forEach(function(r){r.addEventListener('click',function(){cpTab(r.dataset.go);});});
+  // any button with data-go jumps to that tab
+  document.querySelectorAll('[data-go]').forEach(function(el){if(!el.classList.contains('drill-svc'))el.addEventListener('click',function(e){e.stopPropagation();cpTab(el.dataset.go);});});
+  // ===== v8: objectives, data measures, progress notes (demo data, invented) =====
+  var GOALS=[
+    {n:1,text:"Handle transitions and non-preferred activities using coping strategies with staff support.",prog:"inprog",objs:["1A","1B"]},
+    {n:2,text:"Build independence in daily living skills.",prog:"inprog",objs:["2A","2B","2C"]},
+    {n:3,text:"Increase positive social and community participation.",prog:"notstart",objs:["3A","3B"]}
+  ];
+  var OBJ={
+    "1A":{t:"Coping strategy use",d:"Try at least one coping strategy (break request, breathing, fidget, drawing) when frustrated, with prompting as needed.",f:"each visit",
+      i:["Prompt “tell me what you need” language","Reinforce asking for help over escalation","Practice strategies while calm"],
+      m:[["yn","Did the client try a coping strategy?"],["prompt","Highest prompt level used"],["text","Strategy used"]]},
+    "1B":{t:"Transition tolerance",d:"Move between activities after a 2-minute warning with no more than one escalation.",f:"each visit",
+      i:["Give a visual 2-minute warning","Offer a first/then choice"],
+      m:[["tally","Transitions completed calmly"],["tally","Escalations during transitions"]]},
+    "2A":{t:"Tooth brushing",d:"Practice the steps of brushing teeth once per visit.",f:"once per visit",
+      i:["Use least-to-most prompting"],
+      m:[["yn","Did the client practice brushing their teeth?"],["prompt","Highest prompt level used"]]},
+    "2B":{t:"Simple snack prep",d:"Prepare a simple snack once per visit.",f:"once per visit",
+      i:["Break the task into small steps","Use least-to-most prompting"],
+      m:[["yn","Did the client practice preparing a snack?"],["prompt","Highest prompt level used"]]},
+    "2C":{t:"Haircut desensitization",d:"Build tolerance for hair clippers at weekly spa night.",f:"once per week",
+      i:["Show clippers and peers getting haircuts first","Move one step at a time"],
+      m:[["caution","Stop exposure if it causes notable distress. Respect the client's autonomy. Try first/then reinforcement."],
+         ["ladder","Mark every step tolerated without notable distress",["Clippers in view","Staff holds clippers","Staff models on a doll","Staff plays a haircut video","Clippers brought near client","Clippers (off) touch hair","Clippers turned on nearby","Trims one small section","Trims half","Full trim"]]]},
+    "3A":{t:"Peer interaction",d:"Practice appropriate interactions with peers and staff for the whole visit.",f:"whole visit",
+      i:["Prompt least-to-most for appropriate interactions","Reinforce positive peer engagement right away"],
+      m:[["tally","Inappropriate social interactions"],["tally","Independent appropriate interactions"],["tally","Prompted interactions"],["narr","Describe 1–3 positive peer or staff interactions"]]},
+    "3B":{t:"Community activity",d:"Take part in community or group activities of interest to build confidence and connections.",f:"up to 3 tries per visit",
+      i:["Offer two activity choices","Coach cooperative group behavior"],
+      m:[["caution","“Participate” means active involvement. Occasional prompting is fine; repeated refusals even with reminders = No."],["trials","Did the client participate?",3,"Activity"]]}
+  };
+  var NOTES=[
+    {id:"n1",date:"Tue 09/30",time:"1:00–4:00 PM",sch:12,bil:null,cg:"Priya Anand",ratio:"1:3",status:"draft",done:"—",
+      e:{"1A":{p:"Yes",pr:"Verbal",tx:"Breathing with a visual card",nt:"Used the card once before lunch."},
+         "1B":{ty:[3,1],nt:""},
+         "2A":{p:"Yes",pr:"Modeling",nt:""},
+         "2B":{},"2C":{},"3A":{ty:[1,4,2],nt:"",nr:""},"3B":{tr:[["Yes","Board games"],["",""],["",""]]}}},
+    {id:"n2",date:"Mon 09/29",time:"1:00–2:00 PM",sch:4,bil:3,cg:"Dana Reyes",ratio:"1:2",status:"submitted",done:"09/29",late:"client arrived 7 min late — first 15-min unit not billable",
+      e:{"1A":{p:"Yes",pr:"Gestural",tx:"Fidget",nt:"Calm most of the hour."},"1B":{ty:[2,0]},"2A":{p:"N/A"},"2B":{p:"Yes",pr:"Verbal",nt:"Made a cracker snack."},
+         "2C":{p:"N/A"},"3A":{ty:[0,3,1],nr:"Shared markers with a peer without a prompt."},"3B":{tr:[["N/A",""],["",""],["",""]]}}},
+    {id:"r1",kind:"respite",date:"Sat 09/27",time:"10:00 AM–1:00 PM",sch:12,bil:12,cg:"Priya Anand",ratio:"1:4",status:"reviewed",done:"09/27",
+      narr:"Joined the group art table and painted for 40 minutes. Played tag outside with two peers; needed one reminder about the fence line. Ate lunch independently. Calm at pickup."},
+    {id:"n3",date:"Fri 09/26",time:"1:00–4:00 PM",sch:12,bil:12,cg:"Priya Anand",ratio:"1:3",status:"billed",done:"09/26",
+      e:{"1A":{p:"Yes",pr:"Verbal",tx:"Break request"},"1B":{ty:[4,0]},"2A":{p:"Yes",pr:"Visual"},"2B":{p:"No",nt:"Refused; tired after outing."},
+         "2C":{lad:[0,1,2,3,4],nt:"Stopped at step 6 — pulled hand away. Ended on a calm step."},
+         "3A":{ty:[1,5,2],nr:"Took turns at Uno; congratulated a peer."},"3B":{tr:[["Yes","Library visit"],["Yes","Group cooking"],["No","Walk — refused"]]}}}
+  ];
+  var MT={yn:"Yes / No / N/A",prompt:"Prompt level",text:"Short answer",tally:"Frequency tally",ladder:"Graded steps",narr:"Narrative",trials:"Repeated trials",caution:"Staff note"};
+  var STAT={draft:["p-yellow","Draft · caregiver"],submitted:["p-info","Submitted · to review"],reviewed:["p-ok","Reviewed"],billed:["p-ok","Reviewed · billed"]};
+  function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
+  function chips(opts,sel){return '<span class="chips">'+opts.map(function(o){return '<span class="chip'+(o===sel?' on':'')+'">'+esc(o)+'</span>';}).join('')+'</span>';}
+  function line(v){return v?'<span class="ans">'+esc(v)+'</span>':'<span class="blank">—</span>';}
+  var tallyIdx=function(o,m,k){var c=0;for(var j=0;j<k;j++){if(o.m[j][0]==="tally")c++;}return c;};
+  function measureHTML(id,mi,e){
+    var o=OBJ[id],m=o.m[mi],k=m[0];e=e||{};
+    if(k==="caution")return '<div class="caution">'+esc(m[1])+'</div>';
+    var h='<div class="meas"><div class="mlab">'+esc(m[1])+'</div>';
+    if(k==="yn")h+=chips(["Yes","No","N/A"],e.p);
+    else if(k==="prompt")h+=chips(["Gestural","Visual","Verbal","Modeling","Partial physical"],e.pr);
+    else if(k==="text")h+=line(e.tx);
+    else if(k==="narr")h+=line(e.nr);
+    else if(k==="tally"){var t=(e.ty||[])[tallyIdx(o,m,mi)];h+='<span class="tally">'+(t==null?'—':t)+'</span>';}
+    else if(k==="ladder"){h+='<div class="ladder">'+m[2].map(function(s,j){var on=(e.lad||[]).indexOf(j)>=0;return '<div><span class="box'+(on?' on':'')+'">'+(on?'✓':'')+'</span>'+(j+1)+'. '+esc(s)+'</div>';}).join('')+'</div>';}
+    else if(k==="trials"){var tr=e.tr||[];h+='<div class="trials">';for(var j=0;j<m[2];j++){var r=tr[j]||[];h+='<div><span class="sub">Try '+(j+1)+'</span>'+chips(["Yes","No","N/A"],r[0])+'<span class="sub">'+esc(m[3])+':</span>'+line(r[1])+'</div>';}h+='</div>';}
+    return h+'</div>';
+  }
+  // Goals tab
+  function renderGoalList(){
+    document.getElementById('goal-list').innerHTML=GOALS.map(function(g){
+      return '<div class="goal"><div class="gh"><div class="gn">'+g.n+'</div><div><div style="font-weight:600">'+esc(g.text)+'</div><div class="sub">Target 08/15/2025 – 08/14/2026 · <span class="prog '+g.prog+'" style="padding:1px 7px">'+(g.prog==="inprog"?"In progress":"Not started")+'</span></div></div></div>'+
+        g.objs.map(function(id){var o=OBJ[id];return '<div class="obj obj-sel" data-obj="'+id+'"><span class="ol">'+id+'</span><b>'+esc(o.t)+'</b> <span class="srcchip src-man">CLS</span><div class="sub" style="font-size:12px;margin-top:2px">'+esc(o.d)+'</div><div class="sub" style="font-size:11px;margin-top:3px">'+o.m.filter(function(x){return x[0]!=="caution";}).length+' data question'+(o.m.filter(function(x){return x[0]!=="caution";}).length===1?'':'s')+' · '+esc(o.f)+'</div></div>';}).join('')+'</div>';
+    }).join('');
+    document.querySelectorAll('#goal-list .obj-sel').forEach(function(el){el.addEventListener('click',function(){selectObj(el.dataset.obj);});});
+  }
+  function selectObj(id){
+    var o=OBJ[id];
+    document.querySelectorAll('#goal-list .obj-sel').forEach(function(x){x.classList.toggle('sel',x.dataset.obj===id);});
+    var recent=NOTES.filter(function(n){return n.kind!=="respite";}).map(function(n){var e=n.e[id]||{};var s=e.p||(e.ty?e.ty.join(' / '):'')||(e.lad?e.lad.length+' steps':'')||(e.tr?e.tr.filter(function(r){return r[0]==="Yes";}).length+' of '+e.tr.length+' yes':'');
+      return '<div class="checkline"><div class="meta"><div class="nm" style="font-size:12.5px">'+n.date+' · '+esc(n.cg)+'</div><div class="sub">'+(s?esc(s):'not recorded yet')+(e.pr?' · '+esc(e.pr):'')+'</div></div><span class="pill '+STAT[n.status][0]+'">'+STAT[n.status][1].split(' ·')[0]+'</span></div>';}).join('');
+    document.getElementById('obj-panel').innerHTML=
+      '<div class="phead" style="padding:11px 13px"><h2 style="font-size:13px">Objective '+id+' · '+esc(o.t)+'</h2><span class="sp"></span><button class="btn sm" data-go2="notes">Progress notes →</button></div>'+
+      '<div class="pbody" style="padding:12px 13px">'+
+      '<div class="subhd" style="margin-bottom:4px">ISK Instructions for Staff <span style="text-transform:none;color:var(--faint);font-weight:400">· from the IPOS</span></div>'+
+      '<ul class="instr">'+o.i.map(function(s){return '<li>'+esc(s)+'</li>';}).join('')+'</ul>'+
+      '<div class="subhd" style="margin:12px 0 6px">Data questions on each progress note <span style="text-transform:none;color:var(--faint);font-weight:400">· chosen from the measure library</span></div>'+
+      o.m.map(function(m){return '<div class="mrow"><span class="mtype">'+MT[m[0]]+'</span><span>'+esc(m[0]==="caution"?m[1]:m[1])+'</span></div>';}).join('')+
+      '<div style="display:flex;gap:8px;margin:10px 0 2px;flex-wrap:wrap"><button class="btn sm">＋ Add question from library</button><button class="btn sm">Edit</button></div>'+
+      '<p class="sub" style="font-size:11px;margin:4px 0 0">Bren enters these with the ISK goals. Changing a question alone does not require retraining.</p>'+
+      '<div class="subhd" style="margin:14px 0 4px">Recent visits</div>'+recent+'</div>';
+    var b=document.querySelector('#obj-panel [data-go2]'); if(b)b.addEventListener('click',function(){cpTab('notes');});
+  }
+  // Progress notes tab
+  function renderNoteList(sel){
+    document.getElementById('note-list').innerHTML=NOTES.map(function(n){var st=STAT[n.status];
+      return '<div class="notecard'+(n.id===sel?' sel':'')+'" data-note="'+n.id+'"><div style="display:flex;gap:8px;align-items:center"><b style="font-size:12.5px">'+n.date+' · '+n.time+'</b><span class="sp" style="margin-left:auto"></span><span class="pill '+st[0]+'">'+st[1]+'</span></div>'+
+        '<div class="sub">'+esc(n.cg)+' · '+(n.kind==="respite"?'<b>Respite</b>':'CLS')+' · '+n.sch+' units scheduled'+(n.bil!=null?' · '+n.bil+' billable':'')+'</div>'+(n.late?'<div class="sub" style="color:var(--red)">'+esc(n.late)+'</div>':'')+'</div>';}).join('');
+    document.querySelectorAll('.notecard').forEach(function(c){c.addEventListener('click',function(){showNote(c.dataset.note);});});
+  }
+  function showNote(nid){
+    renderNoteList(nid);
+    var n=NOTES.filter(function(x){return x.id===nid;})[0],st=STAT[n.status];
+    var h='<div class="phead" style="padding:11px 13px;flex-wrap:wrap"><h2 style="font-size:13px">'+(n.kind==="respite"?"Respite":"CLS")+' Progress Note · '+n.date+'</h2><span class="sp"></span><span class="pill '+st[0]+'">'+st[1]+'</span></div><div class="pbody" style="padding:12px 13px">';
+    h+='<div class="hdrgrid">'+[["Client","J.R."],["Date of service",n.date],["Start – end",n.time],["Staff : client ratio",n.ratio],["Staff",n.cg],["Note completed on",n.done],["Location","Ripple Effects Community Inclusion Center"],["Staff signature",n.status==="draft"?"not signed":"e-signed"]].map(function(r){return '<div><span>'+r[0]+'</span><b>'+esc(r[1])+'</b></div>';}).join('')+'</div>';
+    if(n.kind==="respite"){
+      h+='<div class="obblock"><div class="obhd"><b>Session narrative</b> <span class="srcchip src-man">no goals</span></div><div class="sub" style="font-size:11.5px;margin:4px 0">Describe the session, including activities, client responses, interventions used, and anything notable that occurred during the session.</div><div class="meas">'+line(n.narr)+'</div></div>';
+    } else GOALS.forEach(function(g){
+      h+='<div class="pngoal">Goal '+g.n+' · '+esc(g.text)+'</div>';
+      g.objs.forEach(function(id){var o=OBJ[id],e=n.e[id]||{};
+        h+='<div class="obblock"><div class="obhd"><span class="ol">'+id+'</span><b>'+esc(o.t)+'</b> <span class="srcchip src-man">CLS</span></div>'+
+          '<details class="isk"><summary>ISK Instructions for Staff</summary><ul class="instr">'+o.i.map(function(s){return '<li>'+esc(s)+'</li>';}).join('')+'</ul></details>'+
+          '<div class="meas"><div class="mlab">Notes '+id+' <span class="sub">(include reinforcers)</span></div>'+line(e.nt)+'</div>'+
+          '<div class="mlab" style="margin-top:6px;font-weight:700;color:var(--faint);font-size:10.5px;letter-spacing:.05em;text-transform:uppercase">Data '+id+'</div>'+
+          o.m.map(function(m,mi){return measureHTML(id,mi,e);}).join('')+'</div>';
+      });
+    });
+    h+='<div class="billbox"><div class="obhd"><b>For billing only</b><span class="pill p-info" style="margin-left:auto">Weekly billing · Bren reviews</span></div>'+
+      '<div class="hdrgrid">'+[["Case number","from client record"],["Units scheduled",n.sch+" (from the shift)"],["Units billed",n.bil==null?"after submit":n.bil+(n.late?" (first unit lost — late arrival)":"")],["Biller",n.status==="billed"?"B. Mumbower":"—"]].map(function(r){return '<div><span>'+r[0]+'</span><b>'+esc(r[1])+'</b></div>';}).join('')+'</div>'+
+      '<p class="sub" style="font-size:11px;margin:8px 0 0">Filled from the shift and the note; Bren reviews it in Weekly Billing before units are billed.</p></div>';
+    if(n.status==="draft")h+='<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button class="btn pri sm">Sign &amp; submit</button><button class="btn sm">Save draft</button></div>';
+    else if(n.status==="submitted")h+='<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button class="btn pri sm">Review &amp; approve</button><button class="btn sm">Return to caregiver</button></div>';
+    h+='<div class="noprint" style="margin-top:10px"><button class="btn sm" id="printnote">⎙ Print / save as PDF</button> <span class="sub" style="font-size:11px">Prints this note for the client file.</span></div>';
+    document.getElementById('note-view').innerHTML=h+'</div>';
+    document.getElementById('printnote').addEventListener('click',function(){document.body.classList.add('pn');window.print();setTimeout(function(){document.body.classList.remove('pn');},500);});
+  }
+  renderGoalList(); selectObj('1A'); showNote('n1');
+  // provenance badges are read-only (v7): shells are edited only in Configuration → Form Templates
+  // Form Templates: select a shell row to show its editor
+  document.querySelectorAll('.tplrow').forEach(function(r){r.addEventListener('click',function(){
+    document.querySelectorAll('.tplrow').forEach(function(x){x.classList.toggle('sel',x===r);});
+    document.querySelectorAll('.tpledit').forEach(function(e){e.classList.toggle('on',e.id==='ed-'+r.dataset.ed);});
+    var hi=document.getElementById('hist'); if(hi) hi.style.display=(r.dataset.ed==='ipos')?'':'none';
+  });});
+
+  var root=document.documentElement;
+  function stored(){try{return localStorage.getItem('rec-theme');}catch(e){return null;}}
+  var init=stored(); if(init) root.setAttribute('data-theme',init);
+  document.getElementById('themetog').addEventListener('click',function(){
+    var cur=root.getAttribute('data-theme');
+    var mq=window.matchMedia('(prefers-color-scheme: dark)').matches;
+    var next=cur?(cur==='dark'?'light':'dark'):(mq?'light':'dark');
+    root.setAttribute('data-theme',next);
+    try{localStorage.setItem('rec-theme',next);}catch(e){}
+  });
+
+  var rail=document.getElementById('rail'),scrim=document.getElementById('scrim');
+  function closeRail(){rail.classList.remove('open');scrim.classList.remove('on');}
+  document.getElementById('menutog').addEventListener('click',function(){rail.classList.toggle('open');scrim.classList.toggle('on');});
+  scrim.addEventListener('click',closeRail);
+})();
+</script>
+
+</body></html>
