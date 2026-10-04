@@ -33,7 +33,8 @@ export function useConversationFlow(
   const persist = options?.persist !== false;
   // When deferred, the session row is only created on the first answer so we
   // never store empty rows for visitors who never engage.
-  const deferSession = Boolean(options?.deferSession);
+  // Write-on-load fix (security plan §3.2): the session row is ALWAYS created on the first answer
+  // (ensureSession), never on page load. options.deferSession is still accepted but no longer needed.
   const [flow, setFlow] = useState<ConversationFlow | null>(null);
   const [state, setState] = useState<FlowState | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -42,6 +43,8 @@ export function useConversationFlow(
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const sessionRef = useRef<{ id: string; token: string } | null>(null);
+  // Single-flight: a double-tap / multi-select Continue must not create two session rows.
+  const pendingSessionRef = useRef<Promise<{ id: string; token: string } | null> | null>(null);
 
   const loadFlow = useCallback(async (): Promise<ConversationFlow | null> => {
     const { data: flowRow, error: flowError } = await supabase
@@ -98,30 +101,8 @@ export function useConversationFlow(
         }
         setFlow(loaded);
 
-        if (!persist || deferSession) {
-          setState(initState(loaded));
-          setLoading(false);
-          return;
-        }
-
-        // Visitors are anonymous and cannot read sessions back, so each visit
-        // starts a new session with a client-generated id.
-        const fresh = initState(loaded);
-        const id = crypto.randomUUID();
-        const token = crypto.randomUUID();
-        const { error: createError } = await supabase.from("conversation_sessions").insert({
-          id,
-          flow_id: loaded.id,
-          session_token: token,
-          current_node_id: fresh.currentNodeId,
-          agency_id: agencyId,
-        });
-        if (createError) throw createError;
-        if (cancelled) return;
-        sessionRef.current = { id, token };
-        setSessionId(id);
-        setSessionToken(token);
-        setState(fresh);
+        // No conversation_sessions insert here any more: visiting the page writes nothing.
+        setState(initState(loaded));
       } catch (e: any) {
         if (!cancelled) setError(e.message ?? "Could not load the conversation.");
       } finally {
@@ -131,27 +112,33 @@ export function useConversationFlow(
     return () => {
       cancelled = true;
     };
-  }, [audience, persist, deferSession, loadFlow]);
+  }, [audience, persist, loadFlow]);
 
   /** Create (once) the session row this conversation writes to. */
   const ensureSession = useCallback(
-    async (flowId: string) => {
+    async (flowId: string, currentNodeId?: string | null) => {
       if (sessionRef.current) return sessionRef.current;
-      const created = { id: crypto.randomUUID(), token: crypto.randomUUID() };
-      const { error: createError } = await supabase.from("conversation_sessions").insert({
-        id: created.id,
-        flow_id: flowId,
-        session_token: created.token,
-        agency_id: agencyId,
-      });
-      if (createError) {
-        console.error("Could not start session", createError);
-        return null;
-      }
-      sessionRef.current = created;
-      setSessionId(created.id);
-      setSessionToken(created.token);
-      return created;
+      if (pendingSessionRef.current) return pendingSessionRef.current;
+      pendingSessionRef.current = (async () => {
+        const created = { id: crypto.randomUUID(), token: crypto.randomUUID() };
+        const { error: createError } = await supabase.from("conversation_sessions").insert({
+          id: created.id,
+          flow_id: flowId,
+          session_token: created.token,
+          current_node_id: currentNodeId ?? null,
+          agency_id: agencyId,
+        });
+        if (createError) {
+          console.error("Could not start session", createError);
+          pendingSessionRef.current = null; // allow a retry on the next answer
+          return null;
+        }
+        sessionRef.current = created;
+        setSessionId(created.id);
+        setSessionToken(created.token);
+        return created;
+      })();
+      return pendingSessionRef.current;
     },
     [agencyId]
   );
@@ -173,7 +160,7 @@ export function useConversationFlow(
       setState(result.state);
 
       if (!persist) return;
-      const session = sessionRef.current ?? (await ensureSession(flow.id));
+      const session = sessionRef.current ?? (await ensureSession(flow.id, state.currentNodeId));
       if (!session) return;
       setSaving(true);
       try {
@@ -208,15 +195,16 @@ export function useConversationFlow(
     const { state: previous, removed } = goBackPure(state);
     if (!removed) return;
     setState(previous);
-    if (!persist || !sessionId) return;
+    const s = sessionRef.current;
+    if (!persist || !s) return;
     const { error: trimError } = await supabase.rpc("flow_session_trim_answers", {
-      p_session_id: sessionId,
-      p_token: sessionToken ?? "",
+      p_session_id: s.id,
+      p_token: s.token,
       p_from_index: removed.sequenceIndex,
       p_node_id: previous.currentNodeId,
     });
     if (trimError) console.error("Could not rewind session", trimError);
-  }, [state, sessionId, sessionToken, persist]);
+  }, [state, persist]);
 
   /** Rewind the conversation to a specific question so it can be re-answered. */
   const rewindTo = useCallback(
@@ -231,16 +219,17 @@ export function useConversationFlow(
         finished: false,
       };
       setState(previous);
-      if (!persist || !sessionId) return;
+      const s = sessionRef.current;
+      if (!persist || !s) return;
       const { error: trimError } = await supabase.rpc("flow_session_trim_answers", {
-        p_session_id: sessionId,
-        p_token: sessionToken ?? "",
+        p_session_id: s.id,
+        p_token: s.token,
         p_from_index: removed.sequenceIndex,
         p_node_id: nodeId,
       });
       if (trimError) console.error("Could not rewind session", trimError);
     },
-    [state, sessionId, sessionToken, persist]
+    [state, persist]
   );
 
   /** Mark the session complete, store the score, and return it. */
@@ -248,10 +237,11 @@ export function useConversationFlow(
     async (contact?: ContactDetails) => {
       if (!flow || !state) return null;
       const finalScore = computeScore(flow, state.answers);
-      if (!persist || !sessionId) return finalScore;
+      const s = sessionRef.current;
+      if (!persist || !s) return finalScore;
       const { error: completeError } = await supabase.rpc("flow_session_complete", {
-        p_session_id: sessionId,
-        p_token: sessionToken ?? "",
+        p_session_id: s.id,
+        p_token: s.token,
         p_total_score: finalScore.total,
         p_trait_scores: finalScore.profile as never,
         p_band: audience === "caregiver_screening" ? finalScore.band : null,
@@ -262,7 +252,7 @@ export function useConversationFlow(
       if (completeError) console.error("Could not complete session", completeError);
       return finalScore;
     },
-    [flow, state, sessionId, sessionToken, persist, audience]
+    [flow, state, persist, audience]
   );
 
   const restart = useCallback(() => {
@@ -301,15 +291,16 @@ export function useConversationFlow(
 
   const linkRegistration = useCallback(
     async (registrationId: string) => {
-      if (!sessionId) return;
+      const s = sessionRef.current;
+      if (!s) return;
       const { error: linkError } = await supabase.rpc("flow_session_link_registration", {
-        p_session_id: sessionId,
-        p_token: sessionToken ?? "",
+        p_session_id: s.id,
+        p_token: s.token,
         p_registration_id: registrationId,
       });
       if (linkError) console.error("Could not link screening to application", linkError);
     },
-    [sessionId, sessionToken]
+    []
   );
 
   return {
