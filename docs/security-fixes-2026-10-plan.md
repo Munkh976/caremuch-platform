@@ -1305,7 +1305,9 @@ are display-only gaps on dev, with no data exposure.
 M-SEC-4 (menu seeds) is **not** in this batch. It stays next in the run order, before RequireRole.
 
 ### 12.7 Pushed and verified (2026-10-04)
-- **Commit:** single commit `bd883bd` (amended before push so it carries only this batch). The
+- **Commit:** single commit **`a7eb540`**, pushed to `origin/phase-3`. Earlier hashes `e3c01f1` and
+  `bd883bd` were local amends that never left the machine. It was amended before push so it carries
+  only this batch. The
   first version also swept in an unrelated, pre-existing uncommitted `fetchCaregiverOpenShifts`
   hunk in `caregiverBoard.ts` (caregiver app shell work). That hunk was removed from the commit and
   left in the working tree.
@@ -1354,6 +1356,170 @@ disposable client and caregivers, teardown verified; screenshots in the session 
 | B6 | Caregiver → Shifts → My Trade Requests | **PASS.** The accepted trade shows "— Ben B." |
 
 ---
+
+## 14. M-SEC-4 (menu seeds) + RequireRole — DRAFT (not committed, not pushed)
+
+### 14.1 What is drafted
+| Piece | File | What it does |
+|---|---|---|
+| Role helper | `src/lib/roleHome.ts` (new) | The role sets `STAFF`, `MANAGER_OR_ABOVE`, `ADMIN`, `SYSTEM_ADMIN`; `roleHome(role)` (the single role → landing mapping, moved out of Auth.tsx); `safeNextPath()` (absolute same-origin path only; rejects `//`, **any backslash** and control characters) |
+| Route guard | `src/components/auth/RequireRole.tsx` (new) | `getSession()` + `get_user_role()`, the same mechanism as the pages, lifted to the router. No session → `/auth?next=<path>`. NULL role → `/auth` (Auth shows "pending approval"). Role not allowed → `roleHome(role)` plus a toast. Shows a spinner until resolved (no content flash). |
+| Router | `src/App.tsx` | 27 routes wrapped. **STAFF:** dashboard, **schedule**, caregivers, clients, client-inquiries, time-off, shift-trades, flow-builder, caregiver-approvals, notifications-outbox, care-types, care-service-categories, order-management, virtual-offices (+`/:id`), knowledge-base, reports. **MANAGER_OR_ABOVE:** admin-user-management. **ADMIN:** users, users/add, users/edit/:id, user-roles, agency-settings. **SYSTEM_ADMIN:** system-roles, role-permissions, system-admin(-dashboard), admin-utilities. The `/live-operations`, `/quick-assign` and `/auto-schedule` aliases redirect into the guarded `/schedule`. Caregiver, client, public and OAuth routes are unwrapped (§1.2). |
+| Auth | `src/pages/Auth.tsx` | Uses `roleHome()` and `safeNextPath()`. Post-login routing is unchanged; `?next=/\host` is no longer followed. |
+| Delete-user for manager | `src/pages/AdminUserManagement.tsx` | The "Delete User" tab and its content render only for agency_admin / system_admin. Managers keep Create and Reset (both functions allow them, within rank). |
+| Peer actions | `src/pages/Users.tsx` | Reset Password and Delete are enabled only when the target ranks **strictly below** the caller (the same ranks as `_shared/authz.ts`). Edit Role keeps its previous rule. |
+| Menus | `supabase/migrations/20261004130000_msec4_menu_seeds.sql` | Sets all CRUD flags false for `caregiver.schedule`, `client.schedule` and `client.orders` (rows kept). Seeds `system_modules.client_dashboard` (category `client`) and grants the client role read on it. Rollback is in the file. |
+
+**Decision taken in the draft (owner to confirm):**
+- `/admin-user-management` is **MANAGER_OR_ABOVE**, not ADMIN as §1.1 first listed.
+- Managers use it to create and reset accounts for roles below them; the Delete tab is hidden from them.
+- `/users` stays ADMIN, as its own in-page check already requires.
+
+**Found while drafting (fixed in the draft):** `Auth.tsx`'s `?next=` check accepted
+`/\example.com`, which browsers normalise to `//example.com`. This is an **open redirect**, proven
+by test U9 below. `RequireRole` starts generating `?next=` links, so it is fixed in the same step.
+
+### 14.2 Tests (`sec_tests_ui.cjs`)
+- Real Chromium (Playwright) against the local Vite dev server and real `/auth` logins.
+- Disposable fixtures: a caregiver, a client, a manager, two agency_admins and one user with **no
+  role**. Teardown is verified by re-query.
+- **before** = the committed code. **draft** = the working tree with the §14.1 frontend changes;
+  the menu migration is NOT applied.
+
+| # | Check | Before (`ui-before-mutydkpt`) | Draft (`ui-draft-mutyod34`) | Must be after push |
+|---|---|---|---|---|
+| U1 | caregiver opens the 25 staff/admin routes | **OPEN.** 14/25 render (dashboard, schedule, caregivers, client-inquiries, time-off, flow-builder, caregiver-approvals, notifications-outbox, care-types, care-service-categories, order-management, knowledge-base, reports, admin-user-management) | **CLOSED.** All 25 → `/caregiver-dashboard` | closed |
+| U2 | client opens the same 25 | **OPEN.** Same 14/25 | **CLOSED.** All 25 → `/client-dashboard` | closed |
+| U3 | logged-out `/dashboard` | → `/auth` (no `next`) | → `/auth?next=%2Fdashboard` | ok |
+| U4 | signed-in user with no role opens `/dashboard` | **OPEN** (renders) | **CLOSED** → `/auth` | closed |
+| U5 | manager on `/admin-user-management` sees the Delete User tab | **OPEN** | **CLOSED** (Create + Reset still shown) | closed |
+| U6 | manager opens dashboard, schedule, caregivers, clients, time-off, reports | ok | ok | ok |
+| U8 | agency_admin: Reset/Delete enabled on a **peer** agency_admin row in `/users` | **OPEN** (3 enabled) | **CLOSED** (only Edit Role) | closed |
+| U9 | `/auth?next=/\example.com` after login | **OPEN.** Left the app → `http://example.com/` | **CLOSED** → `/dashboard` | closed |
+| U7 | client sidebar links to staff "Care Plan" / "Schedule"; no client-dashboard entry | **OPEN** | **OPEN** (needs the M-SEC-4 data migration) | closed + "My Dashboard" link |
+
+To add in the after-run: agency_admin still sees the Delete tab and can open `/users`; scheduler and
+hr_staff open the STAFF pages but are bounced from ADMIN pages; system_admin lands on and opens the
+SYSTEM_ADMIN pages.
+
+### 14.3 Push plan (after owner approval)
+1. Commit **only** this step's hunks: the two new files, plus `App.tsx`, `Auth.tsx`,
+   `AdminUserManagement.tsx`, `Users.tsx`, the migration and the plan. `App.tsx` also carries
+   unrelated, pre-existing uncommitted caregiver-app-shell edits (the CaregiverToday / CaregiverSchedule
+   routes). Those are left out of the commit the same way the `caregiverBoard.ts` hunk was (§12.7).
+   This needs care: the guard edits sit next to those routes. If the owner prefers, the
+   caregiver-app-shell work can be committed first as its own change.
+2. `supabase migration list` → only `20261004130000` pending → `db push`.
+3. Read-only checks:
+   - `role_permissions` for caregiver/client (schedule and orders all false; client_dashboard read);
+   - `system_modules.client_dashboard` present.
+4. `sec_tests_ui.cjs after` (U1–U9 plus the additions above). Teardown verified.
+5. Push the branch. The frontend goes live on the next dev-server run or deploy.
+
+### 14.4 Rollback
+Revert the commit (frontend). For the menus, run the UPDATE/DELETE block at the end of the
+migration file.
+
+### 14.5 Owner review (Oct 4) and what was done
+- **`/admin-user-management`** = manager, agency_admin, system_admin. Scheduler and hr_staff are
+  redirected (U12). Approved.
+- **Commit:** only the guard hunks of `App.tsx` were committed (`1c28073`).
+
+**Staged-only build proof:**
+- `git stash push --keep-index --include-untracked`, then `tsc` and `vite build` on the staged-only
+  tree. The build passed. `tsc` shows only the known stale-type errors plus 4 in the committed
+  `CaregiverDashboard.tsx` (stale `shift_assignments` types; that page only exists because the
+  app-shell work deletes it), none in the guard files.
+- **Restoring was not clean the first time.** `git stash pop --index` stopped on a conflict in
+  `App.tsx` and kept the stash. With `core.autocrlf=true` it also rewrote LF files with CRLF.
+- **Recovery:** every file was restored byte-for-byte from SHA-1s recorded before the stash:
+  - `App.tsx` from a saved copy;
+  - the line-ending-only files back to LF;
+  - `.gitignore`, which had mixed endings, rebuilt by hash (27 CRLF + 3 LF lines);
+  - the index reset to the guard-only state.
+
+  `git status` and all 22 modified/untracked files then matched the pre-stash state exactly, and
+  only then was the stash dropped.
+- **Lesson:** next time use `git stash push --keep-index` *without* `--index` on pop, or build from a
+  `git worktree` of the staged tree instead of stashing.
+
+**Role resolution (owner point 3):**
+- `get_user_role()` orders system_admin(1) … caregiver(6). `client` has no CASE arm, so it gets NULL
+  and sorts **last**: client is the lowest role, the same as `_shared/authz.ts` (client 10).
+- A client-only user resolves to `client`; caregiver + client resolves to `caregiver`.
+- The only difference from `authz.ts` is a scheduler/hr_staff tie, where `get_user_role` prefers
+  scheduler while `authz.ts` ranks them equal. That's harmless for routing: both use the same routes.
+- No multi-role users exist today; U11 created one.
+
+**`?next=` (owner point 4):**
+- `safeNextPath()` checks the value as received and after up to three rounds of decoding.
+- It requires exactly one leading `/` (not `//`, not `/\`), no backslash and no control characters.
+- Finally the value must resolve, against `window.location.origin`, to that same origin.
+
+**M-SEC-4 rows (owner point 5):**
+- `role_permissions` has **no agency column**; it is global, keyed by role and module. So no agency can
+  have customised these rows.
+- All three changed rows still had their seed timestamps (created = updated = 2026-08-25).
+- Changed (count 3):
+  - `caregiver.schedule` read true → false;
+  - `client.schedule` read true → false;
+  - `client.orders` read/create true → false.
+- Inserted: `system_modules.client_dashboard` and `client.client_dashboard` read.
+
+### 14.6 Pushed and verified (2026-10-04)
+- `supabase migration list`: only `20261004130000` pending. `db push` applied it.
+- Read-only check of the menu rows:
+  - `caregiver.schedule` and `client.schedule`/`orders` have all CRUD false;
+  - `client.client_dashboard` read is true;
+  - the `system_modules` 'client_dashboard' row exists (category `client`, active).
+
+**UI tests** (`sec_tests_ui.cjs`):
+- **before** = committed `a7eb540`, run from a temporary `git worktree` of HEAD (run `ui-before-mutz5cgg`);
+- **after** = with `1c28073` and the migration (run `ui-after-mutzlj1w`);
+- disposable fixtures in both, teardown verified.
+
+| # | Check | Before | After |
+|---|---|---|---|
+| U1 | caregiver opens the 25 staff/admin routes | **OPEN** (14 render) | **CLOSED** (all → `/caregiver-dashboard`) |
+| U2 | client opens the same 25 | **OPEN** (14 render) | **CLOSED** (all → `/client-dashboard`) |
+| U3 | logged-out `/dashboard` | `/auth` (no next) | `/auth?next=%2Fdashboard` |
+| U4 | no-role user opens `/dashboard` | **OPEN** | **CLOSED** (→ `/auth`) |
+| U5 | manager sees the Delete User tab | **OPEN** | **CLOSED** (Create + Reset kept) |
+| U6 | manager opens staff pages | ok | ok |
+| U8 | agency_admin Reset/Delete on a peer agency_admin | **OPEN** (3 enabled) | **CLOSED** (Edit Role only) |
+| U9 | `?next=` variants: `/\example.com`, `//example.com`, `%2F%2Fexample.com`, `%2F%5Cexample.com`, `/%09/example.com`, `https://example.com`, `javascript:alert(1)`, `%252F%252Fexample.com` | **OPEN** (`/%5C…`, `%2F%5C…`, `/%09/…` → example.com) | **CLOSED** (all 8 stay in the app; no JS dialog) |
+| U10 | client logs in → client home; `/client-dashboard` renders | ok | ok |
+| U11 | caregiver + client user → higher role's home | ok (`/caregiver-dashboard`) | ok |
+| U12 | scheduler / hr_staff open `/admin-user-management` | **OPEN** | **CLOSED** (→ `/dashboard`; `/schedule` still opens) |
+| U13 | agency_admin: Delete tab + `/users` | ok | ok |
+| U7 | client sidebar links to staff Care Plan / Schedule | **OPEN** | **CLOSED** (sidebar: "CLIENT · My Dashboard") |
+
+**Sidebars after the push (U14):**
+
+| Role | Sidebar entries |
+|---|---|
+| manager | Dashboard, Client Inquiries, Client Management, Caregiver Applications, Caregiver Management, Care Plan, Schedule, Time Off Requests, Shift Trades, Notification Outbox, Care Services, Care Service Categories, Conversation Builder, Virtual Offices, Knowledge Base, Reports |
+| scheduler | Dashboard, Client Management, Caregiver Management, Care Plan, Schedule, Time Off Requests, Shift Trades |
+| hr_staff | Dashboard, Client Inquiries, Caregiver Applications, Conversation Builder |
+| agency_admin | as manager + Agency Settings |
+| client | **My Dashboard** only |
+| caregiver | CaregiverAppShell bottom tabs (Today, Schedule, Shifts, Profile) in the working tree. With the committed code (old CaregiverDashboard in AppLayout), the sidebar no longer lists the staff "Schedule" (before: OPERATIONS · Schedule). |
+
+### 14.7 CLAUDE.md rule 15 — routes still to guard when the app-shell work is committed
+The uncommitted caregiver-app-shell work adds or changes these routes. Each needs a RequireRole
+role list in the commit that lands it:
+- `/caregiver-dashboard` → `CaregiverToday` (replaces `CaregiverDashboard`);
+- `/caregiver-schedule` → `CaregiverSchedule` (**new route**);
+- `/available-shifts`, `/caregiver-time-off`, `/caregiver-settings`: dual-shell pages changed by
+  that work (they pick `CaregiverAppShell` vs `AppLayout` via `useIsCaregiverRole`);
+- `/client-dashboard` is also still session-only (it predates rule 15).
+
+**Proposed lists:**
+- `allow={["caregiver"]}` for the five caregiver routes, and `allow={["client"]}` for
+  `/client-dashboard`.
+- **Caveat to decide then:** `get_user_role` resolves a staff+caregiver user to the staff role, so
+  such a user would be sent to `/dashboard` instead of the caregiver app. None exist today. The
+  alternative is a caregiver-row check, which is what `useIsCaregiverRole` already does.
 
 ## 13. RequireRole step — task list (accumulated)
 1. `RequireRole` wrapper plus `src/lib/roleHome.ts` (shared with `Auth.tsx`). Wrap every

@@ -41,6 +41,8 @@ import NotificationsOutbox from "./pages/NotificationsOutbox";
 import ClientInquiries from "./pages/ClientInquiries";
 import PublicOffice from "./pages/PublicOffice";
 import KnowledgeBase from "./pages/KnowledgeBase";
+import { RequireRole } from "./components/auth/RequireRole";
+import { ADMIN, MANAGER_OR_ABOVE, STAFF, SYSTEM_ADMIN } from "./lib/roleHome";
 
 const queryClient = new QueryClient();
 
@@ -56,44 +58,44 @@ const App = () => (
           <Route path="/a/:slug" element={<PublicOffice />} />
           <Route path="/a/:slug/apply" element={<PublicOffice initialMode="apply" />} />
           <Route path="/a/:slug/care" element={<PublicOffice initialMode="care" />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/schedule" element={<Schedule />} />
-          <Route path="/caregivers" element={<Caregivers />} />
-          <Route path="/clients" element={<Clients />} />
-          <Route path="/client-inquiries" element={<ClientInquiries />} />
-          <Route path="/time-off" element={<TimeOffRequests />} />
+          <Route path="/dashboard" element={<RequireRole allow={STAFF}><Dashboard /></RequireRole>} />
+          <Route path="/schedule" element={<RequireRole allow={STAFF}><Schedule /></RequireRole>} />
+          <Route path="/caregivers" element={<RequireRole allow={STAFF}><Caregivers /></RequireRole>} />
+          <Route path="/clients" element={<RequireRole allow={STAFF}><Clients /></RequireRole>} />
+          <Route path="/client-inquiries" element={<RequireRole allow={STAFF}><ClientInquiries /></RequireRole>} />
+          <Route path="/time-off" element={<RequireRole allow={STAFF}><TimeOffRequests /></RequireRole>} />
           <Route path="/live-operations" element={<Navigate to="/schedule?tab=today" replace />} />
           <Route path="/quick-assign" element={<Navigate to="/schedule?tab=unassigned" replace />} />
-          <Route path="/shift-trades" element={<ShiftTrades />} />
+          <Route path="/shift-trades" element={<RequireRole allow={STAFF}><ShiftTrades /></RequireRole>} />
           <Route path="/caregiver-registration" element={<CaregiverRegistration />} />
           <Route path="/assistant" element={<Assistant />} />
-          <Route path="/flow-builder" element={<FlowBuilder />} />
-          <Route path="/caregiver-approvals" element={<CaregiverApprovals />} />
-          <Route path="/notifications-outbox" element={<NotificationsOutbox />} />
+          <Route path="/flow-builder" element={<RequireRole allow={STAFF}><FlowBuilder /></RequireRole>} />
+          <Route path="/caregiver-approvals" element={<RequireRole allow={STAFF}><CaregiverApprovals /></RequireRole>} />
+          <Route path="/notifications-outbox" element={<RequireRole allow={STAFF}><NotificationsOutbox /></RequireRole>} />
           <Route path="/caregiver-dashboard" element={<CaregiverDashboard />} />
           <Route path="/client-dashboard" element={<ClientDashboard />} />
-          <Route path="/users" element={<Users />} />
-          <Route path="/users/add" element={<AddUser />} />
-          <Route path="/users/edit/:id" element={<EditUser />} />
-          <Route path="/user-roles" element={<UserRoles />} />
-          <Route path="/system-roles" element={<SystemRoles />} />
-          <Route path="/role-permissions" element={<RolePermissions />} />
-          <Route path="/system-admin-dashboard" element={<SystemAdminDashboard />} />
-          <Route path="/system-admin" element={<SystemAdminDashboard />} />
-          <Route path="/care-types" element={<CareTypes />} />
-          <Route path="/care-service-categories" element={<CareTypes openCategoriesOnLoad />} />
-          <Route path="/order-management" element={<OrderManagement />} />
+          <Route path="/users" element={<RequireRole allow={ADMIN}><Users /></RequireRole>} />
+          <Route path="/users/add" element={<RequireRole allow={ADMIN}><AddUser /></RequireRole>} />
+          <Route path="/users/edit/:id" element={<RequireRole allow={ADMIN}><EditUser /></RequireRole>} />
+          <Route path="/user-roles" element={<RequireRole allow={ADMIN}><UserRoles /></RequireRole>} />
+          <Route path="/system-roles" element={<RequireRole allow={SYSTEM_ADMIN}><SystemRoles /></RequireRole>} />
+          <Route path="/role-permissions" element={<RequireRole allow={SYSTEM_ADMIN}><RolePermissions /></RequireRole>} />
+          <Route path="/system-admin-dashboard" element={<RequireRole allow={SYSTEM_ADMIN}><SystemAdminDashboard /></RequireRole>} />
+          <Route path="/system-admin" element={<RequireRole allow={SYSTEM_ADMIN}><SystemAdminDashboard /></RequireRole>} />
+          <Route path="/care-types" element={<RequireRole allow={STAFF}><CareTypes /></RequireRole>} />
+          <Route path="/care-service-categories" element={<RequireRole allow={STAFF}><CareTypes openCategoriesOnLoad /></RequireRole>} />
+          <Route path="/order-management" element={<RequireRole allow={STAFF}><OrderManagement /></RequireRole>} />
           <Route path="/available-shifts" element={<AvailableShifts />} />
           <Route path="/caregiver-time-off" element={<CaregiverTimeOff />} />
           <Route path="/caregiver-settings" element={<CaregiverSettings />} />
-          <Route path="/admin-utilities" element={<AdminUtilities />} />
-          <Route path="/agency-settings" element={<AgencySettings />} />
-          <Route path="/virtual-offices" element={<VirtualOffices />} />
-          <Route path="/knowledge-base" element={<KnowledgeBase />} />
-          <Route path="/virtual-offices/:id" element={<VirtualOfficeConfig />} />
+          <Route path="/admin-utilities" element={<RequireRole allow={SYSTEM_ADMIN}><AdminUtilities /></RequireRole>} />
+          <Route path="/agency-settings" element={<RequireRole allow={ADMIN}><AgencySettings /></RequireRole>} />
+          <Route path="/virtual-offices" element={<RequireRole allow={STAFF}><VirtualOffices /></RequireRole>} />
+          <Route path="/knowledge-base" element={<RequireRole allow={STAFF}><KnowledgeBase /></RequireRole>} />
+          <Route path="/virtual-offices/:id" element={<RequireRole allow={STAFF}><VirtualOfficeConfig /></RequireRole>} />
           <Route path="/auto-schedule" element={<Navigate to="/schedule?tab=unassigned" replace />} />
-          <Route path="/reports" element={<Reports />} />
-          <Route path="/admin-user-management" element={<AdminUserManagement />} />
+          <Route path="/reports" element={<RequireRole allow={STAFF}><Reports /></RequireRole>} />
+          <Route path="/admin-user-management" element={<RequireRole allow={MANAGER_OR_ABOVE}><AdminUserManagement /></RequireRole>} />
           <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />

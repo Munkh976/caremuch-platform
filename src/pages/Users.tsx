@@ -126,12 +126,20 @@ const Users = () => {
     }
   };
 
+  // Mirrors the server rule in admin-reset-password / admin-delete-user (_shared/authz.ts, M-SEC-2b):
+  // the target must rank strictly BELOW the caller, so an agency_admin can't act on another
+  // agency_admin (or a system_admin), and a system_admin can't act on another system_admin.
+  // Disabling here just keeps users from clicking into a 403; the server enforces it.
+  const ROLE_RANK: Record<string, number> = {
+    system_admin: 100, agency_admin: 80, manager: 60, scheduler: 40, hr_staff: 40, caregiver: 20, client: 10,
+  };
+  // Edit Role keeps its previous rule (agency_admin may edit any non-system_admin role in its agency;
+  // user_roles RLS enforces it). Only Reset/Delete follow the strict 'lower rank' rule above.
+  const canEditRole = (targetRole: string) =>
+    userRole === 'system_admin' || (userRole === 'agency_admin' && targetRole !== 'system_admin');
   const canManageUser = (targetRole: string) => {
-    if (userRole === 'system_admin') return true;
-    if (userRole === 'agency_admin') {
-      return targetRole !== 'system_admin';
-    }
-    return false;
+    if (userRole !== 'system_admin' && userRole !== 'agency_admin') return false;
+    return (ROLE_RANK[targetRole] ?? 0) < (ROLE_RANK[userRole] ?? 0);
   };
 
   const handleResetPassword = async () => {
@@ -331,7 +339,7 @@ const Users = () => {
                           size="sm"
                           className="text-primary hover:text-primary"
                           onClick={() => navigate(`/users/edit/${user.id}`)}
-                          disabled={!canManageUser(user.role || '')}
+                          disabled={!canEditRole(user.role || '')}
                         >
                           <Edit className="h-4 w-4 mr-1" />
                           Edit Role

@@ -9,12 +9,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Activity, Sparkles, ArrowLeft, MessageCircle } from "lucide-react";
 import { signInSchema, signUpSchema, firstError } from "@/lib/validation";
+import { roleHome, safeNextPath } from "@/lib/roleHome";
 
 const Auth = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const rawNext = searchParams.get("next");
-  const nextPath = rawNext && rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : null;
+  // safeNextPath also rejects a backslash form like "/\example.com" (browsers treat it as
+  // "//example.com") — that was an open redirect.
+  const nextPath = safeNextPath(rawNext);
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -27,14 +30,9 @@ const Auth = () => {
       return;
     }
     const { data } = await supabase.rpc('get_user_role', { _user_id: userId });
-    if (data === 'caregiver') {
-      navigate('/caregiver-dashboard');
-    } else if (data === 'client') {
-      navigate('/client-dashboard');
-    } else if (data === 'system_admin') {
-      navigate('/system-admin-dashboard');
-    } else if (data) {
-      navigate('/dashboard');
+    // One role -> home mapping, shared with RequireRole (src/lib/roleHome.ts).
+    if (data) {
+      navigate(roleHome(data));
     } else {
       toast.info('Your account is pending approval. Please wait for a manager to approve your registration.');
       navigate('/auth');

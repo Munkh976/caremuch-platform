@@ -10,10 +10,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { ArrowLeft, UserPlus, KeyRound, UserX } from "lucide-react";
 import { AppLayout } from "@/components/AppLayout";
+import { usePermissions } from "@/hooks/usePermissions";
+import { ADMIN, type AppRole } from "@/lib/roleHome";
 
 const AdminUserManagement = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  // Delete-user is agency_admin / system_admin only (admin-delete-user refuses managers, security
+  // plan §10.4), so the tab is not shown to managers at all.
+  const { userRole } = usePermissions();
+  const canDeleteUsers = !!userRole && ADMIN.includes(userRole as AppRole);
 
   // Create User State
   const [email, setEmail] = useState("");
@@ -219,7 +225,7 @@ const AdminUserManagement = () => {
         </div>
 
         <Tabs defaultValue="create" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className={`grid w-full ${canDeleteUsers ? "grid-cols-3" : "grid-cols-2"}`}>
             <TabsTrigger value="create">
               <UserPlus className="h-4 w-4 mr-2" />
               Create User
@@ -228,10 +234,12 @@ const AdminUserManagement = () => {
               <KeyRound className="h-4 w-4 mr-2" />
               Reset Password
             </TabsTrigger>
+            {canDeleteUsers && (
             <TabsTrigger value="delete">
               <UserX className="h-4 w-4 mr-2" />
               Delete User
             </TabsTrigger>
+            )}
           </TabsList>
 
           <TabsContent value="create">
@@ -366,6 +374,7 @@ const AdminUserManagement = () => {
             </Card>
           </TabsContent>
 
+          {canDeleteUsers && (
           <TabsContent value="delete">
             <Card>
               <CardHeader>
@@ -407,6 +416,7 @@ const AdminUserManagement = () => {
               </CardContent>
             </Card>
           </TabsContent>
+          )}
         </Tabs>
       </div>
     </AppLayout>
