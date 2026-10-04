@@ -1139,6 +1139,7 @@ flags (§9, §11.8), noted inline where they affect a shape.
 |---|---|---|
 | Q11 | Billing week: Monday–Sunday or ISK's week? | Monday–Sunday, office setting `virtual_office.billing_week_start` (default 1) |
 | Q12 | Note-by-note review or bulk-approve clean rows? | Per-note review + a second "bulk-approve clean rows" button |
+| Q18 | Late arrival / early departure: should a much later arrival, or an early departure, bill only the 15-minute units actually delivered? | **Current rule kept:** more than 5 minutes late removes exactly one unit (`units_used = units_scheduled − 1`); early departure is not deducted. The billed-unit rule lives in ONE function, `cp_derive_progress_note_units` (the Phase A trigger), so a change to "delivered units" is a single-function change plus a test. Shift-length units (`floor(minutes / 15)`) move to one shared helper in Phase C, used by note creation and by eligibility projection. |
 
 ## 13. Conflicts found on Oct 4 and how they were resolved
 
