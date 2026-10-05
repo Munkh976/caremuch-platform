@@ -105,6 +105,554 @@ export type Database = {
         }
         Relationships: []
       }
+      billing_batches: {
+        Row: {
+          agency_id: string
+          billed_at: string | null
+          billed_by: string | null
+          created_at: string
+          created_by: string | null
+          export_ref: string | null
+          id: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: Database["public"]["Enums"]["billing_batch_status"]
+          virtual_office_id: string
+          week_end: string
+          week_start: string
+        }
+        Insert: {
+          agency_id: string
+          billed_at?: string | null
+          billed_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          export_ref?: string | null
+          id?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: Database["public"]["Enums"]["billing_batch_status"]
+          virtual_office_id: string
+          week_end: string
+          week_start: string
+        }
+        Update: {
+          agency_id?: string
+          billed_at?: string | null
+          billed_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          export_ref?: string | null
+          id?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: Database["public"]["Enums"]["billing_batch_status"]
+          virtual_office_id?: string
+          week_end?: string
+          week_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billing_batches_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agency"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "billing_batches_virtual_office_id_fkey"
+            columns: ["virtual_office_id"]
+            isOneToOne: false
+            referencedRelation: "virtual_office"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      care_plan_attendees: {
+        Row: {
+          attended: boolean | null
+          care_plan_id: string
+          contributed: boolean | null
+          id: string
+          name: string | null
+          relationship: string | null
+        }
+        Insert: {
+          attended?: boolean | null
+          care_plan_id: string
+          contributed?: boolean | null
+          id?: string
+          name?: string | null
+          relationship?: string | null
+        }
+        Update: {
+          attended?: boolean | null
+          care_plan_id?: string
+          contributed?: boolean | null
+          id?: string
+          name?: string | null
+          relationship?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "care_plan_attendees_care_plan_id_fkey"
+            columns: ["care_plan_id"]
+            isOneToOne: false
+            referencedRelation: "care_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      care_plan_dsm_recommendations: {
+        Row: {
+          care_plan_id: string
+          id: string
+          notes: string | null
+          outcome_code: string
+          service: string
+        }
+        Insert: {
+          care_plan_id: string
+          id?: string
+          notes?: string | null
+          outcome_code: string
+          service: string
+        }
+        Update: {
+          care_plan_id?: string
+          id?: string
+          notes?: string | null
+          outcome_code?: string
+          service?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "care_plan_dsm_recommendations_care_plan_id_fkey"
+            columns: ["care_plan_id"]
+            isOneToOne: false
+            referencedRelation: "care_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      care_plan_external_services: {
+        Row: {
+          auth_reference: string | null
+          care_plan_id: string
+          description: string | null
+          effective_date: string | null
+          expiration_date: string | null
+          id: string
+          provider_program: string | null
+          service: string | null
+          units_text: string | null
+        }
+        Insert: {
+          auth_reference?: string | null
+          care_plan_id: string
+          description?: string | null
+          effective_date?: string | null
+          expiration_date?: string | null
+          id?: string
+          provider_program?: string | null
+          service?: string | null
+          units_text?: string | null
+        }
+        Update: {
+          auth_reference?: string | null
+          care_plan_id?: string
+          description?: string | null
+          effective_date?: string | null
+          expiration_date?: string | null
+          id?: string
+          provider_program?: string | null
+          service?: string | null
+          units_text?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "care_plan_external_services_care_plan_id_fkey"
+            columns: ["care_plan_id"]
+            isOneToOne: false
+            referencedRelation: "care_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      care_plan_goals: {
+        Row: {
+          care_plan_id: string
+          goal_text: string
+          id: string
+          seq: number
+          target_end: string | null
+          target_start: string | null
+        }
+        Insert: {
+          care_plan_id: string
+          goal_text: string
+          id?: string
+          seq: number
+          target_end?: string | null
+          target_start?: string | null
+        }
+        Update: {
+          care_plan_id?: string
+          goal_text?: string
+          id?: string
+          seq?: number
+          target_end?: string | null
+          target_start?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "care_plan_goals_care_plan_id_fkey"
+            columns: ["care_plan_id"]
+            isOneToOne: false
+            referencedRelation: "care_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      care_plan_natural_supports: {
+        Row: {
+          care_plan_id: string
+          how_they_help: string | null
+          id: string
+          name: string | null
+          status: string | null
+          support_type: string | null
+        }
+        Insert: {
+          care_plan_id: string
+          how_they_help?: string | null
+          id?: string
+          name?: string | null
+          status?: string | null
+          support_type?: string | null
+        }
+        Update: {
+          care_plan_id?: string
+          how_they_help?: string | null
+          id?: string
+          name?: string | null
+          status?: string | null
+          support_type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "care_plan_natural_supports_care_plan_id_fkey"
+            columns: ["care_plan_id"]
+            isOneToOne: false
+            referencedRelation: "care_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      care_plan_needs: {
+        Row: {
+          additional_info: string | null
+          addressed: boolean | null
+          care_plan_id: string
+          domain: string | null
+          id: string
+          item_kind: string
+          item_text: string | null
+          level_of_need: string | null
+          source: string
+        }
+        Insert: {
+          additional_info?: string | null
+          addressed?: boolean | null
+          care_plan_id: string
+          domain?: string | null
+          id?: string
+          item_kind?: string
+          item_text?: string | null
+          level_of_need?: string | null
+          source: string
+        }
+        Update: {
+          additional_info?: string | null
+          addressed?: boolean | null
+          care_plan_id?: string
+          domain?: string | null
+          id?: string
+          item_kind?: string
+          item_text?: string | null
+          level_of_need?: string | null
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "care_plan_needs_care_plan_id_fkey"
+            columns: ["care_plan_id"]
+            isOneToOne: false
+            referencedRelation: "care_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      care_plan_objective_needs: {
+        Row: {
+          objective_id: string
+          treatment_need_id: string
+        }
+        Insert: {
+          objective_id: string
+          treatment_need_id: string
+        }
+        Update: {
+          objective_id?: string
+          treatment_need_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "care_plan_objective_needs_objective_id_fkey"
+            columns: ["objective_id"]
+            isOneToOne: false
+            referencedRelation: "care_plan_objectives"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "care_plan_objective_needs_treatment_need_id_fkey"
+            columns: ["treatment_need_id"]
+            isOneToOne: false
+            referencedRelation: "care_plan_treatment_needs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      care_plan_objectives: {
+        Row: {
+          goal_id: string
+          id: string
+          letter: string | null
+          objective_text: string
+          responsible_party: Database["public"]["Enums"]["objective_responsible_party"]
+          seq: number
+          service_type: string | null
+          staff_instructions: string | null
+          target_end: string | null
+          target_start: string | null
+        }
+        Insert: {
+          goal_id: string
+          id?: string
+          letter?: string | null
+          objective_text: string
+          responsible_party?: Database["public"]["Enums"]["objective_responsible_party"]
+          seq?: number
+          service_type?: string | null
+          staff_instructions?: string | null
+          target_end?: string | null
+          target_start?: string | null
+        }
+        Update: {
+          goal_id?: string
+          id?: string
+          letter?: string | null
+          objective_text?: string
+          responsible_party?: Database["public"]["Enums"]["objective_responsible_party"]
+          seq?: number
+          service_type?: string | null
+          staff_instructions?: string | null
+          target_end?: string | null
+          target_start?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "care_plan_objectives_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "care_plan_goals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      care_plan_reviews: {
+        Row: {
+          care_plan_id: string
+          id: string
+          next_review_date: string | null
+          notes: string | null
+          review_date: string | null
+        }
+        Insert: {
+          care_plan_id: string
+          id?: string
+          next_review_date?: string | null
+          notes?: string | null
+          review_date?: string | null
+        }
+        Update: {
+          care_plan_id?: string
+          id?: string
+          next_review_date?: string | null
+          notes?: string | null
+          review_date?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "care_plan_reviews_care_plan_id_fkey"
+            columns: ["care_plan_id"]
+            isOneToOne: false
+            referencedRelation: "care_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      care_plan_treatment_needs: {
+        Row: {
+          care_plan_id: string
+          domain: string
+          id: string
+          new_need: boolean
+          sort_order: number
+          to_address: boolean
+          treatment_recommendation: string | null
+        }
+        Insert: {
+          care_plan_id: string
+          domain: string
+          id?: string
+          new_need?: boolean
+          sort_order?: number
+          to_address?: boolean
+          treatment_recommendation?: string | null
+        }
+        Update: {
+          care_plan_id?: string
+          domain?: string
+          id?: string
+          new_need?: boolean
+          sort_order?: number
+          to_address?: boolean
+          treatment_recommendation?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "care_plan_treatment_needs_care_plan_id_fkey"
+            columns: ["care_plan_id"]
+            isOneToOne: false
+            referencedRelation: "care_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      care_plans: {
+        Row: {
+          agency_id: string
+          client_id: string
+          created_at: string
+          created_by: string | null
+          discharge_criteria: string | null
+          effective_date: string | null
+          expiration_date: string | null
+          facilitator_name: string | null
+          field_snapshot: Json | null
+          field_values: Json
+          id: string
+          meeting_date: string | null
+          michicans_date: string | null
+          next_review_date: string | null
+          plan_type: Database["public"]["Enums"]["care_plan_type"]
+          recorder_name: string | null
+          review_frequency: string | null
+          signed_by: string | null
+          signed_date: string | null
+          status: Database["public"]["Enums"]["care_plan_status"]
+          template_id: string | null
+          template_version: number | null
+          training_version: number
+          version: number
+          virtual_office_id: string | null
+        }
+        Insert: {
+          agency_id: string
+          client_id: string
+          created_at?: string
+          created_by?: string | null
+          discharge_criteria?: string | null
+          effective_date?: string | null
+          expiration_date?: string | null
+          facilitator_name?: string | null
+          field_snapshot?: Json | null
+          field_values?: Json
+          id?: string
+          meeting_date?: string | null
+          michicans_date?: string | null
+          next_review_date?: string | null
+          plan_type?: Database["public"]["Enums"]["care_plan_type"]
+          recorder_name?: string | null
+          review_frequency?: string | null
+          signed_by?: string | null
+          signed_date?: string | null
+          status?: Database["public"]["Enums"]["care_plan_status"]
+          template_id?: string | null
+          template_version?: number | null
+          training_version?: number
+          version?: number
+          virtual_office_id?: string | null
+        }
+        Update: {
+          agency_id?: string
+          client_id?: string
+          created_at?: string
+          created_by?: string | null
+          discharge_criteria?: string | null
+          effective_date?: string | null
+          expiration_date?: string | null
+          facilitator_name?: string | null
+          field_snapshot?: Json | null
+          field_values?: Json
+          id?: string
+          meeting_date?: string | null
+          michicans_date?: string | null
+          next_review_date?: string | null
+          plan_type?: Database["public"]["Enums"]["care_plan_type"]
+          recorder_name?: string | null
+          review_frequency?: string | null
+          signed_by?: string | null
+          signed_date?: string | null
+          status?: Database["public"]["Enums"]["care_plan_status"]
+          template_id?: string | null
+          template_version?: number | null
+          training_version?: number
+          version?: number
+          virtual_office_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "care_plans_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agency"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "care_plans_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "care_plans_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "form_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "care_plans_virtual_office_id_fkey"
+            columns: ["virtual_office_id"]
+            isOneToOne: false
+            referencedRelation: "virtual_office"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       care_request_time_windows: {
         Row: {
           agency_id: string
@@ -567,39 +1115,57 @@ export type Database = {
           caregiver_id: string
           certification_name: string
           certification_number: string | null
+          change_history: Json
           created_at: string | null
+          credential_type_id: string | null
           document_url: string | null
+          effective_date: string | null
+          entered_by: string | null
           expiry_date: string
           id: string
           is_demo: boolean
           is_verified: boolean | null
           issued_date: string | null
+          overridden_at: string | null
+          overridden_by: string | null
           updated_at: string | null
         }
         Insert: {
           caregiver_id: string
           certification_name: string
           certification_number?: string | null
+          change_history?: Json
           created_at?: string | null
+          credential_type_id?: string | null
           document_url?: string | null
+          effective_date?: string | null
+          entered_by?: string | null
           expiry_date: string
           id?: string
           is_demo?: boolean
           is_verified?: boolean | null
           issued_date?: string | null
+          overridden_at?: string | null
+          overridden_by?: string | null
           updated_at?: string | null
         }
         Update: {
           caregiver_id?: string
           certification_name?: string
           certification_number?: string | null
+          change_history?: Json
           created_at?: string | null
+          credential_type_id?: string | null
           document_url?: string | null
+          effective_date?: string | null
+          entered_by?: string | null
           expiry_date?: string
           id?: string
           is_demo?: boolean
           is_verified?: boolean | null
           issued_date?: string | null
+          overridden_at?: string | null
+          overridden_by?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -615,6 +1181,13 @@ export type Database = {
             columns: ["caregiver_id"]
             isOneToOne: false
             referencedRelation: "caregivers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "caregiver_certifications_credential_type_id_fkey"
+            columns: ["credential_type_id"]
+            isOneToOne: false
+            referencedRelation: "credential_types"
             referencedColumns: ["id"]
           },
         ]
@@ -1071,11 +1644,104 @@ export type Database = {
           },
         ]
       }
+      client_documents: {
+        Row: {
+          agency_id: string
+          client_id: string
+          created_at: string
+          created_by: string | null
+          doc_type: string
+          effective_date: string | null
+          expiration_date: string | null
+          field_snapshot: Json | null
+          field_values: Json
+          file_ref: string | null
+          id: string
+          is_current: boolean
+          not_applicable_reason: string | null
+          status: Database["public"]["Enums"]["client_document_status"]
+          template_id: string | null
+          template_version: number | null
+          version: number
+          virtual_office_id: string | null
+        }
+        Insert: {
+          agency_id: string
+          client_id: string
+          created_at?: string
+          created_by?: string | null
+          doc_type: string
+          effective_date?: string | null
+          expiration_date?: string | null
+          field_snapshot?: Json | null
+          field_values?: Json
+          file_ref?: string | null
+          id?: string
+          is_current?: boolean
+          not_applicable_reason?: string | null
+          status?: Database["public"]["Enums"]["client_document_status"]
+          template_id?: string | null
+          template_version?: number | null
+          version?: number
+          virtual_office_id?: string | null
+        }
+        Update: {
+          agency_id?: string
+          client_id?: string
+          created_at?: string
+          created_by?: string | null
+          doc_type?: string
+          effective_date?: string | null
+          expiration_date?: string | null
+          field_snapshot?: Json | null
+          field_values?: Json
+          file_ref?: string | null
+          id?: string
+          is_current?: boolean
+          not_applicable_reason?: string | null
+          status?: Database["public"]["Enums"]["client_document_status"]
+          template_id?: string | null
+          template_version?: number | null
+          version?: number
+          virtual_office_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_documents_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agency"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_documents_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_documents_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "form_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_documents_virtual_office_id_fkey"
+            columns: ["virtual_office_id"]
+            isOneToOne: false
+            referencedRelation: "virtual_office"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_orders: {
         Row: {
           agency_id: string
           archived_at: string | null
           archived_by: string | null
+          care_plan_id: string | null
           client_id: string
           created_at: string | null
           days_of_week: string | null
@@ -1089,11 +1755,13 @@ export type Database = {
           start_date: string
           status: string | null
           updated_at: string | null
+          virtual_office_id: string | null
         }
         Insert: {
           agency_id: string
           archived_at?: string | null
           archived_by?: string | null
+          care_plan_id?: string | null
           client_id: string
           created_at?: string | null
           days_of_week?: string | null
@@ -1107,11 +1775,13 @@ export type Database = {
           start_date: string
           status?: string | null
           updated_at?: string | null
+          virtual_office_id?: string | null
         }
         Update: {
           agency_id?: string
           archived_at?: string | null
           archived_by?: string | null
+          care_plan_id?: string | null
           client_id?: string
           created_at?: string | null
           days_of_week?: string | null
@@ -1125,6 +1795,7 @@ export type Database = {
           start_date?: string
           status?: string | null
           updated_at?: string | null
+          virtual_office_id?: string | null
         }
         Relationships: [
           {
@@ -1135,10 +1806,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "client_orders_care_plan_id_fkey"
+            columns: ["care_plan_id"]
+            isOneToOne: false
+            referencedRelation: "care_plans"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "client_orders_client_id_fkey"
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_orders_virtual_office_id_fkey"
+            columns: ["virtual_office_id"]
+            isOneToOne: false
+            referencedRelation: "virtual_office"
             referencedColumns: ["id"]
           },
         ]
@@ -1569,6 +2254,106 @@ export type Database = {
             columns: ["registration_id"]
             isOneToOne: false
             referencedRelation: "caregiver_registrations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cp_default_credential_types: {
+        Row: {
+          category: Database["public"]["Enums"]["credential_category"]
+          id: string
+          is_active: boolean
+          name: string
+          required: boolean
+          valid_months: number | null
+        }
+        Insert: {
+          category: Database["public"]["Enums"]["credential_category"]
+          id?: string
+          is_active?: boolean
+          name: string
+          required?: boolean
+          valid_months?: number | null
+        }
+        Update: {
+          category?: Database["public"]["Enums"]["credential_category"]
+          id?: string
+          is_active?: boolean
+          name?: string
+          required?: boolean
+          valid_months?: number | null
+        }
+        Relationships: []
+      }
+      cp_default_service_types: {
+        Row: {
+          care_type_code: string
+          id: string
+          is_active: boolean
+          service_type: string
+        }
+        Insert: {
+          care_type_code: string
+          id?: string
+          is_active?: boolean
+          service_type: string
+        }
+        Update: {
+          care_type_code?: string
+          id?: string
+          is_active?: boolean
+          service_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cp_default_service_types_care_type_code_fkey"
+            columns: ["care_type_code"]
+            isOneToOne: true
+            referencedRelation: "care_types"
+            referencedColumns: ["code"]
+          },
+        ]
+      }
+      credential_types: {
+        Row: {
+          agency_id: string
+          category: Database["public"]["Enums"]["credential_category"]
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          name: string
+          required: boolean
+          valid_months: number | null
+        }
+        Insert: {
+          agency_id: string
+          category: Database["public"]["Enums"]["credential_category"]
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          required?: boolean
+          valid_months?: number | null
+        }
+        Update: {
+          agency_id?: string
+          category?: Database["public"]["Enums"]["credential_category"]
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          required?: boolean
+          valid_months?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credential_types_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agency"
             referencedColumns: ["id"]
           },
         ]
@@ -2005,12 +2790,233 @@ export type Database = {
           },
         ]
       }
+      form_template_fields: {
+        Row: {
+          default_value: string | null
+          field_key: string
+          field_type: string
+          id: string
+          label: string
+          options: Json | null
+          required: boolean
+          section: string | null
+          shown_on_progress_note: boolean
+          sort_order: number
+          storage: Database["public"]["Enums"]["form_field_storage"]
+          template_version_id: string
+          writes_to_column: string | null
+          writes_to_entity: string | null
+        }
+        Insert: {
+          default_value?: string | null
+          field_key: string
+          field_type: string
+          id?: string
+          label: string
+          options?: Json | null
+          required?: boolean
+          section?: string | null
+          shown_on_progress_note?: boolean
+          sort_order?: number
+          storage: Database["public"]["Enums"]["form_field_storage"]
+          template_version_id: string
+          writes_to_column?: string | null
+          writes_to_entity?: string | null
+        }
+        Update: {
+          default_value?: string | null
+          field_key?: string
+          field_type?: string
+          id?: string
+          label?: string
+          options?: Json | null
+          required?: boolean
+          section?: string | null
+          shown_on_progress_note?: boolean
+          sort_order?: number
+          storage?: Database["public"]["Enums"]["form_field_storage"]
+          template_version_id?: string
+          writes_to_column?: string | null
+          writes_to_entity?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "form_template_fields_template_version_id_fkey"
+            columns: ["template_version_id"]
+            isOneToOne: false
+            referencedRelation: "form_template_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      form_template_versions: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          is_current: boolean
+          note_layout: Json | null
+          published_at: string | null
+          published_by: string | null
+          sections: Json
+          status: Database["public"]["Enums"]["form_template_version_status"]
+          template_id: string
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_current?: boolean
+          note_layout?: Json | null
+          published_at?: string | null
+          published_by?: string | null
+          sections?: Json
+          status?: Database["public"]["Enums"]["form_template_version_status"]
+          template_id: string
+          version: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_current?: boolean
+          note_layout?: Json | null
+          published_at?: string | null
+          published_by?: string | null
+          sections?: Json
+          status?: Database["public"]["Enums"]["form_template_version_status"]
+          template_id?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "form_template_versions_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "form_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      form_templates: {
+        Row: {
+          agency_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          intake_doc_type: string | null
+          is_active: boolean
+          is_required_for_client: boolean
+          kind: Database["public"]["Enums"]["form_template_kind"]
+          name: string
+          service_type: string | null
+          virtual_office_id: string | null
+        }
+        Insert: {
+          agency_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          intake_doc_type?: string | null
+          is_active?: boolean
+          is_required_for_client?: boolean
+          kind: Database["public"]["Enums"]["form_template_kind"]
+          name: string
+          service_type?: string | null
+          virtual_office_id?: string | null
+        }
+        Update: {
+          agency_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          intake_doc_type?: string | null
+          is_active?: boolean
+          is_required_for_client?: boolean
+          kind?: Database["public"]["Enums"]["form_template_kind"]
+          name?: string
+          service_type?: string | null
+          virtual_office_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "form_templates_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agency"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "form_templates_virtual_office_id_fkey"
+            columns: ["virtual_office_id"]
+            isOneToOne: false
+            referencedRelation: "virtual_office"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      group_sessions: {
+        Row: {
+          agency_id: string
+          created_at: string
+          created_by: string | null
+          end_time: string
+          id: string
+          max_clients: number | null
+          session_date: string
+          staff_client_ratio: string | null
+          start_time: string
+          virtual_office_id: string
+        }
+        Insert: {
+          agency_id: string
+          created_at?: string
+          created_by?: string | null
+          end_time: string
+          id?: string
+          max_clients?: number | null
+          session_date: string
+          staff_client_ratio?: string | null
+          start_time: string
+          virtual_office_id: string
+        }
+        Update: {
+          agency_id?: string
+          created_at?: string
+          created_by?: string | null
+          end_time?: string
+          id?: string
+          max_clients?: number | null
+          session_date?: string
+          staff_client_ratio?: string | null
+          start_time?: string
+          virtual_office_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_sessions_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agency"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_sessions_virtual_office_id_fkey"
+            columns: ["virtual_office_id"]
+            isOneToOne: false
+            referencedRelation: "virtual_office"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       knowledge_chunks: {
         Row: {
           chunk_index: number
           content: string
           created_at: string
           document_id: string
+          embedding: string | null
           id: string
           is_demo: boolean
           language: string
@@ -2021,6 +3027,7 @@ export type Database = {
           content: string
           created_at?: string
           document_id: string
+          embedding?: string | null
           id?: string
           is_demo?: boolean
           language: string
@@ -2031,6 +3038,7 @@ export type Database = {
           content?: string
           created_at?: string
           document_id?: string
+          embedding?: string | null
           id?: string
           is_demo?: boolean
           language?: string
@@ -2053,10 +3061,16 @@ export type Database = {
           content: string
           created_at: string
           created_by: string | null
+          file_format: string | null
           id: string
+          ingestion_error: string | null
+          ingestion_status: string
           is_active: boolean
           is_demo: boolean
           language: string
+          source_storage_path: string | null
+          superseded_by: string | null
+          surface: string
           title: string
           updated_at: string
           virtual_office_id: string | null
@@ -2067,10 +3081,16 @@ export type Database = {
           content: string
           created_at?: string
           created_by?: string | null
+          file_format?: string | null
           id?: string
+          ingestion_error?: string | null
+          ingestion_status?: string
           is_active?: boolean
           is_demo?: boolean
           language?: string
+          source_storage_path?: string | null
+          superseded_by?: string | null
+          surface?: string
           title: string
           updated_at?: string
           virtual_office_id?: string | null
@@ -2081,10 +3101,16 @@ export type Database = {
           content?: string
           created_at?: string
           created_by?: string | null
+          file_format?: string | null
           id?: string
+          ingestion_error?: string | null
+          ingestion_status?: string
           is_active?: boolean
           is_demo?: boolean
           language?: string
+          source_storage_path?: string | null
+          superseded_by?: string | null
+          surface?: string
           title?: string
           updated_at?: string
           virtual_office_id?: string | null
@@ -2098,7 +3124,158 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "knowledge_documents_superseded_by_fkey"
+            columns: ["superseded_by"]
+            isOneToOne: false
+            referencedRelation: "knowledge_documents"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "knowledge_documents_virtual_office_id_fkey"
+            columns: ["virtual_office_id"]
+            isOneToOne: false
+            referencedRelation: "virtual_office"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      measure_types: {
+        Row: {
+          agency_id: string | null
+          created_at: string
+          created_by: string | null
+          default_options: Json | null
+          id: string
+          is_active: boolean
+          kind: Database["public"]["Enums"]["measure_kind"]
+          label: string
+        }
+        Insert: {
+          agency_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          default_options?: Json | null
+          id?: string
+          is_active?: boolean
+          kind: Database["public"]["Enums"]["measure_kind"]
+          label: string
+        }
+        Update: {
+          agency_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          default_options?: Json | null
+          id?: string
+          is_active?: boolean
+          kind?: Database["public"]["Enums"]["measure_kind"]
+          label?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "measure_types_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agency"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      objective_measures: {
+        Row: {
+          id: string
+          is_active: boolean
+          measure_type_id: string
+          objective_id: string
+          options: Json | null
+          prompt_text: string
+          seq: number
+          trial_count: number | null
+        }
+        Insert: {
+          id?: string
+          is_active?: boolean
+          measure_type_id: string
+          objective_id: string
+          options?: Json | null
+          prompt_text: string
+          seq?: number
+          trial_count?: number | null
+        }
+        Update: {
+          id?: string
+          is_active?: boolean
+          measure_type_id?: string
+          objective_id?: string
+          options?: Json | null
+          prompt_text?: string
+          seq?: number
+          trial_count?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "objective_measures_measure_type_id_fkey"
+            columns: ["measure_type_id"]
+            isOneToOne: false
+            referencedRelation: "measure_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "objective_measures_objective_id_fkey"
+            columns: ["objective_id"]
+            isOneToOne: false
+            referencedRelation: "care_plan_objectives"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      office_service_types: {
+        Row: {
+          agency_id: string
+          care_type_code: string
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          service_type: string
+          virtual_office_id: string
+        }
+        Insert: {
+          agency_id: string
+          care_type_code: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          service_type: string
+          virtual_office_id: string
+        }
+        Update: {
+          agency_id?: string
+          care_type_code?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          service_type?: string
+          virtual_office_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "office_service_types_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agency"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "office_service_types_care_type_code_fkey"
+            columns: ["care_type_code"]
+            isOneToOne: false
+            referencedRelation: "care_types"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "office_service_types_virtual_office_id_fkey"
             columns: ["virtual_office_id"]
             isOneToOne: false
             referencedRelation: "virtual_office"
@@ -2118,6 +3295,7 @@ export type Database = {
           is_demo: boolean
           notes: string | null
           order_id: string
+          service_authorization_id: string | null
           start_time: string
           updated_at: string
           week_of_month: number | null
@@ -2133,6 +3311,7 @@ export type Database = {
           is_demo?: boolean
           notes?: string | null
           order_id: string
+          service_authorization_id?: string | null
           start_time: string
           updated_at?: string
           week_of_month?: number | null
@@ -2148,6 +3327,7 @@ export type Database = {
           is_demo?: boolean
           notes?: string | null
           order_id?: string
+          service_authorization_id?: string | null
           start_time?: string
           updated_at?: string
           week_of_month?: number | null
@@ -2165,6 +3345,13 @@ export type Database = {
             columns: ["order_id"]
             isOneToOne: false
             referencedRelation: "client_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_services_service_authorization_id_fkey"
+            columns: ["service_authorization_id"]
+            isOneToOne: false
+            referencedRelation: "service_authorizations"
             referencedColumns: ["id"]
           },
         ]
@@ -2219,6 +3406,313 @@ export type Database = {
           },
         ]
       }
+      plan_inservice_forms: {
+        Row: {
+          agency_id: string
+          care_plan_id: string
+          case_manager_name: string | null
+          client_id: string
+          created_at: string
+          entered_by: string | null
+          field_snapshot: Json | null
+          field_values: Json
+          id: string
+          program_lead_id: string | null
+          signed_at: string | null
+          template_id: string | null
+          template_version: number | null
+          trained_on: string | null
+          training_version: number
+          virtual_office_id: string | null
+        }
+        Insert: {
+          agency_id: string
+          care_plan_id: string
+          case_manager_name?: string | null
+          client_id: string
+          created_at?: string
+          entered_by?: string | null
+          field_snapshot?: Json | null
+          field_values?: Json
+          id?: string
+          program_lead_id?: string | null
+          signed_at?: string | null
+          template_id?: string | null
+          template_version?: number | null
+          trained_on?: string | null
+          training_version: number
+          virtual_office_id?: string | null
+        }
+        Update: {
+          agency_id?: string
+          care_plan_id?: string
+          case_manager_name?: string | null
+          client_id?: string
+          created_at?: string
+          entered_by?: string | null
+          field_snapshot?: Json | null
+          field_values?: Json
+          id?: string
+          program_lead_id?: string | null
+          signed_at?: string | null
+          template_id?: string | null
+          template_version?: number | null
+          trained_on?: string | null
+          training_version?: number
+          virtual_office_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_inservice_forms_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agency"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_inservice_forms_care_plan_id_fkey"
+            columns: ["care_plan_id"]
+            isOneToOne: false
+            referencedRelation: "care_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_inservice_forms_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_inservice_forms_program_lead_id_fkey"
+            columns: ["program_lead_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_inservice_forms_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "form_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_inservice_forms_virtual_office_id_fkey"
+            columns: ["virtual_office_id"]
+            isOneToOne: false
+            referencedRelation: "virtual_office"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      plan_training_forms: {
+        Row: {
+          agency_id: string
+          care_plan_id: string
+          client_id: string
+          created_at: string
+          entered_by: string | null
+          field_snapshot: Json | null
+          field_values: Json
+          id: string
+          location: string | null
+          plan_document_type: Database["public"]["Enums"]["plan_document_type"]
+          plan_effective_date: string | null
+          template_id: string | null
+          template_version: number | null
+          training_version: number
+          virtual_office_id: string | null
+        }
+        Insert: {
+          agency_id: string
+          care_plan_id: string
+          client_id: string
+          created_at?: string
+          entered_by?: string | null
+          field_snapshot?: Json | null
+          field_values?: Json
+          id?: string
+          location?: string | null
+          plan_document_type?: Database["public"]["Enums"]["plan_document_type"]
+          plan_effective_date?: string | null
+          template_id?: string | null
+          template_version?: number | null
+          training_version: number
+          virtual_office_id?: string | null
+        }
+        Update: {
+          agency_id?: string
+          care_plan_id?: string
+          client_id?: string
+          created_at?: string
+          entered_by?: string | null
+          field_snapshot?: Json | null
+          field_values?: Json
+          id?: string
+          location?: string | null
+          plan_document_type?: Database["public"]["Enums"]["plan_document_type"]
+          plan_effective_date?: string | null
+          template_id?: string | null
+          template_version?: number | null
+          training_version?: number
+          virtual_office_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_training_forms_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agency"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_training_forms_care_plan_id_fkey"
+            columns: ["care_plan_id"]
+            isOneToOne: false
+            referencedRelation: "care_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_training_forms_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_training_forms_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "form_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_training_forms_virtual_office_id_fkey"
+            columns: ["virtual_office_id"]
+            isOneToOne: false
+            referencedRelation: "virtual_office"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      plan_training_records: {
+        Row: {
+          agency_id: string
+          care_plan_id: string
+          caregiver_id: string
+          change_history: Json
+          client_id: string
+          created_at: string
+          entered_by: string | null
+          id: string
+          overridden_at: string | null
+          overridden_by: string | null
+          primary_clinician_name: string | null
+          signed_date: string | null
+          trainer_name: string | null
+          training_date: string | null
+          training_form_id: string
+          training_method: Database["public"]["Enums"]["training_method"] | null
+          training_version: number
+          virtual_office_id: string | null
+        }
+        Insert: {
+          agency_id: string
+          care_plan_id: string
+          caregiver_id: string
+          change_history?: Json
+          client_id: string
+          created_at?: string
+          entered_by?: string | null
+          id?: string
+          overridden_at?: string | null
+          overridden_by?: string | null
+          primary_clinician_name?: string | null
+          signed_date?: string | null
+          trainer_name?: string | null
+          training_date?: string | null
+          training_form_id: string
+          training_method?:
+            | Database["public"]["Enums"]["training_method"]
+            | null
+          training_version: number
+          virtual_office_id?: string | null
+        }
+        Update: {
+          agency_id?: string
+          care_plan_id?: string
+          caregiver_id?: string
+          change_history?: Json
+          client_id?: string
+          created_at?: string
+          entered_by?: string | null
+          id?: string
+          overridden_at?: string | null
+          overridden_by?: string | null
+          primary_clinician_name?: string | null
+          signed_date?: string | null
+          trainer_name?: string | null
+          training_date?: string | null
+          training_form_id?: string
+          training_method?:
+            | Database["public"]["Enums"]["training_method"]
+            | null
+          training_version?: number
+          virtual_office_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_training_records_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agency"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_training_records_care_plan_id_fkey"
+            columns: ["care_plan_id"]
+            isOneToOne: false
+            referencedRelation: "care_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_training_records_caregiver_id_fkey"
+            columns: ["caregiver_id"]
+            isOneToOne: false
+            referencedRelation: "caregiver_performance"
+            referencedColumns: ["caregiver_id"]
+          },
+          {
+            foreignKeyName: "plan_training_records_caregiver_id_fkey"
+            columns: ["caregiver_id"]
+            isOneToOne: false
+            referencedRelation: "caregivers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_training_records_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_training_records_training_form_id_fkey"
+            columns: ["training_form_id"]
+            isOneToOne: false
+            referencedRelation: "plan_training_forms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_training_records_virtual_office_id_fkey"
+            columns: ["virtual_office_id"]
+            isOneToOne: false
+            referencedRelation: "virtual_office"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           agency_id: string | null
@@ -2229,10 +3723,12 @@ export type Database = {
           email: string
           full_name: string | null
           id: string
+          office_restricted: boolean
           overtime_threshold: number | null
           phone: string | null
           subscription_tier: string | null
           updated_at: string | null
+          virtual_office_id: string | null
         }
         Insert: {
           agency_id?: string | null
@@ -2243,10 +3739,12 @@ export type Database = {
           email: string
           full_name?: string | null
           id: string
+          office_restricted?: boolean
           overtime_threshold?: number | null
           phone?: string | null
           subscription_tier?: string | null
           updated_at?: string | null
+          virtual_office_id?: string | null
         }
         Update: {
           agency_id?: string | null
@@ -2257,10 +3755,12 @@ export type Database = {
           email?: string
           full_name?: string | null
           id?: string
+          office_restricted?: boolean
           overtime_threshold?: number | null
           phone?: string | null
           subscription_tier?: string | null
           updated_at?: string | null
+          virtual_office_id?: string | null
         }
         Relationships: [
           {
@@ -2268,6 +3768,294 @@ export type Database = {
             columns: ["agency_id"]
             isOneToOne: false
             referencedRelation: "agency"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profiles_virtual_office_id_fkey"
+            columns: ["virtual_office_id"]
+            isOneToOne: false
+            referencedRelation: "virtual_office"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      progress_note_entries: {
+        Row: {
+          data: Json
+          id: string
+          measures_snapshot: Json | null
+          notes_text: string | null
+          objective_id: string | null
+          progress_note_id: string
+        }
+        Insert: {
+          data?: Json
+          id?: string
+          measures_snapshot?: Json | null
+          notes_text?: string | null
+          objective_id?: string | null
+          progress_note_id: string
+        }
+        Update: {
+          data?: Json
+          id?: string
+          measures_snapshot?: Json | null
+          notes_text?: string | null
+          objective_id?: string | null
+          progress_note_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "progress_note_entries_objective_id_fkey"
+            columns: ["objective_id"]
+            isOneToOne: false
+            referencedRelation: "care_plan_objectives"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "progress_note_entries_progress_note_id_fkey"
+            columns: ["progress_note_id"]
+            isOneToOne: false
+            referencedRelation: "progress_notes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      progress_notes: {
+        Row: {
+          actual_end: string | null
+          actual_minutes: number | null
+          agency_id: string
+          arrived_late: boolean
+          authorization_id: string | null
+          batch_approved_at: string | null
+          batch_approved_by: string | null
+          billable: boolean
+          billed_at: string | null
+          biller_name: string | null
+          biller_signed_at: string | null
+          billing_batch_id: string | null
+          care_plan_id: string | null
+          caregiver_id: string
+          client_arrived_at: string | null
+          client_id: string
+          completed_on: string | null
+          created_at: string
+          created_by: string | null
+          due_at: string | null
+          field_snapshot: Json | null
+          field_values: Json
+          id: string
+          late_submitted: boolean
+          location: string | null
+          narrative_text: string | null
+          non_billable_reason: string | null
+          note_kind: Database["public"]["Enums"]["progress_note_kind"]
+          returned_at: string | null
+          returned_by: string | null
+          returned_count: number
+          returned_reason: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          scheduled_end: string | null
+          scheduled_start: string | null
+          service_date: string
+          service_type: string | null
+          shift_id: string | null
+          staff_client_ratio: string | null
+          staff_signature_name: string | null
+          staff_signed_at: string | null
+          status: Database["public"]["Enums"]["progress_note_status"]
+          template_id: string | null
+          template_version: number | null
+          training_version: number | null
+          units_scheduled: number | null
+          units_used: number
+          virtual_office_id: string | null
+          void_reason: string | null
+          voided: boolean
+          voided_at: string | null
+          voided_by: string | null
+        }
+        Insert: {
+          actual_end?: string | null
+          actual_minutes?: number | null
+          agency_id: string
+          arrived_late?: boolean
+          authorization_id?: string | null
+          batch_approved_at?: string | null
+          batch_approved_by?: string | null
+          billable?: boolean
+          billed_at?: string | null
+          biller_name?: string | null
+          biller_signed_at?: string | null
+          billing_batch_id?: string | null
+          care_plan_id?: string | null
+          caregiver_id: string
+          client_arrived_at?: string | null
+          client_id: string
+          completed_on?: string | null
+          created_at?: string
+          created_by?: string | null
+          due_at?: string | null
+          field_snapshot?: Json | null
+          field_values?: Json
+          id?: string
+          late_submitted?: boolean
+          location?: string | null
+          narrative_text?: string | null
+          non_billable_reason?: string | null
+          note_kind: Database["public"]["Enums"]["progress_note_kind"]
+          returned_at?: string | null
+          returned_by?: string | null
+          returned_count?: number
+          returned_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          scheduled_end?: string | null
+          scheduled_start?: string | null
+          service_date: string
+          service_type?: string | null
+          shift_id?: string | null
+          staff_client_ratio?: string | null
+          staff_signature_name?: string | null
+          staff_signed_at?: string | null
+          status?: Database["public"]["Enums"]["progress_note_status"]
+          template_id?: string | null
+          template_version?: number | null
+          training_version?: number | null
+          units_scheduled?: number | null
+          units_used?: number
+          virtual_office_id?: string | null
+          void_reason?: string | null
+          voided?: boolean
+          voided_at?: string | null
+          voided_by?: string | null
+        }
+        Update: {
+          actual_end?: string | null
+          actual_minutes?: number | null
+          agency_id?: string
+          arrived_late?: boolean
+          authorization_id?: string | null
+          batch_approved_at?: string | null
+          batch_approved_by?: string | null
+          billable?: boolean
+          billed_at?: string | null
+          biller_name?: string | null
+          biller_signed_at?: string | null
+          billing_batch_id?: string | null
+          care_plan_id?: string | null
+          caregiver_id?: string
+          client_arrived_at?: string | null
+          client_id?: string
+          completed_on?: string | null
+          created_at?: string
+          created_by?: string | null
+          due_at?: string | null
+          field_snapshot?: Json | null
+          field_values?: Json
+          id?: string
+          late_submitted?: boolean
+          location?: string | null
+          narrative_text?: string | null
+          non_billable_reason?: string | null
+          note_kind?: Database["public"]["Enums"]["progress_note_kind"]
+          returned_at?: string | null
+          returned_by?: string | null
+          returned_count?: number
+          returned_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          scheduled_end?: string | null
+          scheduled_start?: string | null
+          service_date?: string
+          service_type?: string | null
+          shift_id?: string | null
+          staff_client_ratio?: string | null
+          staff_signature_name?: string | null
+          staff_signed_at?: string | null
+          status?: Database["public"]["Enums"]["progress_note_status"]
+          template_id?: string | null
+          template_version?: number | null
+          training_version?: number | null
+          units_scheduled?: number | null
+          units_used?: number
+          virtual_office_id?: string | null
+          void_reason?: string | null
+          voided?: boolean
+          voided_at?: string | null
+          voided_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "progress_notes_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agency"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "progress_notes_authorization_id_fkey"
+            columns: ["authorization_id"]
+            isOneToOne: false
+            referencedRelation: "service_authorizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "progress_notes_billing_batch_id_fkey"
+            columns: ["billing_batch_id"]
+            isOneToOne: false
+            referencedRelation: "billing_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "progress_notes_care_plan_id_fkey"
+            columns: ["care_plan_id"]
+            isOneToOne: false
+            referencedRelation: "care_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "progress_notes_caregiver_id_fkey"
+            columns: ["caregiver_id"]
+            isOneToOne: false
+            referencedRelation: "caregiver_performance"
+            referencedColumns: ["caregiver_id"]
+          },
+          {
+            foreignKeyName: "progress_notes_caregiver_id_fkey"
+            columns: ["caregiver_id"]
+            isOneToOne: false
+            referencedRelation: "caregivers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "progress_notes_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "progress_notes_shift_id_fkey"
+            columns: ["shift_id"]
+            isOneToOne: false
+            referencedRelation: "shifts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "progress_notes_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "form_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "progress_notes_virtual_office_id_fkey"
+            columns: ["virtual_office_id"]
+            isOneToOne: false
+            referencedRelation: "virtual_office"
             referencedColumns: ["id"]
           },
         ]
@@ -2313,6 +4101,131 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "system_modules"
             referencedColumns: ["module_code"]
+          },
+        ]
+      }
+      service_authorizations: {
+        Row: {
+          agency_id: string
+          amount: number | null
+          auth_number: string
+          authorizing_agent_notes: string | null
+          client_id: string
+          created_at: string
+          created_by: string | null
+          effective_date: string
+          expiration_date: string
+          field_snapshot: Json | null
+          field_values: Json
+          id: string
+          modifier: string | null
+          period_type: Database["public"]["Enums"]["auth_period_type"] | null
+          rate: number | null
+          service_code: string | null
+          service_description: string | null
+          service_type: string
+          source_adapter: Database["public"]["Enums"]["auth_source_type"]
+          template_id: string | null
+          template_version: number | null
+          unit_minutes: number
+          units_authorized: number
+          units_available: number
+          units_claimed: number
+          units_paid: number
+          units_per_period: number | null
+          units_used_before_caremuch: number
+          virtual_office_id: string | null
+        }
+        Insert: {
+          agency_id: string
+          amount?: number | null
+          auth_number: string
+          authorizing_agent_notes?: string | null
+          client_id: string
+          created_at?: string
+          created_by?: string | null
+          effective_date: string
+          expiration_date: string
+          field_snapshot?: Json | null
+          field_values?: Json
+          id?: string
+          modifier?: string | null
+          period_type?: Database["public"]["Enums"]["auth_period_type"] | null
+          rate?: number | null
+          service_code?: string | null
+          service_description?: string | null
+          service_type: string
+          source_adapter?: Database["public"]["Enums"]["auth_source_type"]
+          template_id?: string | null
+          template_version?: number | null
+          unit_minutes?: number
+          units_authorized?: number
+          units_available?: number
+          units_claimed?: number
+          units_paid?: number
+          units_per_period?: number | null
+          units_used_before_caremuch?: number
+          virtual_office_id?: string | null
+        }
+        Update: {
+          agency_id?: string
+          amount?: number | null
+          auth_number?: string
+          authorizing_agent_notes?: string | null
+          client_id?: string
+          created_at?: string
+          created_by?: string | null
+          effective_date?: string
+          expiration_date?: string
+          field_snapshot?: Json | null
+          field_values?: Json
+          id?: string
+          modifier?: string | null
+          period_type?: Database["public"]["Enums"]["auth_period_type"] | null
+          rate?: number | null
+          service_code?: string | null
+          service_description?: string | null
+          service_type?: string
+          source_adapter?: Database["public"]["Enums"]["auth_source_type"]
+          template_id?: string | null
+          template_version?: number | null
+          unit_minutes?: number
+          units_authorized?: number
+          units_available?: number
+          units_claimed?: number
+          units_paid?: number
+          units_per_period?: number | null
+          units_used_before_caremuch?: number
+          virtual_office_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_authorizations_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agency"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_authorizations_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_authorizations_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "form_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_authorizations_virtual_office_id_fkey"
+            columns: ["virtual_office_id"]
+            isOneToOne: false
+            referencedRelation: "virtual_office"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -2578,6 +4491,13 @@ export type Database = {
             referencedRelation: "shift_assignments"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "shift_trades_shift_id_fkey"
+            columns: ["shift_id"]
+            isOneToOne: false
+            referencedRelation: "shifts"
+            referencedColumns: ["id"]
+          },
         ]
       }
       shifts: {
@@ -2590,6 +4510,7 @@ export type Database = {
           created_at: string | null
           duration_hours: number
           end_time: string
+          group_session_id: string | null
           id: string
           is_demo: boolean
           is_recurring: boolean | null
@@ -2605,6 +4526,7 @@ export type Database = {
           start_time: string
           status: Database["public"]["Enums"]["shift_status"] | null
           updated_at: string | null
+          virtual_office_id: string | null
         }
         Insert: {
           agency_id: string
@@ -2615,6 +4537,7 @@ export type Database = {
           created_at?: string | null
           duration_hours: number
           end_time: string
+          group_session_id?: string | null
           id?: string
           is_demo?: boolean
           is_recurring?: boolean | null
@@ -2630,6 +4553,7 @@ export type Database = {
           start_time: string
           status?: Database["public"]["Enums"]["shift_status"] | null
           updated_at?: string | null
+          virtual_office_id?: string | null
         }
         Update: {
           agency_id?: string
@@ -2640,6 +4564,7 @@ export type Database = {
           created_at?: string | null
           duration_hours?: number
           end_time?: string
+          group_session_id?: string | null
           id?: string
           is_demo?: boolean
           is_recurring?: boolean | null
@@ -2655,6 +4580,7 @@ export type Database = {
           start_time?: string
           status?: Database["public"]["Enums"]["shift_status"] | null
           updated_at?: string | null
+          virtual_office_id?: string | null
         }
         Relationships: [
           {
@@ -2700,6 +4626,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "shifts_group_session_id_fkey"
+            columns: ["group_session_id"]
+            isOneToOne: false
+            referencedRelation: "group_sessions"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "shifts_order_id_fkey"
             columns: ["order_id"]
             isOneToOne: false
@@ -2711,6 +4644,13 @@ export type Database = {
             columns: ["order_service_id"]
             isOneToOne: false
             referencedRelation: "order_services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shifts_virtual_office_id_fkey"
+            columns: ["virtual_office_id"]
+            isOneToOne: false
+            referencedRelation: "virtual_office"
             referencedColumns: ["id"]
           },
         ]
@@ -2802,6 +4742,7 @@ export type Database = {
           started_at: string
           status: Database["public"]["Enums"]["time_entry_status"]
           updated_at: string
+          virtual_office_id: string | null
           voided_at: string | null
         }
         Insert: {
@@ -2824,6 +4765,7 @@ export type Database = {
           started_at: string
           status?: Database["public"]["Enums"]["time_entry_status"]
           updated_at?: string
+          virtual_office_id?: string | null
           voided_at?: string | null
         }
         Update: {
@@ -2846,6 +4788,7 @@ export type Database = {
           started_at?: string
           status?: Database["public"]["Enums"]["time_entry_status"]
           updated_at?: string
+          virtual_office_id?: string | null
           voided_at?: string | null
         }
         Relationships: [
@@ -2884,6 +4827,13 @@ export type Database = {
             referencedRelation: "shifts"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "time_entries_virtual_office_id_fkey"
+            columns: ["virtual_office_id"]
+            isOneToOne: false
+            referencedRelation: "virtual_office"
+            referencedColumns: ["id"]
+          },
         ]
       }
       time_off_requests: {
@@ -2901,6 +4851,7 @@ export type Database = {
           start_date: string
           status: Database["public"]["Enums"]["request_status"]
           updated_at: string | null
+          virtual_office_id: string | null
         }
         Insert: {
           agency_id: string
@@ -2916,6 +4867,7 @@ export type Database = {
           start_date: string
           status?: Database["public"]["Enums"]["request_status"]
           updated_at?: string | null
+          virtual_office_id?: string | null
         }
         Update: {
           agency_id?: string
@@ -2931,6 +4883,7 @@ export type Database = {
           start_date?: string
           status?: Database["public"]["Enums"]["request_status"]
           updated_at?: string | null
+          virtual_office_id?: string | null
         }
         Relationships: [
           {
@@ -2952,6 +4905,13 @@ export type Database = {
             columns: ["caregiver_id"]
             isOneToOne: false
             referencedRelation: "caregivers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "time_off_requests_virtual_office_id_fkey"
+            columns: ["virtual_office_id"]
+            isOneToOne: false
+            referencedRelation: "virtual_office"
             referencedColumns: ["id"]
           },
         ]
@@ -2995,12 +4955,17 @@ export type Database = {
         Row: {
           address: string | null
           agency_id: string
+          billing_week_start: number
           branding: Json
+          care_plan_module_enabled: boolean
+          care_plan_module_enabled_at: string | null
           city: string | null
           code: string | null
+          compliance_enforcement_enabled: boolean
           contact_email: string | null
           contact_phone: string | null
           created_at: string
+          group_session_max_clients: number
           id: string
           is_active: boolean
           is_demo: boolean
@@ -3024,12 +4989,17 @@ export type Database = {
         Insert: {
           address?: string | null
           agency_id: string
+          billing_week_start?: number
           branding?: Json
+          care_plan_module_enabled?: boolean
+          care_plan_module_enabled_at?: string | null
           city?: string | null
           code?: string | null
+          compliance_enforcement_enabled?: boolean
           contact_email?: string | null
           contact_phone?: string | null
           created_at?: string
+          group_session_max_clients?: number
           id?: string
           is_active?: boolean
           is_demo?: boolean
@@ -3053,12 +5023,17 @@ export type Database = {
         Update: {
           address?: string | null
           agency_id?: string
+          billing_week_start?: number
           branding?: Json
+          care_plan_module_enabled?: boolean
+          care_plan_module_enabled_at?: string | null
           city?: string | null
           code?: string | null
+          compliance_enforcement_enabled?: boolean
           contact_email?: string | null
           contact_phone?: string | null
           created_at?: string
+          group_session_max_clients?: number
           id?: string
           is_active?: boolean
           is_demo?: boolean
@@ -3120,6 +5095,11 @@ export type Database = {
       }
     }
     Functions: {
+      approve_batch_notes: {
+        Args: { _batch_id: string; _note_ids: string[] }
+        Returns: Json
+      }
+      approve_clean_rows: { Args: { _batch_id: string }; Returns: Json }
       assign_caregiver_role: {
         Args: { caregiver_email: string }
         Returns: undefined
@@ -3134,11 +5114,33 @@ export type Database = {
         }
         Returns: Json
       }
+      build_billing_batch: {
+        Args: { _office_id: string; _week_start: string }
+        Returns: Json
+      }
       caregiver_agency_id: { Args: { _caregiver_id: string }; Returns: string }
       caregiver_pick_up_shift: { Args: { _shift_id: string }; Returns: Json }
+      caregiver_pickup_trade_shift: {
+        Args: { _trade_id: string }
+        Returns: Json
+      }
       check_assignment_eligibility: {
         Args: { _caregiver_id: string; _shift_id: string }
         Returns: Json
+      }
+      check_assignment_eligibility_bulk: {
+        Args: { _caregiver_ids: string[]; _shift_id: string }
+        Returns: {
+          caregiver_id: string
+          result: Json
+        }[]
+      }
+      check_caregiver_shifts_eligibility: {
+        Args: { _shift_ids: string[] }
+        Returns: {
+          result: Json
+          shift_id: string
+        }[]
       }
       compute_earnings_batch: {
         Args: {
@@ -3170,10 +5172,227 @@ export type Database = {
         }
         Returns: Json
       }
+      cp_approve_batch: {
+        Args: { _batch_id: string; _clean_only: boolean; _note_ids: string[] }
+        Returns: Json
+      }
+      cp_audit: {
+        Args: {
+          _agency_id: string
+          _event_type: string
+          _office_id: string
+          _payload: Json
+          _subject_id: string
+          _subject_type: string
+        }
+        Returns: undefined
+      }
+      cp_care_plan_goal_in_scope: {
+        Args: { _goal_id: string }
+        Returns: boolean
+      }
+      cp_care_plan_in_scope: {
+        Args: { _care_plan_id: string }
+        Returns: boolean
+      }
+      cp_care_plan_objective_in_scope: {
+        Args: { _objective_id: string }
+        Returns: boolean
+      }
+      cp_caregiver_safe_eligibility: { Args: { _elig: Json }; Returns: Json }
+      cp_check_constrained_edit: {
+        Args: { _current_version_id: string; _fields: Json; _note_layout: Json }
+        Returns: undefined
+      }
+      cp_client_onboarding: { Args: { _client_id: string }; Returns: Json }
+      cp_eligibility_core: {
+        Args: { _caregiver_id: string; _ctx: Json; _shift_id: string }
+        Returns: Json
+      }
+      cp_form_template_readable: {
+        Args: { _template_id: string }
+        Returns: boolean
+      }
+      cp_form_template_version_readable: {
+        Args: { _version_id: string }
+        Returns: boolean
+      }
+      cp_goal_tree: { Args: { _care_plan_id: string }; Returns: Json }
+      cp_is_assigned_caregiver: {
+        Args: { _caregiver_id: string }
+        Returns: boolean
+      }
+      cp_lock_client_authorizations: {
+        Args: { _client_id: string }
+        Returns: undefined
+      }
+      cp_objective_measures: { Args: { _objective_id: string }; Returns: Json }
+      cp_period_left: {
+        Args: {
+          _auth: string
+          _cap: number
+          _d: string
+          _dm_auth: string[]
+          _dm_date: string[]
+          _dm_units: number[]
+          _period: Database["public"]["Enums"]["auth_period_type"]
+          _week_start: number
+        }
+        Returns: number
+      }
+      cp_period_window: {
+        Args: {
+          _d: string
+          _period: Database["public"]["Enums"]["auth_period_type"]
+          _week_start: number
+        }
+        Returns: unknown
+      }
+      cp_progress_note_in_scope: {
+        Args: { _note_id: string }
+        Returns: boolean
+      }
+      cp_projected_units: {
+        Args: {
+          _client_id: string
+          _exclude_shift: string
+          _need: number
+          _service_type: string
+          _shift_date: string
+        }
+        Returns: Json
+      }
+      cp_require_scope: {
+        Args: {
+          _agency_id: string
+          _office_id: string
+          _roles: Database["public"]["Enums"]["app_role"][]
+        }
+        Returns: undefined
+      }
+      cp_require_template_editor: {
+        Args: { _agency_id: string; _office_id: string }
+        Returns: undefined
+      }
+      cp_resolve_note_template: {
+        Args: { _agency_id: string; _office_id: string; _service_type: string }
+        Returns: string
+      }
+      cp_resolve_template: {
+        Args: {
+          _agency_id: string
+          _intake_doc_type: string
+          _kind: Database["public"]["Enums"]["form_template_kind"]
+          _office_id: string
+        }
+        Returns: string
+      }
+      cp_safe_issue_list: { Args: { _issues: Json }; Returns: Json }
+      cp_shift_client_context: { Args: { _shift_id: string }; Returns: Json }
+      cp_shift_units: {
+        Args: { _date: string; _end: string; _start: string; _tz: string }
+        Returns: number
+      }
+      cp_spine_columns: { Args: { _entity: string }; Returns: string[] }
+      cp_staff_in_agency: {
+        Args: {
+          _agency_id: string
+          _roles: Database["public"]["Enums"]["app_role"][]
+        }
+        Returns: boolean
+      }
+      cp_staff_in_scope: {
+        Args: {
+          _agency_id: string
+          _office_id: string
+          _roles: Database["public"]["Enums"]["app_role"][]
+        }
+        Returns: boolean
+      }
+      cp_template_snapshot: { Args: { _version_id: string }; Returns: Json }
+      cp_validate_answer: {
+        Args: { _a: Json; _final: boolean; _m: Json }
+        Returns: undefined
+      }
+      cp_validate_entry_data: {
+        Args: { _data: Json; _final: boolean; _measures: Json }
+        Returns: undefined
+      }
+      cp_validate_field_values: {
+        Args: { _snapshot: Json; _values: Json }
+        Returns: undefined
+      }
+      cp_validate_plan_header: {
+        Args: { _h: Json; _require_dates: boolean }
+        Returns: undefined
+      }
+      cp_validate_template_definition: {
+        Args: {
+          _fields: Json
+          _kind: Database["public"]["Enums"]["form_template_kind"]
+          _note_layout: Json
+        }
+        Returns: undefined
+      }
+      create_care_plan: {
+        Args: {
+          _client_id: string
+          _field_values?: Json
+          _header: Json
+          _plan_type: Database["public"]["Enums"]["care_plan_type"]
+        }
+        Returns: string
+      }
       create_flow_draft: { Args: { p_flow_id: string }; Returns: string }
+      create_group_session: {
+        Args: {
+          _end_time: string
+          _max_clients?: number
+          _office_id: string
+          _session_date: string
+          _staff_client_ratio?: string
+          _start_time: string
+        }
+        Returns: string
+      }
+      create_progress_note_for_shift: {
+        Args: { _shift_id: string }
+        Returns: string
+      }
+      create_service_authorization: {
+        Args: {
+          _auth_number: string
+          _authorizing_agent_notes?: string
+          _client_id: string
+          _effective_date: string
+          _expiration_date: string
+          _field_values?: Json
+          _modifier?: string
+          _period_type?: Database["public"]["Enums"]["auth_period_type"]
+          _service_code?: string
+          _service_description?: string
+          _service_type: string
+          _unit_minutes?: number
+          _units_authorized: number
+          _units_per_period?: number
+          _units_used_before_caremuch?: number
+        }
+        Returns: string
+      }
       current_agency_id: { Args: never; Returns: string }
+      current_virtual_office_id: { Args: never; Returns: string }
       derived_shift_caregiver: { Args: { _shift_id: string }; Returns: string }
       discard_flow_draft: { Args: { p_draft_id: string }; Returns: undefined }
+      enter_caregiver_credential: {
+        Args: {
+          _caregiver_id: string
+          _certification_number?: string
+          _credential_type_id: string
+          _effective_date: string
+          _expiry_date: string
+        }
+        Returns: string
+      }
       event_actor_type: { Args: never; Returns: string }
       event_default_agency_id: { Args: never; Returns: string }
       family_agency_id: { Args: { _family_id: string }; Returns: string }
@@ -3227,6 +5446,50 @@ export type Database = {
         Returns: undefined
       }
       generate_order_number: { Args: never; Returns: string }
+      get_billing_batch: { Args: { _batch_id: string }; Returns: Json }
+      get_bookable_caregivers: {
+        Args: { _day_of_week: number }
+        Returns: {
+          avg_rating: number
+          care_type_codes: string[]
+          caregiver_id: string
+          day_windows: Json
+          first_name: string
+          last_initial: string
+          rating_count: number
+        }[]
+      }
+      get_caregiver_trade_shifts: {
+        Args: never
+        Returns: {
+          care_type_code: string
+          client_id: string
+          duration_hours: number
+          end_time: string
+          order_title: string
+          original_caregiver_first_name: string
+          original_caregiver_last_name: string
+          reason: string
+          shift_date: string
+          shift_id: string
+          start_time: string
+          trade_id: string
+        }[]
+      }
+      get_caregiver_visible_clients: {
+        Args: never
+        Returns: {
+          address: string
+          city: string
+          first_name: string
+          id: string
+          last_name: string
+          phone: string
+          scheduling_flexibility: string
+          state: string
+          zip_code: string
+        }[]
+      }
       get_caregiver_with_profile: {
         Args: { caregiver_uuid: string }
         Returns: {
@@ -3241,6 +5504,10 @@ export type Database = {
           role: Database["public"]["Enums"]["caregiver_role"]
           user_id: string
         }[]
+      }
+      get_client_onboarding_status: {
+        Args: { _client_id: string }
+        Returns: Json
       }
       get_client_with_profile: {
         Args: { client_uuid: string }
@@ -3257,6 +5524,43 @@ export type Database = {
           state: string
           user_id: string
         }[]
+      }
+      get_my_care_team: {
+        Args: never
+        Returns: {
+          avg_rating: number
+          care_type_codes: string[]
+          caregiver_id: string
+          employment_role: string
+          first_name: string
+          is_preferred: boolean
+          last_initial: string
+          last_shift_date: string
+          next_shift_date: string
+          rating_count: number
+          shift_count: number
+        }[]
+      }
+      get_my_trade_requests: {
+        Args: never
+        Returns: {
+          created_at: string
+          end_time: string
+          id: string
+          new_caregiver_first_name: string
+          new_caregiver_last_initial: string
+          order_title: string
+          reason: string
+          resolved_at: string
+          shift_date: string
+          shift_id: string
+          start_time: string
+          status: string
+        }[]
+      }
+      get_progress_note_for_caregiver: {
+        Args: { _note_id: string }
+        Returns: Json
       }
       get_public_office: { Args: { p_slug: string }; Returns: Json }
       get_user_role: {
@@ -3280,6 +5584,7 @@ export type Database = {
       }
       is_agency_staff: { Args: { _user_id: string }; Returns: boolean }
       is_my_assigned_shift: { Args: { _shift_id: string }; Returns: boolean }
+      is_office_restricted: { Args: { _user_id: string }; Returns: boolean }
       is_published_public_agency: {
         Args: { _agency_id: string }
         Returns: boolean
@@ -3287,6 +5592,15 @@ export type Database = {
       knowledge_document_agency_id: {
         Args: { _document_id: string }
         Returns: string
+      }
+      list_caregivers_needing_retraining: {
+        Args: { _office_id: string }
+        Returns: Json
+      }
+      list_clients_onboarding: { Args: { _office_id: string }; Returns: Json }
+      list_overdue_notes: {
+        Args: { _as_of?: string; _office_id: string }
+        Returns: Json
       }
       log_event: {
         Args: {
@@ -3302,17 +5616,118 @@ export type Database = {
         }
         Returns: undefined
       }
+      mark_batch_billed: { Args: { _batch_id: string }; Returns: Json }
+      match_agency_knowledge: {
+        Args: {
+          _agency_id?: string
+          _language: string
+          _limit?: number
+          _match_threshold?: number
+          _query_embedding: string
+          _surfaces?: string[]
+          _virtual_office_id?: string
+        }
+        Returns: {
+          chunk_id: string
+          content: string
+          document_id: string
+          document_title: string
+          similarity: number
+        }[]
+      }
       my_agency_id: { Args: never; Returns: string }
       my_caregiver_ids: { Args: never; Returns: string[] }
       my_client_ids: { Args: never; Returns: string[] }
       order_agency_id: { Args: { _order_id: string }; Returns: string }
       order_client_id: { Args: { _order_id: string }; Returns: string }
+      override_training_record: {
+        Args: {
+          _primary_clinician_name: string
+          _record_id: string
+          _signed_date: string
+          _trainer_name: string
+          _training_date: string
+          _training_method: Database["public"]["Enums"]["training_method"]
+        }
+        Returns: undefined
+      }
       publish_flow_draft: { Args: { p_draft_id: string }; Returns: string }
+      publish_template_version: {
+        Args: { _template_id: string }
+        Returns: string
+      }
       purge_demo_data: { Args: never; Returns: Json }
       purge_demo_data_dry_run: { Args: never; Returns: Json }
+      record_inservice_form: {
+        Args: {
+          _care_plan_id: string
+          _case_manager_name: string
+          _field_values?: Json
+          _program_lead_id: string
+          _signed_at: string
+          _trained_on: string
+        }
+        Returns: string
+      }
+      record_training_form: {
+        Args: {
+          _care_plan_id: string
+          _field_values?: Json
+          _location: string
+          _plan_document_type: Database["public"]["Enums"]["plan_document_type"]
+          _plan_effective_date: string
+          _records: Json
+        }
+        Returns: string
+      }
       release_shift_assignments: {
         Args: { _reason?: string; _shift_ids: string[] }
         Returns: number
+      }
+      renew_care_plan: {
+        Args: {
+          _care_plan_id: string
+          _field_values?: Json
+          _header?: Json
+          _plan_type?: Database["public"]["Enums"]["care_plan_type"]
+        }
+        Returns: string
+      }
+      return_progress_note: {
+        Args: { _note_id: string; _reason: string }
+        Returns: undefined
+      }
+      review_progress_note: {
+        Args: {
+          _billable: boolean
+          _non_billable_reason?: string
+          _note_id: string
+        }
+        Returns: Json
+      }
+      save_progress_note_draft: {
+        Args: {
+          _entries?: Json
+          _header?: Json
+          _narrative_text?: string
+          _note_id: string
+        }
+        Returns: undefined
+      }
+      save_template_draft: {
+        Args: {
+          _fields: Json
+          _intake_doc_type: string
+          _is_required_for_client: boolean
+          _kind: Database["public"]["Enums"]["form_template_kind"]
+          _name: string
+          _note_layout: Json
+          _office_id: string
+          _sections: Json
+          _service_type?: string
+          _template_id: string
+        }
+        Returns: string
       }
       search_agency_knowledge: {
         Args: {
@@ -3320,6 +5735,8 @@ export type Database = {
           _language: string
           _limit?: number
           _query: string
+          _surfaces?: string[]
+          _virtual_office_id?: string
         }
         Returns: {
           chunk_id: string
@@ -3329,9 +5746,80 @@ export type Database = {
           rank: number
         }[]
       }
+      seed_office_care_plan_defaults: {
+        Args: { _office_id: string }
+        Returns: Json
+      }
+      set_objective_measures: {
+        Args: { _measures: Json; _objective_id: string }
+        Returns: number
+      }
+      set_shift_group_session: {
+        Args: { _group_session_id: string; _shift_id: string }
+        Returns: undefined
+      }
       shift_assignment_agency_id: {
         Args: { _shift_id: string }
         Returns: string
+      }
+      shift_assignment_virtual_office_id: {
+        Args: { _shift_id: string }
+        Returns: string
+      }
+      submit_caregiver_registration: {
+        Args: {
+          p_address?: string
+          p_agency_id?: string
+          p_care_type_codes?: string[]
+          p_city?: string
+          p_email: string
+          p_employment_type?: string
+          p_first_name: string
+          p_hourly_rate?: number
+          p_last_name: string
+          p_phone: string
+          p_state?: string
+          p_virtual_office_id?: string
+          p_zip_code?: string
+        }
+        Returns: string
+      }
+      submit_progress_note: {
+        Args: { _note_id: string; _typed_signature: string }
+        Returns: Json
+      }
+      update_care_plan_fields: {
+        Args: { _care_plan_id: string; _field_values?: Json; _header?: Json }
+        Returns: undefined
+      }
+      upgrade_instance_template: {
+        Args: {
+          _instance_id: string
+          _instance_table: string
+          _new_values?: Json
+        }
+        Returns: Json
+      }
+      upsert_care_plan_goals: {
+        Args: { _care_plan_id: string; _goals: Json }
+        Returns: Json
+      }
+      upsert_client_document: {
+        Args: {
+          _client_id: string
+          _doc_type: string
+          _effective_date?: string
+          _expiration_date?: string
+          _field_values?: Json
+          _file_ref?: string
+          _not_applicable_reason?: string
+          _status: Database["public"]["Enums"]["client_document_status"]
+        }
+        Returns: string
+      }
+      void_progress_note: {
+        Args: { _note_id: string; _reason: string }
+        Returns: undefined
       }
     }
     Enums: {
@@ -3356,6 +5844,16 @@ export type Database = {
         | "completed"
         | "no_show"
         | "cancelled"
+      auth_period_type:
+        | "per_week"
+        | "per_auth"
+        | "per_quarter"
+        | "per_month"
+        | "per_day"
+      auth_source_type: "manual" | "doc" | "edi" | "connector"
+      billing_batch_status: "open" | "reviewed" | "billed"
+      care_plan_status: "active" | "superseded" | "expired"
+      care_plan_type: "initial" | "annual" | "addendum"
       care_request_status:
         | "new"
         | "reviewing"
@@ -3371,11 +5869,22 @@ export type Database = {
         | "dementia_care"
         | "hospice"
       caregiver_role: "full_time" | "part_time" | "on_call"
+      client_document_status:
+        | "missing"
+        | "pending"
+        | "complete"
+        | "expired"
+        | "not_applicable"
       conversation_session_status:
         | "in_progress"
         | "completed"
         | "abandoned"
         | "submitted"
+      credential_category:
+        | "background_check"
+        | "annual_online"
+        | "annual"
+        | "in_person_recert"
       earnings_line_status: "calculated" | "voided"
       earnings_rate_source: "shift" | "caregiver"
       flow_audience: "caregiver_screening" | "family_intake" | "general"
@@ -3385,6 +5894,48 @@ export type Database = {
         | "info"
         | "contact_capture"
         | "terminal"
+      form_field_storage:
+        | "spine_column"
+        | "child_rows"
+        | "field_value"
+        | "static_text"
+      form_template_kind:
+        | "ipos"
+        | "authorization"
+        | "progress_note"
+        | "inservice"
+        | "training"
+        | "intake"
+        | "credential"
+      form_template_version_status: "draft" | "published"
+      measure_kind:
+        | "yes_no_na"
+        | "prompt_level"
+        | "graded_steps"
+        | "tally"
+        | "trials"
+        | "short_answer"
+        | "narrative"
+        | "staff_note"
+      objective_responsible_party:
+        | "this_agency"
+        | "case_management"
+        | "evaluator"
+        | "family"
+        | "other_provider"
+      plan_document_type:
+        | "ipos_initial"
+        | "ipos_annual"
+        | "ipos_addendum"
+        | "behavior_support_plan"
+        | "protocol"
+      progress_note_kind: "cls" | "respite"
+      progress_note_status:
+        | "draft"
+        | "submitted"
+        | "returned"
+        | "reviewed"
+        | "billed"
       request_status: "pending" | "approved" | "denied" | "cancelled"
       request_type: "vacation" | "medical" | "personal" | "emergency"
       shift_status:
@@ -3404,6 +5955,7 @@ export type Database = {
         | "cancelled"
         | "expired"
       trade_type: "trade_board" | "direct_trade" | "agency_coverage"
+      training_method: "pcp_meeting" | "outside_pcp"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -3558,6 +6110,17 @@ export const Constants = {
         "no_show",
         "cancelled",
       ],
+      auth_period_type: [
+        "per_week",
+        "per_auth",
+        "per_quarter",
+        "per_month",
+        "per_day",
+      ],
+      auth_source_type: ["manual", "doc", "edi", "connector"],
+      billing_batch_status: ["open", "reviewed", "billed"],
+      care_plan_status: ["active", "superseded", "expired"],
+      care_plan_type: ["initial", "annual", "addendum"],
       care_request_status: [
         "new",
         "reviewing",
@@ -3575,11 +6138,24 @@ export const Constants = {
         "hospice",
       ],
       caregiver_role: ["full_time", "part_time", "on_call"],
+      client_document_status: [
+        "missing",
+        "pending",
+        "complete",
+        "expired",
+        "not_applicable",
+      ],
       conversation_session_status: [
         "in_progress",
         "completed",
         "abandoned",
         "submitted",
+      ],
+      credential_category: [
+        "background_check",
+        "annual_online",
+        "annual",
+        "in_person_recert",
       ],
       earnings_line_status: ["calculated", "voided"],
       earnings_rate_source: ["shift", "caregiver"],
@@ -3590,6 +6166,54 @@ export const Constants = {
         "info",
         "contact_capture",
         "terminal",
+      ],
+      form_field_storage: [
+        "spine_column",
+        "child_rows",
+        "field_value",
+        "static_text",
+      ],
+      form_template_kind: [
+        "ipos",
+        "authorization",
+        "progress_note",
+        "inservice",
+        "training",
+        "intake",
+        "credential",
+      ],
+      form_template_version_status: ["draft", "published"],
+      measure_kind: [
+        "yes_no_na",
+        "prompt_level",
+        "graded_steps",
+        "tally",
+        "trials",
+        "short_answer",
+        "narrative",
+        "staff_note",
+      ],
+      objective_responsible_party: [
+        "this_agency",
+        "case_management",
+        "evaluator",
+        "family",
+        "other_provider",
+      ],
+      plan_document_type: [
+        "ipos_initial",
+        "ipos_annual",
+        "ipos_addendum",
+        "behavior_support_plan",
+        "protocol",
+      ],
+      progress_note_kind: ["cls", "respite"],
+      progress_note_status: [
+        "draft",
+        "submitted",
+        "returned",
+        "reviewed",
+        "billed",
       ],
       request_status: ["pending", "approved", "denied", "cancelled"],
       request_type: ["vacation", "medical", "personal", "emergency"],
@@ -3606,6 +6230,7 @@ export const Constants = {
       time_entry_status: ["draft", "submitted", "approved", "rejected"],
       trade_status: ["pending", "accepted", "declined", "cancelled", "expired"],
       trade_type: ["trade_board", "direct_trade", "agency_coverage"],
+      training_method: ["pcp_meeting", "outside_pcp"],
     },
   },
 } as const

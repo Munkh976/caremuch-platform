@@ -1,4 +1,4 @@
-import { ReactNode, useState } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -38,7 +38,13 @@ interface AppLayoutProps {
 export const AppLayout = ({ children }: AppLayoutProps) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  // Desktop (md+): the sidebar is always shown (md:translate-x-0). Below md it starts closed, opens
+  // from the menu button over a scrim, and closes on navigation or a tap outside.
+  const isDesktop = () => typeof window === "undefined" || window.matchMedia("(min-width: 768px)").matches;
+  const [isSidebarOpen, setIsSidebarOpen] = useState(isDesktop);
+  useEffect(() => {
+    if (!isDesktop()) setIsSidebarOpen(false);
+  }, [location.pathname]);
   const { permissions, userRole, loading } = usePermissions();
   const { pendingCount } = usePendingApprovals();
   const menuBadgeCounts = useMenuBadgeCounts();
@@ -232,9 +238,15 @@ export const AppLayout = ({ children }: AppLayoutProps) => {
         size="icon"
         className="fixed top-4 left-4 z-50 md:hidden"
         onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+        aria-label={isSidebarOpen ? "Close menu" : "Open menu"}
       >
         {isSidebarOpen ? <X /> : <Menu />}
       </Button>
+
+      {/* Mobile scrim: tap outside the open sidebar to close it */}
+      {isSidebarOpen && (
+        <div className="fixed inset-0 z-30 bg-black/40 md:hidden" aria-hidden="true" onClick={() => setIsSidebarOpen(false)} />
+      )}
 
       {/* Sidebar */}
       <aside
@@ -305,7 +317,7 @@ export const AppLayout = ({ children }: AppLayoutProps) => {
       </aside>
 
       {/* Main content */}
-      <main className={`flex-1 transition-all ${isSidebarOpen ? "md:ml-64" : ""}`}>
+      <main className="flex-1 transition-all md:ml-64">
         <div className="container mx-auto p-6 md:p-8">{children}</div>
       </main>
     </div>
