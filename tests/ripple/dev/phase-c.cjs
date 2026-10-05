@@ -79,13 +79,15 @@ async function afterC(F) {
     tbl: (await c.query(`SELECT count(*)::int n FROM information_schema.tables WHERE table_schema='public' AND table_name='group_sessions'`)).rows[0].n,
     cols: (await c.query(`SELECT count(*)::int n FROM information_schema.columns WHERE table_schema='public' AND ((table_name='shifts' AND column_name='group_session_id') OR (table_name='virtual_office' AND column_name IN ('group_session_max_clients','care_plan_module_enabled_at')) OR (table_name='service_authorizations' AND column_name='units_used_before_caremuch'))`)).rows[0].n,
     ev: (await c.query(`SELECT count(*)::int n FROM regexp_matches((SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname='events_event_type_check'), '''[a-z_]+''', 'g')`)).rows[0].n,
+    evC: (await c.query(`SELECT (SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname='events_event_type_check') ~ 'group_session_created' AND (SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname='events_event_type_check') ~ 'shift_group_session_set' ok`)).rows[0].ok,
     flags: (await c.query(`SELECT count(*)::int n FROM public.virtual_office WHERE (compliance_enforcement_enabled OR care_plan_module_enabled) AND name NOT LIKE 'ZZ %'`)).rows[0].n,
     sig: await sigAcl(c),
     csa: (await c.query(`SELECT p.pronargs n, (SELECT string_agg(CASE WHEN a.grantee = 0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END, ',' ORDER BY 1) FROM aclexplode(p.proacl) a WHERE a.privilege_type='EXECUTE') g FROM pg_proc p WHERE p.pronamespace='public'::regnamespace AND p.proname = 'create_service_authorization'`)).rows,
     acl: (await c.query(`SELECT p.proname, p.prosecdef d, COALESCE((SELECT string_agg(CASE WHEN a.grantee = 0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END, ',' ORDER BY 1) FROM aclexplode(p.proacl) a WHERE a.privilege_type='EXECUTE'), '(default)') g
       FROM pg_proc p WHERE p.pronamespace='public'::regnamespace AND p.proname = ANY($1)`, [C_NEW])).rows,
   }));
-  rec("C0 Phase C objects present (13 functions, group_sessions, 4 columns, 44 event types); still no real office with a flag on", pass(st.fns === 13 && st.tbl === 1 && st.cols === 4 && st.ev === 44 && st.flags === 0),
+  // event types: 44 through Phase C; later additive rounds only add (W1: 50), so >= 44 with Phase C's two present
+  rec("C0 Phase C objects present (13 functions, group_sessions, 4 columns, Phase C event types within >= 44); still no real office with a flag on", pass(st.fns === 13 && st.tbl === 1 && st.cols === 4 && st.ev >= 44 && st.evC && st.flags === 0),
     `functions ${st.fns}/13, table ${st.tbl}, columns ${st.cols}/4, event types ${st.ev}, real offices flagged ${st.flags}`);
   const sigBefore = JSON.parse(fs.readFileSync(C_SIG_FILE, "utf8"));
   rec("SIG the 10 replaced functions keep their exact signatures, definer flag and EXECUTE grants (no overloads)", pass(JSON.stringify(sigBefore) === JSON.stringify(st.sig)),

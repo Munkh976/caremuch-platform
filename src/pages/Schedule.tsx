@@ -92,6 +92,8 @@ const Schedule = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  // Optional ?client=<id> (deep link from the care-plan screens): narrows the list to one client. Absent = unchanged page.
+  const clientFilter = searchParams.get("client");
 
   const [selectedShift, setSelectedShift] = useState<any>(null);
   const [shiftToAssign, setShiftToAssign] = useState<any>(null);
@@ -250,9 +252,10 @@ const Schedule = () => {
     return shifts.filter((s) => {
       if (categoryFilter !== "all" && s.care_types?.category !== categoryFilter) return false;
       if (statusFilter !== "all" && (s.status || "open") !== statusFilter) return false;
+      if (clientFilter && s.client_id !== clientFilter) return false;
       return true;
     });
-  }, [shifts, categoryFilter, statusFilter]);
+  }, [shifts, categoryFilter, statusFilter, clientFilter]);
 
   const unassignedShifts = useMemo(
     () => filteredShifts.filter((s) => !getAssignedCaregiver(s)),
@@ -366,6 +369,12 @@ const Schedule = () => {
                   <SelectItem value="cancelled">Cancelled</SelectItem>
                 </SelectContent>
               </Select>
+              {clientFilter && (
+                <Badge variant="secondary" className="gap-1" data-testid="client-filter">
+                  {(() => { const c = clients.find((x) => x.id === clientFilter); return c ? `Client: ${[c.first_name, c.last_name].filter(Boolean).join(" ")}` : "One client"; })()}
+                  <button type="button" className="ml-1 underline" onClick={() => { const p = new URLSearchParams(searchParams); p.delete("client"); setSearchParams(p, { replace: true }); }}>Clear</button>
+                </Badge>
+              )}
             </div>
           </CardContent>
         </Card>

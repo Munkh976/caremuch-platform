@@ -246,17 +246,6 @@ export const AppLayout = ({ children }: AppLayoutProps) => {
 
   return (
     <div className="flex min-h-screen w-full bg-background">
-      {/* Mobile menu toggle */}
-      <Button
-        variant="ghost"
-        size="icon"
-        className="fixed top-4 left-4 z-50 md:hidden"
-        onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-        aria-label={isSidebarOpen ? "Close menu" : "Open menu"}
-      >
-        {isSidebarOpen ? <X /> : <Menu />}
-      </Button>
-
       {/* Mobile scrim: tap outside the open sidebar to close it */}
       {isSidebarOpen && (
         <div className="fixed inset-0 z-30 bg-black/40 md:hidden" aria-hidden="true" onClick={() => setIsSidebarOpen(false)} />
@@ -269,8 +258,11 @@ export const AppLayout = ({ children }: AppLayoutProps) => {
         } md:translate-x-0`}
       >
         <div className="flex h-full flex-col">
-          {/* below md the floating menu button (40px at left 16px) sits over this header: keep the wordmark clear of it */}
-          <div className="border-b p-6 pl-[4.5rem] md:pl-6">
+          <div className="relative border-b p-6">
+            {/* below md the sidebar is a drawer: its own close button */}
+            <Button variant="ghost" size="icon" className="absolute right-2 top-2 md:hidden" onClick={() => setIsSidebarOpen(false)} aria-label="Close menu">
+              <X />
+            </Button>
             <h1 className="text-2xl font-bold text-primary">CareMuch</h1>
             <p className="text-xs font-medium text-foreground/80 mt-1">
               {isSystemAdmin ? "System Administration" : "Agency Portal"}
@@ -332,7 +324,14 @@ export const AppLayout = ({ children }: AppLayoutProps) => {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 transition-all md:ml-64">
+      <main className="min-w-0 flex-1 transition-all md:ml-64">
+        {/* below md: a slim sticky top bar with the menu button, so it never floats over the page content */}
+        <header className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b bg-background/95 px-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 md:hidden">
+          <Button variant="ghost" size="icon" onClick={() => setIsSidebarOpen(true)} aria-label="Open menu" aria-expanded={isSidebarOpen}>
+            <Menu />
+          </Button>
+          <span className="text-lg font-bold text-primary">CareMuch</span>
+        </header>
         <div className="container mx-auto p-6 md:p-8">{children}</div>
       </main>
     </div>

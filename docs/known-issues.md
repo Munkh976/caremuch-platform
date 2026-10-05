@@ -1311,12 +1311,11 @@ just the named ones), because the service role bypasses RLS and the authenticate
 Also before production (separate entries): load the care-plan default catalogs; server-side
 password minimum and leaked-password protection; custom SMTP / Mode A.
 
-## OPEN (Ripple S4): authorization void waits for owner approval; intake upload deferred (S4b)
+## OPEN (Ripple S4): intake upload deferred (S4b). RESOLVED: authorization void (W2, Oct 5)
 
-- **Void (W2):** `correct_service_authorization` shipped in S4 (additive). `void_service_authorization` needs a voided state on
-  `service_authorizations` that every reader skips: `cp_projected_units` (eligibility, scheduling), `review_progress_note`,
-  `cp_client_onboarding`, `cp_check_order_service_authorization`, and the S4 reads. That changes existing functions, so it waits for
-  owner approval (UI plan §8). Until then an authorization entered by mistake can be corrected but not voided.
+- **Void (W2) — RESOLVED Oct 5 (`20261015120000`, owner-approved change to existing objects):** `voided_at / voided_by / void_reason`;
+  `void_service_authorization` only when no note references it, no schedule line points at it and the projection allocates
+  nothing to it; every reader skips voided rows; a voided number may be re-entered (partial unique index over active rows).
 - **S4b:** intake documents are metadata only in V1 (type, status, effective/expiration, N/A reason). File upload needs a
   private bucket with office-scoped storage policies and its own security review. `client_documents` has no free-text note column;
   the N/A reason is the only note today.

@@ -37,7 +37,8 @@ async function afterD2(F) {
     st.map((f) => `${f.proname} definer=${f.d} ${f.g}`).join("; "));
   const before = JSON.parse(fs.readFileSync(UNTOUCHED_FILE, "utf8")), now = await defs();
   // functions a LATER approved migration changed on purpose (compared against the pre-D2 snapshot)
-  const LATER = { assign_caregiver_to_shift: "S-OFF-1 (20261011120000)", release_shift_assignments: "S-OFF-1 (20261011120000)" };
+  const LATER = { assign_caregiver_to_shift: "S-OFF-1 (20261011120000)", release_shift_assignments: "S-OFF-1 (20261011120000)",
+    cp_projected_units: "W2 void (20261015120000)", review_progress_note: "W2 void (20261015120000)", create_service_authorization: "W2 void (20261015120000)" };
   const changed = UNTOUCHED.filter((k) => before[k] !== now[k]);
   const unexplained = changed.filter((k) => !LATER[k]);
   rec("U D2 changed none of the scheduling / units functions (definition + ACL hash; differences allowed only where a later approved migration changed the function)",

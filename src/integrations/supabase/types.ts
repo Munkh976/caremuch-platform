@@ -4135,6 +4135,9 @@ export type Database = {
           units_per_period: number | null
           units_used_before_caremuch: number
           virtual_office_id: string | null
+          void_reason: string | null
+          voided_at: string | null
+          voided_by: string | null
         }
         Insert: {
           agency_id: string
@@ -4166,6 +4169,9 @@ export type Database = {
           units_per_period?: number | null
           units_used_before_caremuch?: number
           virtual_office_id?: string | null
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
         }
         Update: {
           agency_id?: string
@@ -4197,6 +4203,9 @@ export type Database = {
           units_per_period?: number | null
           units_used_before_caremuch?: number
           virtual_office_id?: string | null
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
         }
         Relationships: [
           {
@@ -5880,6 +5889,10 @@ export type Database = {
       void_progress_note: {
         Args: { _note_id: string; _reason: string }
         Returns: undefined
+      }
+      void_service_authorization: {
+        Args: { _id: string; _reason: string }
+        Returns: Json
       }
       would_bump_training_version: {
         Args: { _care_plan_id: string; _goals: Json }

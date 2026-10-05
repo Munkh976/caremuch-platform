@@ -49,6 +49,7 @@ export function AuthorizationRiskPanel({ officeId, withinDays = 60 }: { officeId
                   {r.units_at_risk} units at risk ({r.hours_at_risk} h)
                 </span>
                 <span className="text-xs text-muted-foreground">{r.units_pending} scheduled</span>
+                <Link to={`/schedule?client=${r.client_id}`} className="whitespace-nowrap text-xs font-medium text-primary hover:underline" data-testid="risk-schedule-link">Schedule →</Link>
               </div>
             </li>
           ))}

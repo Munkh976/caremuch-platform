@@ -66,6 +66,7 @@ skew.
 | `node tests/ripple/dev/w1-audit.cjs <before|after>` | W1 audit: the events CHECK (44 types before, 50 after), each measure-library write records one event through real logins, refusals and ACLs unchanged, NB1 |
 | `node tests/ripple/dev/ui-s4.cjs <before|after>` | UI S4 RPCs on the real project: units table (opening balance, FIFO pending), G2 bands, W2 correction refusals + audit, IPOS child rows, role denials, ACLs, NB1 |
 | `node tests/ripple/dev/ui-s5.cjs <before|after>` | UI S5: `would_bump_training_version` predicts what `upsert_care_plan_goals` does (no training: no bump; after training: bump on a goal/Instructions edit), measure edits never bump, case-management objectives refuse measures, denials, ACL, NB1 |
+| `node tests/ripple/dev/w2-void.cjs <before|after>` | W2 void: schema + ACL, refusals (pending projection, charged note, reason, 8 roles), audit, readers skip voided (units table, risk list, onboarding, review), number re-entry, NB1 |
 | `node tests/ripple/ui/round3.cjs <s4|s5|all>` | **UI round 3 in a real browser**: care-plans list + risk panel, IPOS create from the shell, ProvenanceBadge header, authorization table + UnitsBar, correction refusals in the dialog, onboarding flips to onboarded, renewal confirmation then expired in-service/training, access (office-Y manager, scheduler, hr_staff, Kind-Care-only manager); S5 goals grouped by service, selection in place, retraining confirmation only after training, measures never prompt, no measure control on CM objectives, order kept; 390px. Screenshots go to `docs/screenshots/ripple-ui/round3/`. |
 
 | Command | Local (PGlite) |
@@ -80,7 +81,8 @@ skew.
 | `node tests/ripple/pglite/w1-audit.cjs` | W1: the CHECK keeps the 44 types and adds 6; one event per measure-library write; fail closed (a failing audit insert rolls the write back); ACLs and refusals unchanged |
 | `node tests/ripple/pglite/ui-s4.cjs` | UI S4: projection equals `cp_projected_units`, units table, G2 bands + units at risk, W2 refusals / audit / denials, `set_care_plan_rows`, ACLs |
 | `node tests/ripple/pglite/ui-s5.cjs` | UI S5: preview vs save across untrained / trained / re-trained states, unchanged tree is not a change, measures never bump, CM objectives refuse measures, reorder kept, denials, ACL |
-| `node tests/ripple/pglite/rollback-round3.cjs` | Round 3 rollbacks (S5, S4, W1 in reverse) each restore the exact previous catalog; re-apply equals the first apply |
+| `node tests/ripple/pglite/w2-void.cjs` | W2 void: identical reader output with no voided rows (before vs after the migration), ACLs kept, schema, void rules + audit, every reader skips voided, number re-entry |
+| `node tests/ripple/pglite/rollback-round3.cjs` | Round 3 rollbacks (W2 void, S5, S4, W1 in reverse; W2's restored reader bodies md5-identical to DEV before the push) each restore the exact previous catalog; re-apply equals the first apply |
 
 `before` mode is each phase's **pre-push** check: its objects are absent and its baseline is
 recorded. It is only meaningful before that phase's migrations are applied. All four phases are

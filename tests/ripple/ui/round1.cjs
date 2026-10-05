@@ -168,7 +168,7 @@ async function run(base) {
         }
         if (MODE === "after" && key === "mgrRX") {   // the menu opens and closes on mobile
           await mp.goto(`${base}/dashboard`); await mp.waitForTimeout(2500);
-          await mp.locator("button.fixed").first().click(); await mp.waitForTimeout(600);
+          await mp.getByRole("button", { name: "Open menu" }).click(); await mp.waitForTimeout(600);
           const openNow = !(await sidebarClosed(mp)); await mp.screenshot({ path: path.join(SHOTS, `after-sidebar-open-mgrRX-390.png`) });
           await mp.mouse.click(370, 600); await mp.waitForTimeout(600); const closedAgain = await sidebarClosed(mp);
           rec(`W-toggle`, openNow && closedAgain, `390px: menu button opens the sidebar ${openNow}; tapping the scrim closes it ${closedAgain}`);

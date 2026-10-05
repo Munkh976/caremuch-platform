@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { format } from "date-fns";
-import { ChevronDown, Pencil, Plus } from "lucide-react";
+import { Ban, ChevronDown, Pencil, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
@@ -65,6 +65,7 @@ export function AuthorizationsSection({ clientId, officeId, planId, canWrite, on
   const ext = usePlanRows(clientId, planId, "care_plan_external_services");
   const [creating, setCreating] = useState(false);
   const [correcting, setCorrecting] = useState<AuthorizationRow | null>(null);
+  const [voiding, setVoiding] = useState<AuthorizationRow | null>(null);
   const rows = data?.authorizations ?? [];
   return (
     <Card id="authorizations" data-testid="authorizations">
@@ -73,7 +74,7 @@ export function AuthorizationsSection({ clientId, officeId, planId, canWrite, on
         {canWrite && <Button size="sm" className="gap-1" onClick={() => setCreating(true)}><Plus className="h-4 w-4" />Add authorization</Button>}
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="overflow-x-auto rounded-md border">
+        <div className="hidden overflow-x-auto rounded-md border sm:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -103,12 +104,35 @@ export function AuthorizationsSection({ clientId, officeId, planId, canWrite, on
                     <UnitsBar authorized={a.units_authorized} used={a.units_used} pending={a.units_pending} unitMinutes={a.unit_minutes}
                       periodCap={a.period_type && a.units_per_period && a.period_left !== null ? { period: periodWord(a.period_type), cap: a.units_per_period, usedInPeriod: a.units_per_period - a.period_left } : null} />
                   </TableCell>
-                  <TableCell className="text-right">{canWrite && <Button size="icon" variant="ghost" aria-label={`Correct ${a.auth_number}`} onClick={() => setCorrecting(a)}><Pencil className="h-4 w-4" /></Button>}</TableCell>
+                  <TableCell className="whitespace-nowrap text-right">{canWrite && <AuthActions a={a} onCorrect={() => setCorrecting(a)} onVoid={() => setVoiding(a)} />}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </div>
+        {/* below sm: one stacked card per authorization instead of a sideways-scrolling table */}
+        <ul className="space-y-3 sm:hidden" data-testid="authorization-cards">
+          {isLoading && <li className="text-sm text-muted-foreground">Loading…</li>}
+          {!isLoading && !isError && rows.length === 0 && <li className="text-sm text-muted-foreground">No authorization yet.</li>}
+          {rows.map((a) => (
+            <li key={a.id} className="space-y-3 rounded-md border p-3" data-auth-card={a.auth_number}>
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span className="font-medium">{serviceName(a.service_type)}</span>
+                <span className="text-sm text-muted-foreground">#{a.auth_number}</span>
+                {a.status === "active" ? <ExpiryPill expiry={a.expiration_date} /> : <Badge variant="outline">{a.status === "expired" ? "Expired" : "Not started"}</Badge>}
+              </div>
+              <div className="text-xs text-muted-foreground">{d(a.effective_date)} – {d(a.expiration_date)}</div>
+              <dl className="grid grid-cols-4 gap-2 text-center text-sm">
+                {([["Authorized", a.units_authorized], ["Used", a.units_used], ["Pending", a.units_pending], ["Left", a.units_left]] as const).map(([l, v]) => (
+                  <div key={l} className="rounded bg-muted/50 py-1"><dt className="text-[11px] text-muted-foreground">{l}</dt><dd className={l === "Left" ? "font-semibold" : ""}>{v}</dd></div>))}
+              </dl>
+              {a.period_type && a.units_per_period ? <div className="text-xs text-muted-foreground">Period cap: {a.units_per_period} / {periodWord(a.period_type)}</div> : null}
+              <UnitsBar authorized={a.units_authorized} used={a.units_used} pending={a.units_pending} unitMinutes={a.unit_minutes}
+                periodCap={a.period_type && a.units_per_period && a.period_left !== null ? { period: periodWord(a.period_type), cap: a.units_per_period, usedInPeriod: a.units_per_period - a.period_left } : null} />
+              {canWrite && <div className="flex justify-end"><AuthActions a={a} withLabels onCorrect={() => setCorrecting(a)} onVoid={() => setVoiding(a)} /></div>}
+            </li>
+          ))}
+        </ul>
         <Collapsible>
           <CollapsibleTrigger asChild>
             <Button variant="ghost" size="sm" className="gap-1 px-0 text-muted-foreground" data-testid="external-toggle">
@@ -122,6 +146,7 @@ export function AuthorizationsSection({ clientId, officeId, planId, canWrite, on
       </CardContent>
       {creating && <CreateAuthDialog open={creating} onOpenChange={setCreating} clientId={clientId} services={services} onSaved={onChanged} />}
       {correcting && <CorrectAuthDialog row={correcting} onOpenChange={(o) => !o && setCorrecting(null)} onSaved={onChanged} />}
+      {voiding && <VoidAuthDialog row={voiding} onOpenChange={(o) => !o && setVoiding(null)} onSaved={onChanged} />}
     </Card>
   );
 }
@@ -207,6 +232,41 @@ function CorrectAuthDialog({ row, onOpenChange, onSaved }: { row: AuthorizationR
         <div className="space-y-1"><Label htmlFor="auth-reason">Reason for the correction *</Label><Textarea id="auth-reason" rows={2} value={reason} onChange={(e) => { setReason(e.target.value); setRefusal(null); }} /></div>
         {refusal && <Alert variant="destructive" data-testid="correct-error"><AlertDescription>{refusal}</AlertDescription></Alert>}
         <DialogFooter><Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button><Button onClick={save} disabled={busy}>Save correction</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function AuthActions({ a, withLabels, onCorrect, onVoid }: { a: AuthorizationRow; withLabels?: boolean; onCorrect: () => void; onVoid: () => void }) {
+  return (
+    <span className="inline-flex gap-1">
+      <Button size={withLabels ? "sm" : "icon"} variant="ghost" className="gap-1" aria-label={`Correct ${a.auth_number}`} onClick={onCorrect}><Pencil className="h-4 w-4" />{withLabels && "Correct"}</Button>
+      {a.void_available && <Button size={withLabels ? "sm" : "icon"} variant="ghost" className="gap-1 text-destructive" aria-label={`Void ${a.auth_number}`} onClick={onVoid}><Ban className="h-4 w-4" />{withLabels && "Void"}</Button>}
+    </span>
+  );
+}
+
+/** W2: void an authorization nothing was ever charged to or allocated from (reason required, audited). It stays on record. */
+function VoidAuthDialog({ row, onOpenChange, onSaved }: { row: AuthorizationRow; onOpenChange: (o: boolean) => void; onSaved: () => void }) {
+  const [reason, setReason] = useState("");
+  const [refusal, setRefusal] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    if (!reason.trim()) { setRefusal("A reason is required"); return; }
+    setBusy(true);
+    const { error } = await supabase.rpc("void_service_authorization", { _id: row.id, _reason: reason.trim() });
+    setBusy(false);
+    if (error) { setRefusal(rpcErrorText(error)); return; }
+    toast.success("Authorization voided"); onSaved(); onOpenChange(false);
+  };
+  return (
+    <Dialog open onOpenChange={onOpenChange}>
+      <DialogContent className="grid-cols-[minmax(0,1fr)] sm:max-w-[480px]" data-testid="void-dialog">
+        <DialogHeader><DialogTitle>Void authorization #{row.auth_number}</DialogTitle>
+          <DialogDescription>Only for an authorization entered by mistake: nothing has been charged to it or scheduled against it. It stays on record as voided and stops counting everywhere; its number can be entered again.</DialogDescription></DialogHeader>
+        <div className="space-y-1"><Label htmlFor="void-reason">Reason *</Label><Textarea id="void-reason" rows={2} value={reason} onChange={(e) => { setReason(e.target.value); setRefusal(null); }} /></div>
+        {refusal && <Alert variant="destructive" data-testid="void-error"><AlertDescription>{refusal}</AlertDescription></Alert>}
+        <DialogFooter><Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button><Button variant="destructive" onClick={save} disabled={busy}>Void</Button></DialogFooter>
       </DialogContent>
     </Dialog>
   );

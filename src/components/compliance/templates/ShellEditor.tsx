@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -161,8 +160,8 @@ export function ShellEditor({ shell, open, onOpenChange }: { shell: Shell; open:
                       )}
                       {f.storage === "field_value" && (
                         <div className="flex flex-wrap items-center gap-4 sm:col-span-2">
-                          <label className="flex items-center gap-2 text-sm"><Checkbox checked={!!f.required} onCheckedChange={(v) => update(i, { required: v === true })} />Required</label>
-                          {isNote && <label className="flex items-center gap-2 text-sm"><Checkbox checked={!!f.shown_on_progress_note} onCheckedChange={(v) => update(i, { shown_on_progress_note: v === true })} />Shown on progress note</label>}
+                          <label className="flex items-center gap-2 text-sm"><Switch id={`req-${f.field_key}`} checked={!!f.required} onCheckedChange={(v) => update(i, { required: v })} aria-label={`Required: ${f.label}`} />Required</label>
+                          {isNote && <label className="flex items-center gap-2 text-sm"><Switch checked={!!f.shown_on_progress_note} onCheckedChange={(v) => update(i, { shown_on_progress_note: v })} aria-label={`Shown on progress note: ${f.label}`} />Shown on progress note</label>}
                         </div>
                       )}
                     </div>

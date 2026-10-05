@@ -24,7 +24,7 @@ export function ModuleShell({ title, description, icon: Icon, slice, children }:
       {/* minmax(0,1fr) keeps wide tables inside their own scroll areas: without it their min-content
           width would widen the layout's flex <main> and scroll the whole page sideways on phones */}
       <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6">
-        <div className="flex flex-col gap-1 pl-12 md:pl-0">
+        <div className="flex flex-col gap-1">
           <h1 className="text-2xl font-bold tracking-tight md:text-3xl">{title}</h1>
           <p className="text-sm text-muted-foreground">{description}</p>
         </div>
