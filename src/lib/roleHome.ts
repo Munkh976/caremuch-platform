@@ -10,6 +10,8 @@ export const STAFF: readonly AppRole[] = ["system_admin", "agency_admin", "manag
 export const MANAGER_OR_ABOVE: readonly AppRole[] = ["system_admin", "agency_admin", "manager"];
 export const ADMIN: readonly AppRole[] = ["system_admin", "agency_admin"];
 export const SYSTEM_ADMIN: readonly AppRole[] = ["system_admin"];
+/** Ripple care-plan module screens: the clinical tier (owner decisions; system_admin is not in it). */
+export const CARE_PLAN_TIER: readonly AppRole[] = ["agency_admin", "manager"];
 
 /** Where a signed-in user with this role belongs. `null` role = pending approval -> /auth. */
 export function roleHome(role: string | null | undefined): string {

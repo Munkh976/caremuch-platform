@@ -54,6 +54,6 @@ export function useComplianceOffices() {
     moduleOffices,
     hasModuleOffice: moduleOffices.length > 0,
     /** True until both the profile and the offices are known (render nothing gated meanwhile). */
-    loading: profileLoading || (!!profile && query.isLoading),
+    loading: profileLoading || (!!profile && query.isPending),
   };
 }

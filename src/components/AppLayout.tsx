@@ -25,11 +25,16 @@ import {
   Inbox,
   Network,
   BookOpen,
+  ClipboardCheck,
+  Receipt,
+  FileStack,
+  type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { usePermissions } from "@/hooks/usePermissions";
 import { usePendingApprovals } from "@/hooks/usePendingApprovals";
 import { useMenuBadgeCounts } from "@/hooks/useMenuBadgeCounts";
+import { useComplianceOffices } from "@/hooks/useComplianceOffices";
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -48,6 +53,7 @@ export const AppLayout = ({ children }: AppLayoutProps) => {
   const { permissions, userRole, loading } = usePermissions();
   const { pendingCount } = usePendingApprovals();
   const menuBadgeCounts = useMenuBadgeCounts();
+  const { hasModuleOffice } = useComplianceOffices();
 
   const isSystemAdmin = userRole === "system_admin";
 
@@ -60,7 +66,7 @@ export const AppLayout = ({ children }: AppLayoutProps) => {
   const isActive = (path: string) => location.pathname === path;
 
   // Icon mapping for modules
-  const iconMap: Record<string, any> = {
+  const iconMap: Record<string, LucideIcon> = {
     users: UserCheck,
     user_roles: UserCog,
     system_roles: Shield,
@@ -95,6 +101,9 @@ export const AppLayout = ({ children }: AppLayoutProps) => {
     admin_utilities: Settings,
     settings: Settings,
     schedule: Calendar,
+    client_care_plans: ClipboardCheck,
+    weekly_billing: Receipt,
+    form_templates: FileStack,
   };
 
   // Build menu items from permissions.
@@ -131,14 +140,19 @@ export const AppLayout = ({ children }: AppLayoutProps) => {
   const CATEGORY_ITEM_ORDER: Record<string, string[]> = {
     operations: [
       "dashboard", "client_inquiries", "clients", "caregiver_approvals", "caregivers",
-      "orders", "schedule", "time_off", "shift_trades", "notifications_outbox",
+      "orders", "client_care_plans", "schedule", "time_off", "shift_trades", "weekly_billing", "notifications_outbox",
     ],
     administration: ["virtual_offices", "settings", "knowledge_base"],
   };
 
+  // Ripple care-plan module items (Q3): only when the user can see an office with the module on.
+  // Hidden while that is still loading, so they never flash for other agencies' managers.
+  const RIPPLE_MODULES = ["client_care_plans", "weekly_billing", "form_templates"];
+
   const readable = permissions
     .filter(p => p.route && p.can_read)
-    .filter(p => (isSystemAdmin ? p.category === "platform" : p.category !== "platform"));
+    .filter(p => (isSystemAdmin ? p.category === "platform" : p.category !== "platform"))
+    .filter(p => !RIPPLE_MODULES.includes(p.module_code) || hasModuleOffice);
 
   const hasSchedule = readable.some(p => p.module_code === "schedule");
 

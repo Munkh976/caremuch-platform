@@ -57,5 +57,12 @@ export function useCurrentProfile() {
       };
     },
   });
-  return { ...query, profile: query.data ?? null, signedOut: userId === null };
+  return {
+    ...query,
+    profile: query.data ?? null,
+    signedOut: userId === null,
+    // A disabled query (session not known yet) is not "loading" in react-query v5, so say it here:
+    // loading until the session is known and, when signed in, until the profile has arrived.
+    isLoading: userId === undefined || (!!userId && query.isPending),
+  };
 }

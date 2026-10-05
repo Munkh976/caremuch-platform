@@ -41,11 +41,15 @@ import NotificationsOutbox from "./pages/NotificationsOutbox";
 import ClientInquiries from "./pages/ClientInquiries";
 import PublicOffice from "./pages/PublicOffice";
 import KnowledgeBase from "./pages/KnowledgeBase";
+import CarePlans from "./pages/ripple/CarePlans";
+import WeeklyBilling from "./pages/ripple/WeeklyBilling";
+import FormTemplates from "./pages/ripple/FormTemplates";
 import { RequireRole } from "./components/auth/RequireRole";
+import { RequireModuleOffice } from "./components/auth/RequireModuleOffice";
 import { AuthLinkRouter } from "./components/auth/AuthLinkRouter";
 import ForgotPassword from "./pages/ForgotPassword";
 import SetPassword from "./pages/SetPassword";
-import { ADMIN, MANAGER_OR_ABOVE, STAFF, SYSTEM_ADMIN } from "./lib/roleHome";
+import { ADMIN, CARE_PLAN_TIER, MANAGER_OR_ABOVE, STAFF, SYSTEM_ADMIN } from "./lib/roleHome";
 
 const queryClient = new QueryClient();
 
@@ -103,6 +107,10 @@ const App = () => (
           <Route path="/auto-schedule" element={<Navigate to="/schedule?tab=unassigned" replace />} />
           <Route path="/reports" element={<RequireRole allow={STAFF}><Reports /></RequireRole>} />
           <Route path="/admin-user-management" element={<RequireRole allow={MANAGER_OR_ABOVE}><AdminUserManagement /></RequireRole>} />
+          {/* Ripple care-plan module (UI S1): clinical tier + an office with the module on (Q3) */}
+          <Route path="/care-plans" element={<RequireRole allow={CARE_PLAN_TIER}><RequireModuleOffice><CarePlans /></RequireModuleOffice></RequireRole>} />
+          <Route path="/billing/weekly" element={<RequireRole allow={CARE_PLAN_TIER}><RequireModuleOffice><WeeklyBilling /></RequireModuleOffice></RequireRole>} />
+          <Route path="/form-templates" element={<RequireRole allow={CARE_PLAN_TIER}><RequireModuleOffice><FormTemplates /></RequireModuleOffice></RequireRole>} />
           <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
