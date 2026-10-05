@@ -59,8 +59,8 @@ async function setup() {
   F.aa = await mkUser("aa", "agency_admin", null, false, "ZZ Fixture Admin");
   F.cg = await mkUser("cg", "caregiver", F.RX, false, "ZZ Fixture Caregiver");
   F.cl = await mkUser("cl", "client", F.RX, false, "ZZ Fixture Client");
-  await ins("caregivers", { agency_id: A, virtual_office_id: F.RX, user_id: F.cg.id, first_name: "ZZ", last_name: "Fixture Caregiver", email: F.cg.email, phone: "555-0100", is_demo: true });
-  await ins("clients", { agency_id: A, virtual_office_id: F.RX, user_id: F.cl.id, first_name: "ZZ", last_name: "Fixture Client", email: F.cl.email, phone: "555-0101", address: "1 Fixture St", city: "Portage", state: "MI", zip_code: "49002", is_demo: true });
+  await ins("caregivers", { agency_id: A, virtual_office_id: F.RX, user_id: F.cg.id, first_name: "ZZ", last_name: `Fixture Caregiver ${RUN}`, email: F.cg.email, phone: "555-0100", is_demo: true });
+  await ins("clients", { agency_id: A, virtual_office_id: F.RX, user_id: F.cl.id, first_name: "ZZ", last_name: `Fixture Client ${RUN}`, email: F.cl.email, phone: "555-0101", address: "1 Fixture St", city: "Portage", state: "MI", zip_code: "49002", is_demo: true });
   return F;
 }
 async function teardown() {

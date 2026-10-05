@@ -30,6 +30,11 @@ repo root.
 | `SUPABASE_DB_PASSWORD` | **read-only** checks only: catalog, ACLs, DB clock, counts. Every connection runs `SET default_transaction_read_only = on`. Never printed or written. |
 | `RIPPLE_TEST_AGENCY_ID` (optional) | the DEV demo agency the fixtures attach to (default: the seeded demo agency) |
 
+**Rule: never pipe a DEV suite into another command; log to a file.** Run `node <suite> > some.log 2>&1`, then read
+the file. A pipe that closes early (`| true`, `| head`) kills the suite with EPIPE before its teardown, which leaves
+fixtures (and a Vite server) behind (Oct 5: a round1 run left 16 rows + 6 auth users, removed with owner approval).
+Every fixture row carries the run tag (names, emails or office name), so `dev/cleanup-orphans.cjs <tag>` can find it.
+
 **Rule: all times come from the database clock.** Every "now", deadline and date window is read
 from the database (`dbNow`, `dbDay`), never from this machine's clock. Each run prints the measured
 skew.
