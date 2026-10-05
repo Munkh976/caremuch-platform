@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ArrowLeft, Calendar, Plus } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import { CaregiverAppShell } from "@/components/caregivers/CaregiverAppShell";
 
 interface TimeOffRequest {
   id: string;
@@ -139,23 +140,26 @@ const CaregiverTimeOff = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
+      <CaregiverAppShell>
+        <div className="flex items-center justify-center h-[60vh]">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        </div>
+      </CaregiverAppShell>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <CaregiverAppShell>
+    <div className="-mx-4 -mt-5">
       <header className="bg-gradient-to-r from-primary/10 via-primary/5 to-background border-b">
         <div className="container mx-auto px-4 py-6">
           <Button
             variant="ghost"
-            onClick={() => navigate("/caregiver-dashboard")}
+            onClick={() => navigate("/caregiver-settings")}
             className="mb-4"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Dashboard
+            Back to Profile
           </Button>
           <div className="flex items-center justify-between">
             <div>
@@ -291,6 +295,7 @@ const CaregiverTimeOff = () => {
         </DialogContent>
       </Dialog>
     </div>
+    </CaregiverAppShell>
   );
 };
 

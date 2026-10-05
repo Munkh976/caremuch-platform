@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { AppLayout } from "@/components/AppLayout";
+import { CaregiverAppShell } from "@/components/caregivers/CaregiverAppShell";
 import { Calendar, Clock, AlertCircle, Home, Settings, DollarSign, Briefcase } from "lucide-react";
 import { toast } from "sonner";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -179,16 +179,16 @@ const CaregiverDashboard = () => {
 
   if (loading) {
     return (
-      <AppLayout>
+      <CaregiverAppShell>
         <div className="flex items-center justify-center h-[calc(100vh-200px)]">
           <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
         </div>
-      </AppLayout>
+      </CaregiverAppShell>
     );
   }
 
   return (
-    <AppLayout>
+    <CaregiverAppShell>
       <div className="space-y-6">
         {/* Header */}
         <div>
@@ -298,9 +298,9 @@ const CaregiverDashboard = () => {
         <Card className="mb-6">
           <CardContent className="p-6">
             <Tabs value={shiftView} onValueChange={(v) => setShiftView(v as any)}>
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
                 <h2 className="text-xl font-bold">Your Shifts</h2>
-                <TabsList>
+                <TabsList className="h-auto flex-wrap">
                   <TabsTrigger value="upcoming">
                     Upcoming ({upcomingShifts.length})
                   </TabsTrigger>
@@ -571,7 +571,7 @@ const CaregiverDashboard = () => {
         open={!!selectedShift}
         onOpenChange={(open) => !open && setSelectedShift(null)}
       />
-    </AppLayout>
+    </CaregiverAppShell>
   );
 };
 

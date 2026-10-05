@@ -148,7 +148,8 @@ Roles: manager, agency_admin. The existing "Care Plan" (`/order-management`) is 
   path. **W:** `record_inservice_form`, `record_training_form`.
 
 ### 3.3 Caregiver progress note (S7)
-Route `/caregiver-notes/:shiftId` inside `CaregiverAppShell`; role caregiver. Flow:
+Route `/caregiver/notes/:shiftId` inside `CaregiverAppShell`, behind `RequireCaregiverRecord` (a linked caregiver
+record, not a role ranking; owner, Oct 5). **Built in S7 (Oct 5).** Flow:
 `create_progress_note_for_shift(_shift_id)` → note id (idempotent) → `get_progress_note_for_caregiver(_note_id)`
 → `save_progress_note_draft` (header incl. client arrival time; entries; respite narrative) →
 `submit_progress_note` (typed name). A `returned` note shows the reason and reopens for edit. The URL
@@ -205,7 +206,7 @@ menu, module-gated, roles manager, agency_admin, scheduler), not a change to the
 | Operations (S6b) | Group Sessions | `/group-sessions` | `group_sessions` | manager, agency_admin, scheduler |
 | (no menu) | Client care plan detail | `/clients/:clientId/care-plan` | — | manager, agency_admin |
 | (no menu) | Caregiver profile | `/caregivers/:caregiverId` | — | staff |
-| (caregiver app) | Progress note | `/caregiver-notes/:shiftId` | — | caregiver |
+| (caregiver app) | Progress note | `/caregiver/notes/:shiftId` (+ `/caregiver/notes`) | — | caregiver record (`RequireCaregiverRecord`) |
 
 Items render only when the user can see at least one office with `care_plan_module_enabled` (Q3).
 system_admin is not in the clinical tier and gets none of them.
@@ -296,7 +297,7 @@ suite: Manual, Smart and Auto assign on a Kind Care shift identical); screenshot
 | S5b *(optional)* | Caregiver self-view of credentials | Read-only section in Profile (existing caregiver self-read policy). | Caregiver sees only own rows. |
 | **S6** | Training workflow + Scheduling tab | In-service / training-form sheets (`record_inservice_form`, `record_training_form`), "who can deliver" list, `list_caregivers_needing_retraining`, client schedules + existing `OrderWizardDialog`, existing Assign/Smart buttons. | Renewal → caregivers flip to "retraining needed" and appear on the list; already-assigned shifts stay assigned; after retraining they're assignable again; no new assign code path (grep). |
 | S6b *(optional, until Ripple answers the ratio question)* | Group sessions | `/group-sessions` page (§3.8): `create_group_session`, `set_shift_group_session`, menu item `group_sessions` (manager, agency_admin, scheduler). | Two caregivers with 3 clients each in one session assign; a 4th client for one caregiver shows `group_full`; linking the same client twice or a wrong slot shows the server message; Schedule screens unchanged. |
-| **S7** | Caregiver progress note | `/caregiver-notes/:shiftId`; Today/History buttons, "Notes due"; `create_progress_note_for_shift` → `get_progress_note_for_caregiver` → `save_progress_note_draft` → `submit_progress_note`. | CLS: one block per this_agency objective; respite: narrative required; arrival at +5:01 bills 4 → 3; second open returns the same note; **return/resubmit:** a returned note shows the reason, reopens, and resubmits; another caregiver's shift is refused generically; no PHI in URL/storage/console; works at 390. |
+| **S7** (done Oct 5) | Caregiver progress note | `/caregiver/notes/:shiftId`; Today/History buttons, "Notes due"; `create_progress_note_for_shift` → `get_progress_note_for_caregiver` → `save_progress_note_draft` → `submit_progress_note`. | CLS: one block per this_agency objective; respite: narrative required; arrival at +5:01 bills 4 → 3; second open returns the same note; **return/resubmit:** a returned note shows the reason, reopens, and resubmits; another caregiver's shift is refused generically; no PHI in URL/storage/console; works at 390. |
 | **S8** | Staff review + print | Notes tab viewer, `review_progress_note`, `return_progress_note`, `void_progress_note`, print route. | Review FIFO across two authorizations as the server decides; a **per-period cap** refusal shows "would go over the authorization's weekly cap (N needed, M left this week)" and the note stays submitted; **respite note prints with the respite shell** and CLS with the CLS shell; print has no app chrome. |
 | **S9** | Weekly Billing | Page, `build_billing_batch`, `approve_clean_rows`, `approve_batch_notes`, `mark_batch_billed`, CSV. | Only reviewed notes in the batch, the rest listed as excluded with reasons; clean rows approve in bulk, late/returned ones individually; billed notes and batch locked; a restricted user can't build another office's batch. |
 | **S10** | Eligibility UI + enforcement switch | `EligibilityReport` key fix + Fix → links; Virtual Office Compliance card (G4). | Flag off: compliance issues show as advisory, Confirm enabled, Kind Care identical. Flag on: Blocked with the server text ("N projected units remain", "needs N units; M left this week", `group_full`), Smart omits the caregiver, caregiver Available Shifts shows only "Not bookable yet". |
@@ -333,6 +334,26 @@ office) and **Q12** (bulk-approve clean rows; built as a second button), both op
     prototype's progress-note billing box ("Case number — from client record") hits the same gap in S8/S9.
   - **In-service print: provisional layout, pending Ripple's form sample** (owner will provide a redacted sample). It is
     inferred from the architecture text; the 33.01_01F training form follows arch §1.3 field by field.
+- **Owner decisions after round 4 (Oct 5):**
+  - **caregiver-app-shell:** option (b) salvage. Archived as tag `archive/caregiver-app-shell-2026-10` (9a83e24); branch
+    deleted locally and on origin. Salvaged into S7: `CaregiverAppShell` + bottom nav (Today · Schedule · Notes · Shifts ·
+    Profile), Today, Sign out on Profile, the two display fixes (cancelled assignments hidden on the caregiver dashboard;
+    `ShiftDetailsDialog` shows Assign only with an `onAssign` handler). Left in the archive: the Schedule stub and design-doc
+    phases B–D.
+  - **Caregiver route guard:** `RequireCaregiverRecord` (active caregivers row, `user_id = auth.uid()`, user's agency) on every
+    caregiver route; a dual-role user reaches both UIs. The role switcher stays a known issue.
+  - **`/training` list full names:** `list_client_training_status` returns `client_name` (`20261017120000`, changed function).
+  - **Case number:** nullable `clients.case_number` (trimmed, 1–32, CHECK), not client-editable (M-SEC-2 allow-list, unchanged).
+    Edited in the existing client dialog and on the care-plan header (same staff UPDATE path as that dialog; no new RPC);
+    shown on the IPOS card and both training prints (`get_client_training_context` + `case_number`). Managers read it with the
+    client row for the S8/S9 billing footer.
+- **S7 (Oct 5):** new caregiver-safe reads `get_caregiver_clock()` (DB clock, office time zone, office week start) and
+  `list_my_notes_due()` (own started shifts in module offices after go-live; 13 keys; open work at any age, history 60 days)
+  in `20261018120000`. Note page `/caregiver/notes/:shiftId`: in-memory state only, Save + 2 s debounced autosave, "Not saved —
+  retry", submit sheet (typed name, attestation, server time), returned banner, read-only after submit. Times are entered as
+  HH:MM in the office time zone (a time field has no seconds: the +5:01 boundary is proven through the RPC, and the UI shows
+  only "Late arrival recorded"). Today's "N shifts you can pick up" counts only shifts the caregiver eligibility returns as
+  bookable.
 - **S6b:** group sessions wait for Ripple's staff:client ratio answer (default 1:3, office default
   max clients 3).
 - E-signature acceptance and notifications (R9) remain later phases (known-issues).

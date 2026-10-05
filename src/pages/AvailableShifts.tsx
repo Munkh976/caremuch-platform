@@ -8,7 +8,7 @@ import { Calendar, Clock, MapPin, DollarSign, Filter, Search, ArrowLeftRight, Ch
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { ShiftDetailsDialog } from "@/components/schedule/ShiftDetailsDialog";
-import { AppLayout } from "@/components/AppLayout";
+import { CaregiverAppShell } from "@/components/caregivers/CaregiverAppShell";
 import { pickUpShift } from "@/lib/shiftAssignment";
 import { fetchCaregiverVisibleClients, type CaregiverVisibleClient } from "@/lib/caregiverVisibleClients";
 import {
@@ -190,16 +190,16 @@ const AvailableShifts = () => {
 
   if (loading) {
     return (
-      <AppLayout>
+      <CaregiverAppShell>
         <div className="flex items-center justify-center h-[calc(100vh-120px)]">
           <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
         </div>
-      </AppLayout>
+      </CaregiverAppShell>
     );
   }
 
   return (
-    <AppLayout>
+    <CaregiverAppShell>
       <div>
         <h1 className="text-3xl font-bold mb-2">Available Shifts</h1>
         <p className="text-muted-foreground mb-6">Pick up extra shifts to increase your earnings</p>
@@ -489,7 +489,7 @@ const AvailableShifts = () => {
 
         <ShiftDetailsDialog shift={selectedShift} open={!!selectedShift} onOpenChange={(open) => !open && setSelectedShift(null)} />
       </div>
-    </AppLayout>
+    </CaregiverAppShell>
   );
 };
 

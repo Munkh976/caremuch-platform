@@ -1024,10 +1024,13 @@ The client must never send an id; this mirrors `/a/:slug/apply`.
 **Status:** Logged 2026-10-05 (owner decision 3, security plan §14.7).
 
 `get_user_role()` (and so `RequireRole` and post-login routing) resolves a user with several roles to
-the highest one. A manager who also works as a caregiver therefore always lands in the staff app and
-is redirected away from the caregiver app. None exist today. When they do, add an explicit role
-switcher, and let caregiver-app routes accept a user who holds the caregiver role even if it isn't
-their highest.
+the highest one. A manager who also works as a caregiver therefore always lands in the staff app.
+
+**Part done (Ripple S7, Oct 5):** the caregiver-app routes are now guarded by `RequireCaregiverRecord`
+(a linked, active caregivers row in the user's agency), not by the role, so a dual-role user is no
+longer redirected away: they reach both UIs by URL (`tests/ripple/ui/round5.cjs` R1). **Still open:**
+there is no in-app switch between the two (post-login always lands in the staff app, and neither shell
+links to the other). Add the explicit role switcher when such users exist.
 
 ## NOTE: one-time invite / reset links expire after the Supabase default (1 hour)
 

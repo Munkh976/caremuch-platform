@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, CalendarOff, ChevronRight, LogOut } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { CaregiverAppShell } from "@/components/caregivers/CaregiverAppShell";
 import { CaregiverProfileSettings } from "@/components/caregivers/CaregiverProfileSettings";
 import { toast } from "sonner";
 
@@ -39,16 +41,26 @@ const CaregiverSettings = () => {
     }
   };
 
+  // Sign out lives here now: the caregiver app has no staff sidebar (salvaged from caregiver-app-shell).
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    toast.success("Signed out");
+    navigate("/auth");
+  };
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
+      <CaregiverAppShell>
+        <div className="flex items-center justify-center h-[60vh]">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        </div>
+      </CaregiverAppShell>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <CaregiverAppShell>
+    <div className="-mx-4 -mt-5">
       <header className="bg-gradient-to-r from-primary/10 via-primary/5 to-background border-b border-border/40">
         <div className="container mx-auto px-4 py-6">
           <div className="flex items-center gap-4">
@@ -70,8 +82,22 @@ const CaregiverSettings = () => {
           caregiverProfile={caregiverProfile}
           onRefresh={fetchCaregiverProfile}
         />
+
+        <Card className="mt-6">
+          <CardContent className="space-y-2 p-4">
+            <Button variant="outline" className="min-h-11 w-full justify-between hover:bg-muted hover:text-foreground" onClick={() => navigate("/caregiver-time-off")}>
+              <span className="flex items-center gap-3"><CalendarOff className="h-4 w-4" />Time off</span>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+            <Button variant="outline" className="min-h-11 w-full justify-start gap-3 text-destructive hover:bg-muted hover:text-destructive" onClick={handleSignOut} data-testid="caregiver-sign-out">
+              <LogOut className="h-4 w-4" />
+              Sign out
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     </div>
+    </CaregiverAppShell>
   );
 };
 

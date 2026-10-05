@@ -1521,6 +1521,18 @@ role list in the commit that lands it:
   such a user would be sent to `/dashboard` instead of the caregiver app. None exist today. The
   alternative is a caregiver-row check, which is what `useIsCaregiverRole` already does.
 
+**Resolved (Ripple S7, Oct 5; owner decision 2).** The branch was archived as
+`archive/caregiver-app-shell-2026-10` (9a83e24) and the shell salvaged into S7. Every caregiver route
+is wrapped in **`RequireCaregiverRecord`** (`src/components/caregivers/RequireCaregiverRecord.tsx`): a
+linked, active caregivers row with `user_id = auth.uid()` in the user's agency, not a role ranking, so
+a dual-role user reaches both UIs. Routes: `/caregiver-dashboard` (Today), `/caregiver-schedule` (the
+existing CaregiverDashboard page), `/caregiver/notes`, `/caregiver/notes/:shiftId`, `/available-shifts`,
+`/caregiver-time-off`, `/caregiver-settings`. A user without a record goes to their role home; no
+session goes to `/auth?next=`. `useIsCaregiverRole` and the dual-shell switching were not salvaged
+(every guarded page renders the caregiver shell). On DEV only the caregiver role has the
+`available_shifts` menu permission, so no staff menu link is affected. `/client-dashboard` is unchanged
+(still session-only).
+
 ## 15. Issue 2 Mode B + 🟠 Edge Function fixes + Forgot password — DRAFT (not deployed, not committed)
 
 ### 15.1 What is drafted

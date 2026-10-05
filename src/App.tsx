@@ -12,6 +12,10 @@ import Clients from "./pages/Clients";
 import TimeOffRequests from "./pages/TimeOffRequests";
 import ShiftTrades from "./pages/ShiftTrades";
 import CaregiverDashboard from "./pages/CaregiverDashboard";
+import CaregiverToday from "./pages/CaregiverToday";
+import CaregiverNotes from "./pages/caregiver/CaregiverNotes";
+import CaregiverNote from "./pages/caregiver/CaregiverNote";
+import { RequireCaregiverRecord } from "./components/caregivers/RequireCaregiverRecord";
 import ClientDashboard from "./pages/ClientDashboard";
 import CaregiverRegistration from "./pages/CaregiverRegistration";
 import Assistant from "./pages/Assistant";
@@ -86,7 +90,11 @@ const App = () => (
           <Route path="/flow-builder" element={<RequireRole allow={STAFF}><FlowBuilder /></RequireRole>} />
           <Route path="/caregiver-approvals" element={<RequireRole allow={STAFF}><CaregiverApprovals /></RequireRole>} />
           <Route path="/notifications-outbox" element={<RequireRole allow={STAFF}><NotificationsOutbox /></RequireRole>} />
-          <Route path="/caregiver-dashboard" element={<CaregiverDashboard />} />
+          {/* Caregiver app (Ripple S7): every route needs a linked caregiver record (owner, Oct 5; rule 15). */}
+          <Route path="/caregiver-dashboard" element={<RequireCaregiverRecord><CaregiverToday /></RequireCaregiverRecord>} />
+          <Route path="/caregiver-schedule" element={<RequireCaregiverRecord><CaregiverDashboard /></RequireCaregiverRecord>} />
+          <Route path="/caregiver/notes" element={<RequireCaregiverRecord><CaregiverNotes /></RequireCaregiverRecord>} />
+          <Route path="/caregiver/notes/:shiftId" element={<RequireCaregiverRecord><CaregiverNote /></RequireCaregiverRecord>} />
           <Route path="/client-dashboard" element={<ClientDashboard />} />
           <Route path="/users" element={<RequireRole allow={ADMIN}><Users /></RequireRole>} />
           <Route path="/users/add" element={<RequireRole allow={ADMIN}><AddUser /></RequireRole>} />
@@ -99,9 +107,9 @@ const App = () => (
           <Route path="/care-types" element={<RequireRole allow={STAFF}><CareTypes /></RequireRole>} />
           <Route path="/care-service-categories" element={<RequireRole allow={STAFF}><CareTypes openCategoriesOnLoad /></RequireRole>} />
           <Route path="/order-management" element={<RequireRole allow={STAFF}><OrderManagement /></RequireRole>} />
-          <Route path="/available-shifts" element={<AvailableShifts />} />
-          <Route path="/caregiver-time-off" element={<CaregiverTimeOff />} />
-          <Route path="/caregiver-settings" element={<CaregiverSettings />} />
+          <Route path="/available-shifts" element={<RequireCaregiverRecord><AvailableShifts /></RequireCaregiverRecord>} />
+          <Route path="/caregiver-time-off" element={<RequireCaregiverRecord><CaregiverTimeOff /></RequireCaregiverRecord>} />
+          <Route path="/caregiver-settings" element={<RequireCaregiverRecord><CaregiverSettings /></RequireCaregiverRecord>} />
           <Route path="/admin-utilities" element={<RequireRole allow={SYSTEM_ADMIN}><AdminUtilities /></RequireRole>} />
           <Route path="/agency-settings" element={<RequireRole allow={ADMIN}><AgencySettings /></RequireRole>} />
           <Route path="/virtual-offices" element={<RequireRole allow={STAFF}><VirtualOffices /></RequireRole>} />

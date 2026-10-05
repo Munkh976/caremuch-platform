@@ -29,6 +29,16 @@ export async function fetchCaregiverTradeShifts(): Promise<CaregiverTradeShift[]
 }
 
 /**
+ * Ids of the open shifts the caller can see (RLS: their own office, Phase 1B) from `today` on — the
+ * same rows as Available Shifts' Open Shifts section, ids only. `today` comes from the DB clock.
+ */
+export async function fetchCaregiverOpenShiftIds(today: string): Promise<string[]> {
+  const { data, error } = await supabase.from("shifts").select("id").eq("status", "open").gte("shift_date", today);
+  if (error || !data) return [];
+  return data.map((s) => s.id);
+}
+
+/**
  * "One caregiver (the caller) against many shifts" -- the transpose of Phase 1B's
  * evaluateEligibilityBulk (many caregivers against one shift). Shared by both the Trade
  * Shifts and Open Shifts sections; call once with the combined shift ids from both.
