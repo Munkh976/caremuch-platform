@@ -6,6 +6,7 @@ import { ProvenanceBadge } from "@/components/compliance/ProvenanceBadge";
 import { IposTab } from "@/components/compliance/careplan/IposTab";
 import { GoalsTab } from "@/components/compliance/careplan/GoalsTab";
 import { OnboardingTab } from "@/components/compliance/careplan/OnboardingTab";
+import { SchedulingTab } from "@/components/compliance/careplan/SchedulingTab";
 import { useClientHead, useOnboarding, usePlans, useRefreshClient, useShells } from "@/components/compliance/careplan/useCarePlanData";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -79,7 +80,7 @@ export default function ClientCarePlan() {
               <TabsContent value="ipos" className="mt-4"><IposTab clientId={clientId} officeId={officeId} onChanged={refresh} /></TabsContent>
               <TabsContent value="goals" className="mt-4"><GoalsTab clientId={clientId} officeId={officeId} plan={active} onChanged={refresh} /></TabsContent>
               <TabsContent value="notes" className="mt-4"><Placeholder slice="S8" text="Progress notes for review, return and void." /></TabsContent>
-              <TabsContent value="scheduling" className="mt-4"><Placeholder slice="S6" text="Client schedules, in-service and training forms, and who can deliver." /></TabsContent>
+              <TabsContent value="scheduling" className="mt-4"><SchedulingTab clientId={clientId} officeId={officeId} /></TabsContent>
               <TabsContent value="onboarding" className="mt-4">
                 <OnboardingTab clientId={clientId} onboarding={onboarding.data} trainingVersion={active?.training_version ?? null} goTo={goTo} onChanged={refresh} />
               </TabsContent>

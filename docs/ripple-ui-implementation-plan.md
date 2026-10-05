@@ -318,6 +318,16 @@ office) and **Q12** (bulk-approve clean rows; built as a second button), both op
     The UI shows Void only when `get_client_authorizations` returns `void_available = true` (false until then).
 - **S4b (owner, Oct 5):** intake document file upload is not in V1. It needs a private storage bucket with office-scoped
   storage policies and its own security review. S4 records document metadata only (type, status, dates, N/A reason).
+- **S6 decisions (Oct 5):**
+  - hr_staff route: `/training` (clients of the office with their training state) and `/training/:clientId` (the two
+    forms, the retraining list, print), guarded by `TRAINING_TIER` (hr_staff, manager, agency_admin) + RequireModuleOffice.
+    Reached from the Caregiver tab ("Record training ->" per client) and the expirations panel ("Client training ->"); no
+    menu item (no seed). Both read `get_client_training_context` / `list_client_training_status`: plan spine only, never goals,
+    needs or notes. Print: `/training/:clientId/print/:kind/:formId`, no app chrome.
+  - Scheduler: NOT granted the client Scheduling tab (the client page stays manager / agency_admin); schedulers keep the
+    full Schedule screen, which `Open full Schedule ->` deep-links with `?client=`.
+  - **In-service print: provisional layout, pending Ripple's form sample** (owner will provide a redacted sample). It is
+    inferred from the architecture text; the 33.01_01F training form follows arch §1.3 field by field.
 - **S6b:** group sessions wait for Ripple's staff:client ratio answer (default 1:3, office default
   max clients 3).
 - E-signature acceptance and notifications (R9) remain later phases (known-issues).

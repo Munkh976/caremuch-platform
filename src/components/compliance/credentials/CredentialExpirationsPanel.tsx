@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { ShieldCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -42,7 +43,10 @@ export function CredentialExpirationsPanel({ onOpenCaregiver }: { onOpenCaregive
             <CardTitle className="flex items-center gap-2 text-base"><ShieldCheck className="h-4 w-4" aria-hidden="true" />Credential expirations</CardTitle>
             <CardDescription>Overdue, due within 60 days, and required credentials missing.</CardDescription>
           </div>
-          <OfficePicker offices={moduleOffices} value={officeId} onChange={setPicked} />
+          <div className="flex flex-wrap items-center gap-3">
+            <Link to="/training" className="whitespace-nowrap text-sm font-medium text-primary hover:underline" data-testid="client-training-link">Client training →</Link>
+            <OfficePicker offices={moduleOffices} value={officeId} onChange={setPicked} />
+          </div>
         </div>
         <div className="flex flex-wrap gap-2 pt-1 text-xs">
           <Badge variant="destructive">{count("overdue")} overdue</Badge>

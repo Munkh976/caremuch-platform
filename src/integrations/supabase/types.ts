@@ -5552,6 +5552,10 @@ export type Database = {
         Args: { _client_id: string }
         Returns: Json
       }
+      get_client_training_context: {
+        Args: { _client_id: string }
+        Returns: Json
+      }
       get_client_with_profile: {
         Args: { client_uuid: string }
         Returns: {
@@ -5641,6 +5645,10 @@ export type Database = {
         Returns: Json
       }
       list_caregivers_needing_retraining: {
+        Args: { _office_id: string }
+        Returns: Json
+      }
+      list_client_training_status: {
         Args: { _office_id: string }
         Returns: Json
       }

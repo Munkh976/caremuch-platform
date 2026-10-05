@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { addMonths, format } from "date-fns";
 import { History, ShieldAlert } from "lucide-react";
@@ -97,7 +98,7 @@ export function CaregiverCompliance({ caregiverId }: { caregiverId: string }) {
         {data.training.length === 0 ? <p className="text-sm text-muted-foreground">No plan training recorded yet.</p> : (
           <div className="overflow-x-auto rounded-md border">
             <Table>
-              <TableHeader><TableRow><TableHead>Client</TableHead><TableHead>Trained on</TableHead><TableHead>Current plan</TableHead><TableHead>Last training</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+              <TableHeader><TableRow><TableHead>Client</TableHead><TableHead>Trained on</TableHead><TableHead>Current plan</TableHead><TableHead>Last training</TableHead><TableHead>Status</TableHead><TableHead /></TableRow></TableHeader>
               <TableBody>
                 {data.training.map((t) => (
                   <TableRow key={t.client_id}>
@@ -106,6 +107,7 @@ export function CaregiverCompliance({ caregiverId }: { caregiverId: string }) {
                     <TableCell>{t.current_version ? `v${t.current_version}` : "No active plan"}</TableCell>
                     <TableCell className="whitespace-nowrap text-sm">{day(t.last_training_date)}</TableCell>
                     <TableCell>{t.needs_retraining ? <Badge variant="destructive">Needs retraining</Badge> : <Badge variant="secondary">Trained</Badge>}</TableCell>
+                    <TableCell className="text-right"><Link to={`/training/${t.client_id}`} className="whitespace-nowrap text-sm font-medium text-primary hover:underline" data-testid="record-training-link">Record training →</Link></TableCell>
                   </TableRow>
                 ))}
               </TableBody>

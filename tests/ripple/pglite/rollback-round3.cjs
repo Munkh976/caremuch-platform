@@ -15,6 +15,7 @@ const STEPS = [
   ["20261014120100_ui_s4_authorizations.sql", "ui_s4_rollback.sql"],
   ["20261014120200_ui_s5_goals.sql", "ui_s5_rollback.sql"],
   ["20261015120000_w2_void_authorization.sql", "w2_void_rollback.sql"],
+  ["20261016120000_ui_s6_training.sql", "ui_s6_rollback.sql"],
 ].filter(([m]) => require("fs").existsSync(require("path").resolve(__dirname, "../../../supabase/migrations", m)));
 
 (async () => {

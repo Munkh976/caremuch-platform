@@ -1321,3 +1321,9 @@ password minimum and leaked-password protection; custom SMTP / Mode A.
   the N/A reason is the only note today.
 - **Measure-type / correction audit:** W1 and W2 events carry ids, kinds and changed field names; the correction event also
   carries the staff-typed reason (owner decision: "audited with the reason").
+
+## OPEN (Ripple S6): In-service print is a provisional layout, pending Ripple's form sample
+
+`/training/:clientId/print/inservice/:formId` prints the IPOS In-service form from the architecture description (header,
+case manager and program lead signature lines, shell field values). No scan of the paper form is in the repo; the owner will
+provide a redacted sample, and the layout is adjusted to it then. The 33.01_01F training form print follows arch §1.3.

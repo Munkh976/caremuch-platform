@@ -43,6 +43,8 @@ import PublicOffice from "./pages/PublicOffice";
 import KnowledgeBase from "./pages/KnowledgeBase";
 import CarePlans from "./pages/ripple/CarePlans";
 import ClientCarePlan from "./pages/ripple/ClientCarePlan";
+import { TrainingClient, TrainingList } from "./pages/ripple/Training";
+import TrainingPrint from "./pages/ripple/TrainingPrint";
 import WeeklyBilling from "./pages/ripple/WeeklyBilling";
 import FormTemplates from "./pages/ripple/FormTemplates";
 import { RequireRole } from "./components/auth/RequireRole";
@@ -50,7 +52,7 @@ import { RequireModuleOffice } from "./components/auth/RequireModuleOffice";
 import { AuthLinkRouter } from "./components/auth/AuthLinkRouter";
 import ForgotPassword from "./pages/ForgotPassword";
 import SetPassword from "./pages/SetPassword";
-import { ADMIN, CARE_PLAN_TIER, MANAGER_OR_ABOVE, STAFF, SYSTEM_ADMIN } from "./lib/roleHome";
+import { ADMIN, CARE_PLAN_TIER, TRAINING_TIER, MANAGER_OR_ABOVE, STAFF, SYSTEM_ADMIN } from "./lib/roleHome";
 
 const queryClient = new QueryClient();
 
@@ -111,6 +113,9 @@ const App = () => (
           {/* Ripple care-plan module (UI S1): clinical tier + an office with the module on (Q3) */}
           <Route path="/care-plans" element={<RequireRole allow={CARE_PLAN_TIER}><RequireModuleOffice><CarePlans /></RequireModuleOffice></RequireRole>} />
           <Route path="/care-plans/:clientId" element={<RequireRole allow={CARE_PLAN_TIER}><RequireModuleOffice><ClientCarePlan /></RequireModuleOffice></RequireRole>} />
+          <Route path="/training" element={<RequireRole allow={TRAINING_TIER}><RequireModuleOffice><TrainingList /></RequireModuleOffice></RequireRole>} />
+          <Route path="/training/:clientId" element={<RequireRole allow={TRAINING_TIER}><RequireModuleOffice><TrainingClient /></RequireModuleOffice></RequireRole>} />
+          <Route path="/training/:clientId/print/:kind/:formId" element={<RequireRole allow={TRAINING_TIER}><RequireModuleOffice><TrainingPrint /></RequireModuleOffice></RequireRole>} />
           <Route path="/billing/weekly" element={<RequireRole allow={CARE_PLAN_TIER}><RequireModuleOffice><WeeklyBilling /></RequireModuleOffice></RequireRole>} />
           <Route path="/form-templates" element={<RequireRole allow={CARE_PLAN_TIER}><RequireModuleOffice><FormTemplates /></RequireModuleOffice></RequireRole>} />
           <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
