@@ -313,6 +313,98 @@ async function s4(base, F, browser) {
 }
 
 // =============================================================================================
+// S5
+// =============================================================================================
+async function s5(base, F, browser) {
+  F.CS = await client(F.RX, `Goals Client ${RUN}`);
+  const plan = await must(F.mgrRX.c, "create_care_plan", { _client_id: F.CS, _plan_type: "initial", _header: { effective_date: await dbDay(-10), expiration_date: await dbDay(350) }, _field_values: { hopes: "Cook dinner for my family" } });
+  await must(F.mgrRX.c, "upsert_care_plan_goals", { _care_plan_id: plan, _goals: [
+    { seq: 1, goal_text: "Build community skills", objectives: [
+      { seq: 1, letter: "A", objective_text: "Order at a cafe", staff_instructions: "Prompt once, then wait", service_type: "cls", responsible_party: "this_agency" },
+      { seq: 2, letter: "B", objective_text: "Arrange transport", responsible_party: "case_management" }] },
+    { seq: 2, goal_text: "Cook a simple meal", objectives: [{ seq: 1, letter: "A", objective_text: "Follow a picture recipe", service_type: "cls", responsible_party: "this_agency" }] }] });
+  const tv = async () => (await admin.from("care_plans").select("training_version").eq("id", plan).single()).data.training_version;
+  const order = async (page) => page.locator('[data-testid="goal-groups"] [data-objective]').evaluateAll((els) => els.map((e) => e.getAttribute("data-objective")));
+  const openEditor = async (page) => { await page.getByRole("button", { name: "Edit goals and objectives" }).click(); await page.locator('[data-testid="goals-editor"]').waitFor(); };
+
+  const ctx = await ctxFor(browser, 1440); const page = await ctx.newPage();
+  await login(page, base, F.mgrRX); await page.goto(`${base}/care-plans/${F.CS}?tab=goals`);
+  await page.locator('[data-testid="goal-groups"] [data-objective="1A"]').waitFor({ timeout: 30000 }); await page.waitForTimeout(600);
+  const groupText = await page.locator('[data-testid="goal-groups"]').innerText();
+  const order0 = await order(page);
+  await page.locator('[data-objective="1A"]').click(); await page.waitForTimeout(400);
+  const goalsShown = await page.locator("[data-goal]").count(), selected = await page.locator('[data-objective="1A"][data-selected]').count();
+  rec("S5-groups goals grouped by service: 'CLS — goals', 'Respite — no goals', 'Other providers — reference' (the case-management objective); seq order kept",
+    /CLS — goals/.test(groupText) && /Respite — no goals/.test(groupText) && /Other providers — reference/.test(groupText) && order0.join(",") === "1A,2A,1B", `order ${order0.join(",")}`);
+  rec("S5-select selecting an objective highlights it in place without collapsing the others and loads its measures beside it",
+    selected === 1 && goalsShown >= 3 && /Measures · Goal 1 · A/.test(await page.locator('[data-testid="measures-panel"]').innerText()), `selected ${selected}; goal blocks still shown ${goalsShown}`);
+
+  // measures (before any training): add a trials measure
+  await page.locator('[data-testid="edit-measures"]').click(); await page.locator('[data-testid="measures-editor"]').waitFor();
+  await page.getByRole("button", { name: "Add measure" }).click();
+  await page.locator("#m-0-type").click(); await page.getByRole("option", { name: /· Trials$/ }).first().click();
+  await page.locator("#m-0-prompt").fill("Ordered independently?"); await page.locator("#m-0-trials").fill("3");
+  await page.waitForTimeout(300); await shot(page, "s5-measures-editor-1440");
+  await page.getByRole("button", { name: "Save measures" }).click(); await page.locator('[data-testid="measure-list"]').waitFor({ timeout: 15000 }); await page.waitForTimeout(600);
+  await shot(page, "s5-goals-tab-selected-1440");
+  const tvM = await tv();
+
+  // goal edit before any training: no confirmation, no bump
+  await openEditor(page); await page.locator("#obj-0-0-instr").fill("Prompt once, then wait 10 seconds");
+  await page.getByRole("button", { name: "Save", exact: true }).click(); await page.waitForTimeout(1500);
+  const noPrompt = await page.locator('[data-testid="retraining-confirm"]').count(), tv1 = await tv();
+  const instr = (await admin.from("care_plan_objectives").select("staff_instructions").eq("objective_text", "Order at a cafe")).data.map((o) => o.staff_instructions);
+  rec("S5-a a goal edit before any training saves without the retraining confirmation (training version stays 1)",
+    noPrompt === 0 && tv1 === 1 && tvM === 1 && instr.includes("Prompt once, then wait 10 seconds"), `confirm shown ${noPrompt}; v${tv1}; saved ${instr.includes("Prompt once, then wait 10 seconds")}`);
+
+  // after training at v1: confirmation, then bump on confirm
+  await must(F.hrRX.c, "record_inservice_form", { _care_plan_id: plan, _case_manager_name: "ZZ CM", _program_lead_id: F.mgrRX.id, _trained_on: await dbDay(0), _signed_at: await dbNow() });
+  await page.reload(); await page.locator('[data-objective="1A"]').waitFor({ timeout: 20000 });
+  await openEditor(page); await page.locator("#goal-1").fill("Cook a simple meal with a picture recipe");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await page.locator('[data-testid="retraining-confirm"]').waitFor({ timeout: 15000 }); await page.waitForTimeout(400);
+  const confirmText = await page.locator('[data-testid="retraining-confirm"]').innerText(); const tvBefore = await tv();
+  await shot(page, "s5-retraining-confirm-1440");
+  await page.getByRole("button", { name: "Save and start retraining" }).click(); await page.waitForTimeout(2000);
+  const tv2 = await tv();
+  rec("S5-b after training at v1 a goal edit shows the retraining confirmation ('This change requires retraining all caregivers for this client'); nothing is saved until confirmed; confirming bumps to v2",
+    /This change requires retraining all caregivers for this client/.test(confirmText) && tvBefore === 1 && tv2 === 2, `before confirm v${tvBefore}; after v${tv2}`);
+
+  // measure edit after training at the current version: never prompts, never bumps
+  await must(F.hrRX.c, "record_inservice_form", { _care_plan_id: plan, _case_manager_name: "ZZ CM", _program_lead_id: F.mgrRX.id, _trained_on: await dbDay(0), _signed_at: await dbNow() });
+  await page.reload(); await page.locator('[data-objective="2A"]').waitFor({ timeout: 20000 }); await page.locator('[data-objective="2A"]').click();
+  await page.locator('[data-testid="edit-measures"]').click(); await page.locator('[data-testid="measures-editor"]').waitFor();
+  await page.getByRole("button", { name: "Add measure" }).click(); await page.locator("#m-0-prompt").fill("Followed the picture steps?");
+  await page.getByRole("button", { name: "Save measures" }).click(); await page.waitForTimeout(1500);
+  const mPrompt = await page.locator('[data-testid="retraining-confirm"]').count(), tv3 = await tv();
+  rec("S5-c a measure edit after training at the current version never prompts and never bumps (v2 stays)", mPrompt === 0 && tv3 === 2, `confirm ${mPrompt}; v${tv3}`);
+
+  // case-management objective: no measure control
+  await page.locator('[data-objective="1B"]').click(); await page.waitForTimeout(400);
+  const cmNote = await page.locator('[data-testid="no-measure-control"]').count(), cmBtn = await page.locator('[data-testid="edit-measures"]').count();
+  rec("S5-d a case-management objective shows no measure control (reference only)", cmNote === 1 && cmBtn === 0, `note ${cmNote}, edit button ${cmBtn}`);
+  const order1 = await order(page);
+  const db = (await admin.from("care_plan_goals").select("seq, goal_text, care_plan_objectives(letter, seq, objective_text)").eq("care_plan_id", plan).order("seq")).data;
+  rec("S5-e sequence order preserved after the edits (UI and database)", order1.join(",") === order0.join(",") && db.map((g) => g.seq).join() === "1,2"
+    && db[0].care_plan_objectives.sort((a, b) => a.seq - b.seq).map((o) => o.letter).join() === "A,B", `UI ${order1.join(",")}; DB goals ${db.map((g) => g.seq)}`);
+  await ctx.close();
+
+  // 390
+  const c = await ctxFor(browser, 390); const p = await c.newPage();
+  await login(p, base, F.mgrRX); await p.goto(`${base}/care-plans/${F.CS}?tab=goals`);
+  await p.locator('[data-objective="1A"]').waitFor({ timeout: 30000 }); await p.locator('[data-objective="1A"]').click(); await p.waitForTimeout(600);
+  await shot(p, "s5-goals-tab-selected-390"); await fits(p, "S5-390a goals tab with a selected objective fits at 390px", "goals");
+  await p.locator('[data-testid="edit-measures"]').click(); await p.locator('[data-testid="measures-editor"]').waitFor(); await p.waitForTimeout(500);
+  await shot(p, "s5-measures-editor-390"); await closeDialogs(p);
+  await openEditor(p); await p.locator("#goal-0").fill("Build community skills safely");
+  await p.getByRole("button", { name: "Save", exact: true }).click(); await p.locator('[data-testid="retraining-confirm"]').waitFor({ timeout: 15000 }); await p.waitForTimeout(400);
+  await shot(p, "s5-retraining-confirm-390");
+  await p.getByRole("button", { name: "Back" }).click(); await p.getByRole("button", { name: "Cancel" }).click(); await p.waitForTimeout(800);
+  rec("S5-390b retraining confirmation at 390px; cancelling saves nothing", (await tv()) === 2, `v${await tv()}`);
+  await c.close();
+}
+
+// =============================================================================================
 async function run(base) {
   let F;
   try {
@@ -321,7 +413,7 @@ async function run(base) {
     const browser = await chromium.launch();
     try {
       if (WHICH === "s4" || WHICH === "all") await s4(base, F, browser);
-      if ((WHICH === "s5" || WHICH === "all") && typeof s5 === "function") await s5(base, F, browser);
+      if (WHICH === "s5" || WHICH === "all") await s5(base, F, browser);
     } finally { await browser.close(); }
   } finally { await teardown(F); await closeDb(); }
 }
