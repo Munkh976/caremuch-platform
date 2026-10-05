@@ -1899,6 +1899,7 @@ export type Database = {
           address: string
           agency_id: string
           care_requirements: string[] | null
+          case_number: string | null
           city: string
           created_at: string | null
           date_of_birth: string | null
@@ -1927,6 +1928,7 @@ export type Database = {
           address: string
           agency_id: string
           care_requirements?: string[] | null
+          case_number?: string | null
           city: string
           created_at?: string | null
           date_of_birth?: string | null
@@ -1955,6 +1957,7 @@ export type Database = {
           address?: string
           agency_id?: string
           care_requirements?: string[] | null
+          case_number?: string | null
           city?: string
           created_at?: string | null
           date_of_birth?: string | null
@@ -5497,6 +5500,7 @@ export type Database = {
           rating_count: number
         }[]
       }
+      get_caregiver_clock: { Args: never; Returns: Json }
       get_caregiver_compliance: {
         Args: { _caregiver_id: string }
         Returns: Json
@@ -5657,6 +5661,7 @@ export type Database = {
         Args: { _office_id: string; _within_days?: number }
         Returns: Json
       }
+      list_my_notes_due: { Args: never; Returns: Json }
       list_overdue_notes: {
         Args: { _as_of?: string; _office_id: string }
         Returns: Json
