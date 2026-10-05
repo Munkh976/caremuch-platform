@@ -5262,6 +5262,25 @@ export type Database = {
         }
         Returns: Json
       }
+      cp_require_agency_measure_type: {
+        Args: { _id: string }
+        Returns: {
+          agency_id: string | null
+          created_at: string
+          created_by: string | null
+          default_options: Json | null
+          id: string
+          is_active: boolean
+          kind: Database["public"]["Enums"]["measure_kind"]
+          label: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "measure_types"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       cp_require_scope: {
         Args: {
           _agency_id: string
@@ -5381,6 +5400,7 @@ export type Database = {
       }
       current_agency_id: { Args: never; Returns: string }
       current_virtual_office_id: { Args: never; Returns: string }
+      delete_measure_type: { Args: { _id: string }; Returns: undefined }
       derived_shift_caregiver: { Args: { _shift_id: string }; Returns: string }
       discard_flow_draft: { Args: { p_draft_id: string }; Returns: undefined }
       enter_caregiver_credential: {
@@ -5458,6 +5478,10 @@ export type Database = {
           last_initial: string
           rating_count: number
         }[]
+      }
+      get_caregiver_compliance: {
+        Args: { _caregiver_id: string }
+        Returns: Json
       }
       get_caregiver_trade_shifts: {
         Args: never
@@ -5598,10 +5622,15 @@ export type Database = {
         Returns: Json
       }
       list_clients_onboarding: { Args: { _office_id: string }; Returns: Json }
+      list_credential_expirations: {
+        Args: { _office_id: string; _within_days?: number }
+        Returns: Json
+      }
       list_overdue_notes: {
         Args: { _as_of?: string; _office_id: string }
         Returns: Json
       }
+      list_templates_with_usage: { Args: { _office_id: string }; Returns: Json }
       log_event: {
         Args: {
           _actor_id?: string
@@ -5750,6 +5779,10 @@ export type Database = {
         Args: { _office_id: string }
         Returns: Json
       }
+      set_measure_type_active: {
+        Args: { _active: boolean; _id: string }
+        Returns: undefined
+      }
       set_objective_measures: {
         Args: { _measures: Json; _objective_id: string }
         Returns: number
@@ -5814,6 +5847,15 @@ export type Database = {
           _file_ref?: string
           _not_applicable_reason?: string
           _status: Database["public"]["Enums"]["client_document_status"]
+        }
+        Returns: string
+      }
+      upsert_measure_type: {
+        Args: {
+          _default_options?: Json
+          _id: string
+          _kind: Database["public"]["Enums"]["measure_kind"]
+          _label: string
         }
         Returns: string
       }
