@@ -38,7 +38,7 @@ export function InserviceDialog({ open, onOpenChange, ctx, today, onSaved }: { o
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] grid-cols-[minmax(0,1fr)] overflow-y-auto sm:max-w-[560px]" data-testid="inservice-dialog">
         <DialogHeader><DialogTitle>In-service form · training version {ctx.plan?.training_version}</DialogTitle>
-          <DialogDescription>The case manager trained the program lead on {ctx.client_short}'s plan v{ctx.plan?.version}; the program lead signs.</DialogDescription></DialogHeader>
+          <DialogDescription>The case manager trained the program lead on {ctx.client_name}'s plan v{ctx.plan?.version}; the program lead signs.</DialogDescription></DialogHeader>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1 sm:col-span-2"><Label htmlFor="in-cm">Case manager (trainer) *</Label><Input id="in-cm" value={cm} onChange={(e) => setCm(e.target.value)} /></div>
           <div className="space-y-1 sm:col-span-2"><Label htmlFor="in-lead">Program lead (signs) *</Label>
@@ -82,7 +82,7 @@ export function TrainingFormDialog({ open, onOpenChange, ctx, today, onSaved, on
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] grid-cols-[minmax(0,1fr)] overflow-y-auto sm:max-w-[760px]" data-testid="training-dialog">
         <DialogHeader><DialogTitle>Training form (ISK 33.01_01F) · training version {ctx.plan?.training_version}</DialogTitle>
-          <DialogDescription>Caregivers trained on {ctx.client_short}'s plan by the case manager, clinician or program lead.</DialogDescription></DialogHeader>
+          <DialogDescription>Caregivers trained on {ctx.client_name}'s plan by the case manager, clinician or program lead.</DialogDescription></DialogHeader>
         {!ctx.inservice_current ? (
           <Alert variant="destructive" data-testid="training-refused">
             <AlertTriangle className="h-4 w-4" />

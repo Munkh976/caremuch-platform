@@ -8,7 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { ToggleGroup } from "@/components/ui/toggle-group";
+import { FilterChip } from "@/components/compliance/FilterChip";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { UnitsBar } from "@/components/compliance/UnitsBar";
 import { TrainingPanel } from "@/components/compliance/training/TrainingPanel";
@@ -102,9 +103,9 @@ export function SchedulingTab({ clientId, officeId }: { clientId: string; office
           <CardTitle className="text-base">Caregivers who can deliver</CardTitle>
           <div className="flex flex-wrap items-center gap-2">
             <ToggleGroup type="single" value={filter} onValueChange={(v) => v && setFilter(v as DeliverFilter)} className="flex-wrap justify-start" aria-label="Caregiver filter">
-              <ToggleGroupItem value="trained" data-filter="trained">Trained / effective</ToggleGroupItem>
-              <ToggleGroupItem value="retrain" data-filter="retrain">Needs retraining</ToggleGroupItem>
-              <ToggleGroupItem value="all" data-filter="all">All in office</ToggleGroupItem>
+              <FilterChip value="trained" data-filter="trained">Trained / effective</FilterChip>
+              <FilterChip value="retrain" data-filter="retrain">Needs retraining</FilterChip>
+              <FilterChip value="all" data-filter="all">All in office</FilterChip>
             </ToggleGroup>
             <Input className="w-full sm:w-56" placeholder="Search caregivers" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search caregivers" />
           </div>

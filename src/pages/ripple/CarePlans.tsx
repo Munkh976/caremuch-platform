@@ -8,7 +8,8 @@ import { ModuleShell } from "@/components/compliance/ModuleShell";
 import { OfficePicker } from "@/components/compliance/OfficePicker";
 import { AuthorizationRiskPanel } from "@/components/compliance/careplan/AuthorizationRiskPanel";
 import { Badge } from "@/components/ui/badge";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { ToggleGroup } from "@/components/ui/toggle-group";
+import { FilterChip } from "@/components/compliance/FilterChip";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useComplianceOffices } from "@/hooks/useComplianceOffices";
 import { daysUntil, parseDateOnly } from "@/lib/dateOnly";
@@ -65,10 +66,10 @@ export default function CarePlans() {
         <OfficePicker offices={moduleOffices} value={officeId} onChange={setPicked} />
         <AuthorizationRiskPanel officeId={officeId} />
         <ToggleGroup type="single" value={filter} onValueChange={(v) => v && setFilter(v as Filter)} className="flex-wrap justify-start" aria-label="Filter clients">
-          <ToggleGroupItem value="all">All</ToggleGroupItem>
-          <ToggleGroupItem value="pending">Onboarding pending</ToggleGroupItem>
-          <ToggleGroupItem value="onboarded">Onboarded</ToggleGroupItem>
-          <ToggleGroupItem value="review">Review due</ToggleGroupItem>
+          <FilterChip value="all">All</FilterChip>
+          <FilterChip value="pending">Onboarding pending</FilterChip>
+          <FilterChip value="onboarded">Onboarded</FilterChip>
+          <FilterChip value="review">Review due</FilterChip>
         </ToggleGroup>
         <div className="overflow-x-auto rounded-md border" data-testid="care-plan-list">
           <Table>

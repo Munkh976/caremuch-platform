@@ -121,6 +121,10 @@ const ctxFor = (browser, w) => browser.newContext({ viewport: { width: w, height
 const closeDialogs = async (page) => { for (let i = 0; i < 3 && await page.locator('[role="dialog"]').count(); i++) { await page.keyboard.press("Escape"); await page.waitForTimeout(300); } };
 const shown = (page) => page.locator('[data-testid="can-deliver"] tr[data-caregiver]').evaluateAll((els) => els.map((e) => e.getAttribute("data-caregiver").split(" ")[0]));
 const setFilter = async (page, f) => { await page.locator(`[data-filter="${f}"]`).click(); await page.waitForTimeout(500); };
+// S6 polish (a): the active chip's background is the app's primary (navy), not the accent (teal)
+const chipColors = (page, sel) => page.evaluate((s) => { const probe = (cls) => { const d = document.createElement("div"); d.className = cls; document.body.appendChild(d);
+  const c = getComputedStyle(d).backgroundColor; d.remove(); return c; };
+  const on = document.querySelector(`${s}[data-state="on"]`); return { on: on ? getComputedStyle(on).backgroundColor : null, primary: probe("bg-primary"), accent: probe("bg-accent") }; }, sel);
 const openScheduling = async (page, base, F) => { await page.goto(`${base}/care-plans/${F.CX}?tab=scheduling`); await page.locator('[data-testid="scheduling-tab"]').waitFor({ timeout: 30000 }); await page.waitForTimeout(1500); };
 
 // =============================================================================================
@@ -147,6 +151,10 @@ async function polish(base, F, browser) {
     const li = p.locator(`[data-testid="risk-panel"] li[data-auth="ZZ-USED-${RUN}"]`); await li.waitFor({ timeout: 30000 }); await p.waitForTimeout(600);
     const txt = await li.innerText(), href = await li.locator('[data-testid="risk-schedule-link"]').getAttribute("href");
     await shot(p, "polish-3-risk-panel-1440");
+    const listChips = await chipColors(p, '[aria-label="Filter clients"] button');
+    await p.locator('[aria-label="Filter clients"]').screenshot({ path: path.join(SHOTS, "s6p-a-care-plans-chips-1440.png") });
+    rec("S6p-a1 care-plans list filter chips: the active chip uses the primary navy (not the teal accent)",
+      !!listChips.on && listChips.on === listChips.primary && listChips.on !== listChips.accent, JSON.stringify(listChips));
     await li.locator('[data-testid="risk-schedule-link"]').click(); await p.locator('[data-testid="client-filter"]').waitFor({ timeout: 30000 }); await p.waitForTimeout(1500);
     const chip = await p.locator('[data-testid="client-filter"]').innerText();
     await shot(p, "polish-3-schedule-filtered-1440");
@@ -214,6 +222,10 @@ async function s6(base, F, browser) {
   const eligTxt = await page.locator('[data-testid="can-deliver"] tr[data-caregiver^="Gail"] [data-eligibility]').innerText();
   await shot(page, "s6-filter-all-1440");
   await setFilter(page, "trained"); await shot(page, "s6-filter-trained-1440");
+  const schedChips = await chipColors(page, "[data-filter]");
+  await page.locator('[aria-label="Caregiver filter"]').screenshot({ path: path.join(SHOTS, "s6p-a-scheduling-chips-1440.png") });
+  rec("S6p-a2 Scheduling tab 'Trained / effective' chip: the active chip uses the primary navy (not the teal accent)",
+    !!schedChips.on && schedChips.on === schedChips.primary && schedChips.on !== schedChips.accent, JSON.stringify(schedChips));
   rec("S6-trained after in-service + training: 'Trained / effective' shows Gail and Hank (Ivy: no credentials, not trained); 'All in office' shows all three with the engine's eligibility for the next unassigned shift",
     t1.join(",") === "Gail,Hank" && all1.join(",") === "Gail,Hank,Ivy" && /Eligible|Needs approval|Blocked/.test(eligTxt), `trained ${t1.join(",")}; all ${all1.join(",")}; Gail elig "${eligTxt.replace(/\s+/g, " ").slice(0, 80)}"`);
   // renewal -> everyone needs retraining
@@ -243,6 +255,9 @@ async function s6(base, F, browser) {
   const trSections = await page.locator("[data-section]").evaluateAll((els) => els.map((e) => e.getAttribute("data-section")));
   const trText = await page.locator('[data-print="training"]').innerText(), chrome2 = await page.locator("aside, header.sticky").count();
   await shot(page, "s6-print-training-1440", true);
+  await page.locator('[data-print="training"] [data-section="header"]').screenshot({ path: path.join(SHOTS, "s6p-c-print-case-number-1440.png") });
+  rec("S6p-c training-form print: 'Case number' stays a blank line (clients has no case-number field on DEV; no column added)", "INFO",
+    /case number/i.test(trText) ? "Case number cell present, blank" : "Case number cell missing");
   rec("S6-print both forms print without app chrome (no sidebar / top bar; the toolbar hides in print). Training (33.01_01F): header (individual, case #, effective date, 5 plan types, agency, location), staff rows (date, name, signature line, clinician, method), training-information block with trainer + staff signature lines. In-service: header + case manager and program lead signature lines",
     JSON.stringify(trSections) === '["header","staff","training-information"]' && JSON.stringify(inSections) === '["header","signatures"]' && chrome1 === 0 && chrome2 === 0 && !toolbarPrint
       && /Initial/.test(trText) && /Behavior Support Plan/.test(trText) && /Protocol/.test(trText) && /Received during the PCP meeting/.test(trText) && /Trainer signature/i.test(trText) && /Staff signature/i.test(trText) && inSig >= 2,
@@ -281,6 +296,10 @@ async function s6(base, F, browser) {
     const link = p.locator('[data-testid="record-training-link"]').first(); const linkHref = await link.getAttribute("href");
     await link.scrollIntoViewIfNeeded(); await shot(p, "s6-hr-caregiver-tab-link-1440");
     await link.evaluate((el) => el.click()); await p.locator('[data-testid="training-panel"]').waitFor({ timeout: 30000 }); await p.waitForTimeout(800);
+    const hdr = (await p.locator('[data-testid="training-header"] h2').innerText()).trim();
+    await shot(p, "s6p-b-hr-training-full-name-1440");
+    rec("S6p-b hr_staff on /training/:clientId sees the client's full name (as on the paper form and the print), not initials",
+      hdr === `ZZ Training Client ${RUN}`, `header "${hdr}"`);
     await p.getByRole("button", { name: "Record training form" }).click(); await p.locator("#tr-type").waitFor({ timeout: 10000 });
     await p.getByRole("button", { name: "Add caregiver" }).click(); await p.locator("#tr-0-cg").click(); await p.getByRole("option", { name: /^Ivy / }).click();
     await p.getByRole("button", { name: "Record training", exact: true }).click(); await p.waitForTimeout(2500);

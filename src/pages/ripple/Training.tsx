@@ -50,7 +50,10 @@ export function TrainingList() {
   );
 }
 
-/** /training/:clientId (S6): the training workflow for one client, without clinical content. */
+/**
+ * /training/:clientId (S6): the training workflow for one client, without clinical content. The header
+ * shows the full name (owner, Oct 5: HR matches the paper forms; a name isn't clinical content).
+ */
 export function TrainingClient() {
   const { clientId = "" } = useParams();
   const ctx = useTrainingContext(clientId);
@@ -64,7 +67,7 @@ export function TrainingClient() {
         ) : (
           <>
             <Card data-testid="training-header"><CardContent className="flex flex-wrap items-center justify-between gap-2 py-4">
-              <div><h2 className="text-xl font-semibold">{ctx.data.client_short}</h2><p className="text-sm text-muted-foreground">{ctx.data.office_name}</p></div>
+              <div><h2 className="text-xl font-semibold">{ctx.data.client_name}</h2><p className="text-sm text-muted-foreground">{ctx.data.office_name}</p></div>
               {ctx.data.plan && <Badge variant="outline">Plan v{ctx.data.plan.version} · training v{ctx.data.plan.training_version}</Badge>}
             </CardContent></Card>
             <TrainingPanel ctx={ctx.data} onChanged={refresh} />

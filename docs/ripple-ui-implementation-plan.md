@@ -326,6 +326,11 @@ office) and **Q12** (bulk-approve clean rows; built as a second button), both op
     needs or notes. Print: `/training/:clientId/print/:kind/:formId`, no app chrome.
   - Scheduler: NOT granted the client Scheduling tab (the client page stays manager / agency_admin); schedulers keep the
     full Schedule screen, which `Open full Schedule ->` deep-links with `?client=`.
+  - **S6 polish (owner, Oct 5):** filter chips use the primary navy (`FilterChip`; the shared toggle keeps its accent).
+    `/training/:clientId` and its dialogs show the client's full name to hr_staff (a name isn't clinical content; HR matches
+    the paper forms); the `/training` list still shows first name + initial (`list_client_training_status` returns only that).
+    **Case number:** `clients` has no case-number column (nor any table on DEV), so the training print keeps a blank line; the
+    prototype's progress-note billing box ("Case number — from client record") hits the same gap in S8/S9.
   - **In-service print: provisional layout, pending Ripple's form sample** (owner will provide a redacted sample). It is
     inferred from the architecture text; the 33.01_01F training form follows arch §1.3 field by field.
 - **S6b:** group sessions wait for Ripple's staff:client ratio answer (default 1:3, office default
