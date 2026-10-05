@@ -155,13 +155,15 @@ export const ShiftDetailsDialog = ({ shift, open, onOpenChange, onAssign }: Shif
             </div>
           )}
 
-          {/* Quick Assign Button for Unassigned Shifts */}
-          {isUnassigned && (
+          {/* Quick Assign Button for Unassigned Shifts -- staff-only, so it also needs an onAssign
+              handler. Caregiver callers pass none and don't embed shift_assignments, so their own
+              assigned shift would otherwise read as unassigned and show a no-op button. */}
+          {isUnassigned && onAssign && (
             <div className="mt-6 pt-6 border-t">
               <Button
                 className="w-full gap-2"
                 onClick={() => {
-                  onAssign?.(shift);
+                  onAssign(shift);
                   onOpenChange(false);
                 }}
               >

@@ -103,7 +103,9 @@ const CaregiverDashboard = () => {
           *,
           shifts (*)
         `)
-        .eq("caregiver_id", caregiverData.id);
+        .eq("caregiver_id", caregiverData.id)
+        // A cancelled assignment (e.g. released by approved time off) is no longer this caregiver's shift.
+        .neq("status", "cancelled");
 
       if (assignmentsError) throw assignmentsError;
 
