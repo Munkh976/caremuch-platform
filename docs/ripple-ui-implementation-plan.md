@@ -226,10 +226,15 @@ rollback proof + DEV suite.
 | G2 | Authorizations expiring / units at risk | read | S4 (used again in S11) | `list_authorizations_at_risk(_office_id)` → authorization id, client id, service, expiry, units available, projected (scheduled + pending), weekly cap left, "bookable hours". Authorization tier. Reuses `cp_projected_units`. |
 | G3 | Template list with usage counts | read | S2 | `list_templates_with_usage(_office_id)` → shell, kind, service type, current version, records per version. All-staff tier. |
 | W1 | Measure library create / edit / deactivate | write | S2 | `upsert_measure_type(…)` (agency-scoped; deactivate, never delete in use). Manager, agency_admin. |
-| W2 | Correct an authorization (dates, units, period cap) | write | S4 | `update_service_authorization(…)` with an audit event, or a documented "void + re-enter" rule. **Owner decision needed**; V1 can ship create-only. |
+| W2 | Correct or void an authorization (**decided Oct 4**) | write | S4 | Authorizations are never deleted. `correct_service_authorization(_id, …changes, _reason)` (manager, agency_admin; audited with the reason, fail-closed) may change the auth number, dates, `units_authorized`, period type / cap and the opening balance, but refuses: `units_authorized` below the units already charged + the opening balance; dates that would exclude any reviewed/billed note's service date; a period cap that the charged units of some existing period already exceed. `void_service_authorization(_id, _reason)` only when nothing has ever been charged or allocated to it. |
 | G4 | Readiness counts for the enforcement switch | read | S10 | `get_office_compliance_readiness(_office_id)` → caregivers ready / total, clients with an active authorization / total. Manager, agency_admin. |
 
 Everything else a screen needs is either a manager-tier table read (§1) or an existing RPC (§2).
+
+**Push rule inside a UI slice (owner, Oct 4).** A migration that only ADDS things for the slice (new
+read/write RPCs, seeds) may be pushed to DEV once PGlite, its rollback proof and the DEV before-run are
+all green, and is reported afterwards. A migration that changes an existing function, policy, trigger,
+or anything scheduling-related still stops for owner approval before the push.
 
 ---
 
@@ -305,7 +310,7 @@ suite: Manual, Smart and Auto assign on a Kind Care shift identical); screenshot
 All R and Q items from Oct 1 are resolved except **Q11** (billing week; default Monday–Sunday per
 office) and **Q12** (bulk-approve clean rows; built as a second button), both open with Ripple; see
 `docs/Ripple_UI_Plan_Decisions_2026-10-01.md`. New open items from this refresh:
-- **W2:** may an authorization be corrected after entry, or only voided and re-entered?
+- **W2 (decided Oct 4):** correct (with the three refusals) or void (only if never charged/allocated); never delete. Built in S4.
 - **S6b:** group sessions wait for Ripple's staff:client ratio answer (default 1:3, office default
   max clients 3).
 - E-signature acceptance and notifications (R9) remain later phases (known-issues).

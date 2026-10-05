@@ -269,7 +269,8 @@ export const AppLayout = ({ children }: AppLayoutProps) => {
         } md:translate-x-0`}
       >
         <div className="flex h-full flex-col">
-          <div className="border-b p-6">
+          {/* below md the floating menu button (40px at left 16px) sits over this header: keep the wordmark clear of it */}
+          <div className="border-b p-6 pl-[4.5rem] md:pl-6">
             <h1 className="text-2xl font-bold text-primary">CareMuch</h1>
             <p className="text-xs font-medium text-foreground/80 mt-1">
               {isSystemAdmin ? "System Administration" : "Agency Portal"}
