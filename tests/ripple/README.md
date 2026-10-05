@@ -61,6 +61,8 @@ skew.
 | `node tests/ripple/dev/nb1.cjs` | **Scheduling no-change check on its own** (NB1: Manual, Smart and Auto assign, single and bulk eligibility, caregiver side), run in every UI slice |
 | `node tests/ripple/ui/round1.cjs <before\|after>` | **UI round 1 (S0 + S1) in a real browser** (Playwright + Vite on a free port; real logins). Checks menu gating per role (module-office manager and agency admin see the 3 items; Kind-Care-only manager, scheduler, caregiver and client don't), direct-URL redirects, existing pages' main content unchanged vs `before`, and the 390px sidebar and page scroll. Screenshots go to `docs/screenshots/ripple-ui/round1/`. Run `before` on the old code first; it keeps page text in the OS temp folder, never in the repo. |
 | `node tests/ripple/dev/soff.cjs after` | S-OFF-1: an office-Y manager is refused on assign, release and compute earnings for office X, and gets 403 from `enable-caregiver-login`, `enable-client-login` and `admin-reset-password`; office-X and unrestricted managers and caregiver self pick-up still work; note shells per service with fallback; NB1 |
+| `node tests/ripple/dev/ui-s2s3.cjs <before|after>` | UI S2 + S3 RPCs on the real project: `before` checks the four new functions are absent; `after` checks template list with usage and edit rights, measure-type upsert/active/delete-when-unused and refusals, credential expiration bands, caregiver compliance (incl. HR lock), office-scope denials, ACLs, NB1 |
+| `node tests/ripple/ui/round2.cjs` | **UI round 2 (S2 + S3) in a real browser**: Form Templates list, field viewer, locked editor, draft diff, publish, measure library; credentials tab, HR entry and renewal, manager override and HR lock, expiration-panel bands at 61/60/30/29/0/-1 days, Kind-Care-only office shows no panel, role denials, 390px fit. Screenshots go to `docs/screenshots/ripple-ui/round2/`. |
 
 | Command | Local (PGlite) |
 |---|---|
@@ -68,6 +70,8 @@ skew.
 | `node tests/ripple/pglite/rollback-d.cjs` | Phase D rollback restores the exact post-C catalog |
 | `node tests/ripple/pglite/soff.cjs` | S-OFF-1 + note shells: the gap reproduced before the migration, refused after; allowed paths, NB1, shell resolution and fallback, rule 13 and ACLs |
 | `node tests/ripple/pglite/rollback-soff.cjs` | S-OFF-1 + shell rollback restores the exact post-D2 catalog; restored bodies byte-identical to DEV (md5) |
+| `node tests/ripple/pglite/ui-s2s3.cjs` | UI S2 + S3 RPCs on PGlite: list/usage, measure library rules, expiration bands, compliance view, denials, ACLs |
+| `node tests/ripple/pglite/rollback-ui-s2s3.cjs` | UI S2 + S3 rollback restores the exact post-S-OFF-1 catalog; re-apply equals the first apply |
 
 `before` mode is each phase's **pre-push** check: its objects are absent and its baseline is
 recorded. It is only meaningful before that phase's migrations are applied. All four phases are

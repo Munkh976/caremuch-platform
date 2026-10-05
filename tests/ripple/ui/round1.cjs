@@ -86,7 +86,19 @@ async function sidebarItems(page) {
 }
 // page text, with the fixtures' own run id normalized (fixture emails carry it), so before/after compare the UI
 const normRun = (t) => t.replace(/ui1-(before|after)-[a-z0-9]+/g, "ui1-RUN");
-async function mainText(page) { await page.waitForTimeout(2500); return normRun((await page.locator("main").innerText().catch(() => "")).replace(/\s+/g, " ").trim()); }
+// Later slices add sections on purpose (S3: the credential-expirations panel on /caregivers for module
+// offices); they are hidden while reading, so this keeps guarding everything that existed before.
+async function mainText(page) {
+  await page.waitForTimeout(2500);
+  const text = await page.evaluate(() => {
+    const added = [...document.querySelectorAll('[data-testid="expirations-panel"]')];
+    const prev = added.map((e) => e.style.display); added.forEach((e) => { e.style.display = "none"; });
+    const t = document.querySelector("main")?.innerText ?? "";
+    added.forEach((e, i) => { e.style.display = prev[i]; });
+    return t;
+  }).catch(() => "");
+  return normRun(text.replace(/\s+/g, " ").trim());
+}
 const shot = (page, name) => page.screenshot({ path: path.join(SHOTS, `${MODE}-${name}.png`), fullPage: false });
 const noHScroll = (page) => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1);
 const sidebarClosed = (page) => page.evaluate(() => { const a = document.querySelector("aside"); if (!a) return true; const r = a.getBoundingClientRect(); return r.right <= 1; });

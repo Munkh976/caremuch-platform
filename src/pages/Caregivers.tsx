@@ -20,6 +20,9 @@ import { Separator } from "@/components/ui/separator";
 import { AppLayout } from "@/components/AppLayout";
 import { caregiverFormSchema } from "@/lib/validation";
 import { OneTimeLinkDialog } from "@/components/auth/OneTimeLinkDialog";
+import { CredentialExpirationsPanel } from "@/components/compliance/credentials/CredentialExpirationsPanel";
+import { CaregiverDetailTabs } from "@/components/compliance/credentials/CaregiverDetailTabs";
+import { useComplianceTier } from "@/hooks/useComplianceOffices";
 import { requestResetLink, type AccountLinkResponse } from "@/lib/accountLinks";
 import { usePendingApprovals } from "@/hooks/usePendingApprovals";
 import { useCareServices } from "@/hooks/useCareServices";
@@ -40,6 +43,9 @@ const Caregivers = () => {
   const [deleteCaregiver, setDeleteCaregiver] = useState<any>(null);
   const [editCaregiver, setEditCaregiver] = useState<any>(null);
   const [viewCaregiver, setViewCaregiver] = useState<any>(null);
+  // Ripple care-plan module (S3): credentials panel + Details tab, training tier on module offices only
+  const complianceTier = useComplianceTier();
+  const [viewTab, setViewTab] = useState<"overview" | "credentials">("overview");
   const [isEditMode, setIsEditMode] = useState(false);
   const { services: careTypes, groupedOptions, optionFor } = useCareServices();
   const [availabilityCaregiver, setAvailabilityCaregiver] = useState<any>(null);
@@ -476,13 +482,14 @@ const Caregivers = () => {
 
   return (
     <AppLayout>
-      <div>
+      {/* minmax(0,1fr): the roster table scrolls inside its own container instead of widening the page on phones */}
+      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)]">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4">
           <div>
             <h2 className="text-3xl font-bold mb-2">Caregiver Management</h2>
             <p className="text-muted-foreground">Manage your caregiver roster</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button variant="outline" className="gap-2" onClick={() => navigate("/caregiver-approvals")}>
               <Clock className="h-4 w-4" />
               Applications
@@ -790,6 +797,12 @@ const Caregivers = () => {
           </Card>
         </div>
 
+        {complianceTier.showPanel && (
+          <div className="mb-6">
+            <CredentialExpirationsPanel onOpenCaregiver={(id) => { const cg = caregivers.find((c) => c.id === id); if (cg) { setViewTab("credentials"); setViewCaregiver(cg); } }} />
+          </div>
+        )}
+
         {/* Caregivers Table */}
         <Card>
           <CardContent className="p-6">
@@ -963,12 +976,13 @@ const Caregivers = () => {
         </Card>
 
       {/* View Details Dialog */}
-      <Dialog open={!!viewCaregiver} onOpenChange={() => setViewCaregiver(null)}>
-        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+      <Dialog open={!!viewCaregiver} onOpenChange={() => { setViewCaregiver(null); setViewTab("overview"); }}>
+        <DialogContent className={`${complianceTier.showForCaregiver(viewCaregiver?.virtual_office_id) ? "grid-cols-[minmax(0,1fr)] sm:max-w-[900px]" : "sm:max-w-[600px]"} max-h-[90vh] overflow-y-auto`}>
           <DialogHeader>
             <DialogTitle>Caregiver Details</DialogTitle>
           </DialogHeader>
           {viewCaregiver && (
+            <CaregiverDetailTabs enabled={complianceTier.showForCaregiver(viewCaregiver.virtual_office_id)} caregiverId={viewCaregiver.id} initialTab={viewTab}>
             <div className="space-y-6">
               <div className="flex items-start justify-between">
                 <div>
@@ -1020,6 +1034,7 @@ const Caregivers = () => {
                 )}
               </div>
             </div>
+            </CaregiverDetailTabs>
           )}
         </DialogContent>
       </Dialog>

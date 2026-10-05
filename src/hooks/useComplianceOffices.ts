@@ -57,3 +57,20 @@ export function useComplianceOffices() {
     loading: profileLoading || (!!profile && query.isPending),
   };
 }
+
+/**
+ * Training-tier view of the module (S3): whether the user is in the training tier (manager,
+ * agency_admin, hr_staff) and which module offices they can see. Gates the credentials panel and
+ * the caregiver "Credentials & Training" tab; display only.
+ */
+export function useComplianceTier() {
+  const { profile } = useCurrentProfile();
+  const { moduleOffices } = useComplianceOffices();
+  const trainingTier = profile?.roles.some((r) => r === "manager" || r === "agency_admin" || r === "hr_staff") ?? false;
+  const officeIds = new Set(moduleOffices.map((o) => o.id));
+  return {
+    trainingTier,
+    showPanel: trainingTier && moduleOffices.length > 0,
+    showForCaregiver: (officeId: string | null | undefined) => trainingTier && !!officeId && officeIds.has(officeId),
+  };
+}
