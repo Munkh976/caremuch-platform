@@ -14,7 +14,7 @@ import { parseDateOnly } from "@/lib/dateOnly";
 
 /**
  * /training (S6): clients of a module office with their training state, for hr_staff (and managers).
- * Non-clinical: client first name + initial, plan / training versions, counts. No goals, needs, notes.
+ * Non-clinical: client full name (owner, Oct 5), plan / training versions, counts. No goals, needs, notes.
  */
 export function TrainingList() {
   const { moduleOffices } = useComplianceOffices();
@@ -34,7 +34,7 @@ export function TrainingList() {
               {!isLoading && !isError && data.length === 0 && <TableRow><TableCell colSpan={6} className="text-sm text-muted-foreground">No client with an active plan.</TableCell></TableRow>}
               {data.map((r) => (
                 <TableRow key={r.client_id} data-training-client={r.client_id}>
-                  <TableCell className="font-medium"><Link to={`/training/${r.client_id}`} className="hover:underline">{r.client_short}</Link></TableCell>
+                  <TableCell className="font-medium"><Link to={`/training/${r.client_id}`} className="hover:underline">{r.client_name}</Link></TableCell>
                   <TableCell className="whitespace-nowrap text-sm">v{r.plan_version} · training v{r.training_version}</TableCell>
                   <TableCell>{r.inservice_current ? <Badge variant="outline" className="border-success/40 bg-success/10">Signed</Badge> : <Badge variant="outline" className="border-warning/40 bg-warning/15">Needed</Badge>}</TableCell>
                   <TableCell className="text-right">{r.caregivers_trained}</TableCell>

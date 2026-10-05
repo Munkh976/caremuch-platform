@@ -38,7 +38,7 @@ export function useRetraining(officeId: string | null | undefined) {
   });
 }
 
-export interface TrainingStatusRow { client_id: string; client_short: string; plan_version: number; training_version: number; inservice_current: boolean;
+export interface TrainingStatusRow { client_id: string; client_name: string; client_short: string; plan_version: number; training_version: number; inservice_current: boolean;
   caregivers_trained: number; needing_retraining: number; last_training_date: string | null }
 export function useTrainingStatus(officeId: string | null) {
   return useQuery({

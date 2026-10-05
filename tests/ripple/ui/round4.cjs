@@ -1,4 +1,5 @@
-// Ripple UI round 4 (round-3 polish + W2 void UI + S6 Scheduling tab and training workflow) — browser
+// Ripple UI round 4 (round-3 polish + W2 void UI + S6 Scheduling tab and training workflow + the S6
+// follow-ups: case number, full names) — browser
 // acceptance on DEV with real logins. Usage: node tests/ripple/ui/round4.cjs
 // Disposable fixtures (three offices, six users, three caregivers), random passwords in memory only,
 // fixture writes through the real RPCs (as the fixture users), verified teardown.
@@ -183,6 +184,32 @@ async function polish(base, F, browser) {
 }
 
 // =============================================================================================
+// S6 follow-ups (Oct 5): clients.case_number edited on the care-plan header (and visible in the existing
+// client edit dialog), shown on the IPOS card and the training prints; /training list full names.
+async function caseNumber(base, F, browser) {
+  const c = await ctxFor(browser, 1440); const p = await c.newPage();
+  await login(p, base, F.mgrRX); await p.goto(`${base}/care-plans/${F.CX}?tab=ipos`);
+  await p.locator('[data-testid="case-number"]').waitFor({ timeout: 30000 }); await p.waitForTimeout(800);
+  const before = await p.locator('[data-testid="case-number"]').innerText();
+  await p.getByRole("button", { name: "Edit case number" }).click(); await p.locator('[data-testid="case-number-dialog"]').waitFor();
+  await p.fill("#case-number", "X".repeat(33)); await p.getByRole("button", { name: "Save", exact: true }).click(); await p.waitForTimeout(400);
+  const tooLong = await p.locator('[data-testid="case-number-error"]').innerText().catch(() => "");
+  await p.fill("#case-number", "  ISK-00777  "); await p.getByRole("button", { name: "Save", exact: true }).click();
+  await p.locator('[data-testid="case-number-dialog"]').waitFor({ state: "detached", timeout: 10000 }); await p.waitForTimeout(1500);
+  const head = await p.locator('[data-testid="case-number"]').innerText(), ipos = await p.locator('[data-testid="ipos-case-number"]').innerText();
+  const stored = (await admin.from("clients").select("case_number").eq("id", F.CX).single()).data.case_number;
+  await shot(p, "s6p-c-care-plan-header-case-number-1440");
+  rec("S6p-c1 manager sets the case number on the care-plan header (trimmed; 33 characters refused); the header and the IPOS card show it",
+    /not set/.test(before) && /at most 32/.test(tooLong) && /ISK-00777/.test(head) && /ISK-00777/.test(ipos) && stored === "ISK-00777", `before "${before.trim()}"; too long "${tooLong}"; stored "${stored}"`);
+  await p.goto(`${base}/clients`); await p.getByPlaceholder("Search by name, location, or care needs...").fill(RUN); await p.waitForTimeout(1500);
+  await p.getByRole("button", { name: "Edit client" }).first().click(); await p.locator("#case_number").waitFor({ timeout: 10000 });
+  const dialogValue = await p.locator("#case_number").inputValue();
+  await shot(p, "s6p-c-client-edit-dialog-1440");
+  rec("S6p-c2 the existing client edit dialog shows (and can edit) the case number", dialogValue === "ISK-00777", `field value "${dialogValue}"`);
+  await c.close();
+}
+
+// =============================================================================================
 async function s6(base, F, browser) {
   const ctx = await ctxFor(browser, 1440); const page = await ctx.newPage();
   await login(page, base, F.mgrRX); await openScheduling(page, base, F);
@@ -255,9 +282,10 @@ async function s6(base, F, browser) {
   const trSections = await page.locator("[data-section]").evaluateAll((els) => els.map((e) => e.getAttribute("data-section")));
   const trText = await page.locator('[data-print="training"]').innerText(), chrome2 = await page.locator("aside, header.sticky").count();
   await shot(page, "s6-print-training-1440", true);
+  const inText = await (async () => { await page.goto(`${base}/training/${F.CX}/print/inservice/${inId}`); await page.locator('[data-print="inservice"]').waitFor({ timeout: 30000 }); return page.locator('[data-print="inservice"]').innerText(); })();
+  await page.goto(`${base}/training/${F.CX}/print/training/${trId}`); await page.locator('[data-print="training"]').waitFor({ timeout: 30000 }); await page.waitForTimeout(400);
   await page.locator('[data-print="training"] [data-section="header"]').screenshot({ path: path.join(SHOTS, "s6p-c-print-case-number-1440.png") });
-  rec("S6p-c training-form print: 'Case number' stays a blank line (clients has no case-number field on DEV; no column added)", "INFO",
-    /case number/i.test(trText) ? "Case number cell present, blank" : "Case number cell missing");
+  rec("S6p-c3 both training prints fill 'Case number' from the client record", /ISK-00777/.test(trText) && /ISK-00777/.test(inText), `training ${/ISK-00777/.test(trText)}; in-service ${/ISK-00777/.test(inText)}`);
   rec("S6-print both forms print without app chrome (no sidebar / top bar; the toolbar hides in print). Training (33.01_01F): header (individual, case #, effective date, 5 plan types, agency, location), staff rows (date, name, signature line, clinician, method), training-information block with trainer + staff signature lines. In-service: header + case manager and program lead signature lines",
     JSON.stringify(trSections) === '["header","staff","training-information"]' && JSON.stringify(inSections) === '["header","signatures"]' && chrome1 === 0 && chrome2 === 0 && !toolbarPrint
       && /Initial/.test(trText) && /Behavior Support Plan/.test(trText) && /Protocol/.test(trText) && /Received during the PCP meeting/.test(trText) && /Trainer signature/i.test(trText) && /Staff signature/i.test(trText) && inSig >= 2,
@@ -308,6 +336,7 @@ async function s6(base, F, browser) {
     const ivy = (await admin.from("plan_training_records").select("id, entered_by").eq("caregiver_id", F.G3).eq("care_plan_id", F.plan3)).data;
     await p.goto(`${base}/training`); await p.locator('[data-testid="training-list"] [data-training-client]').first().waitFor({ timeout: 30000 }); const listBody = await p.locator("body").innerText();
     await shot(p, "s6-hr-training-list-1440");
+    rec("S6p-d the hr_staff /training list shows the client's full name", listBody.includes(`ZZ Training Client ${RUN}`), `full name ${listBody.includes(`ZZ Training Client ${RUN}`) ? "shown" : "MISSING"}`);
     await p.goto(`${base}/care-plans/${F.CX}`); await p.waitForTimeout(4000); const cpPath = new URL(p.url()).pathname;
     rec("S6-hr hr_staff opens the training form from the Caregiver tab ('Record training ->') and the training page, records a training form, and sees no clinical text anywhere; the client care-plan page stays closed",
       linkHref === `/training/${F.CX}` && ivy.length === 1 && ivy[0].entered_by === F.hrRX.id && !CLINICAL.test(body) && !CLINICAL.test(listBody) && cpPath !== `/care-plans/${F.CX}`,
@@ -331,7 +360,7 @@ async function run(base) {
     F = await setup();
     log(`fixtures [${RUN}]: Ripple-X + Ripple-Y (module on), KindCare-K (off); manager RX/RY/KY, scheduler RX, hr RX, agency admin; client with plan + goals; Gail/Hank (credentials current), Ivy (none); Hank assigned day +5, open shift day +7`);
     const browser = await chromium.launch();
-    try { await polish(base, F, browser); await s6(base, F, browser); } finally { await browser.close(); }
+    try { await polish(base, F, browser); await caseNumber(base, F, browser); await s6(base, F, browser); } finally { await browser.close(); }
   } finally { await teardown(F); await closeDb(); }
 }
 

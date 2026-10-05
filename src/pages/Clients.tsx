@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { CASE_NUMBER_MAX, normalizeCaseNumber } from "@/lib/caseNumber";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -75,6 +76,7 @@ const Clients = () => {
     emergency_contact_name: "",
     emergency_contact_phone: "",
     notes: "",
+    case_number: "",
   });
 
   const medicalConditionsOptions = [
@@ -209,6 +211,7 @@ const Clients = () => {
       emergency_contact_name: "",
       emergency_contact_phone: "",
       notes: "",
+      case_number: "",
     });
     setIsAddDialogOpen(true);
   };
@@ -258,6 +261,7 @@ const Clients = () => {
       emergency_contact_name: client.emergency_contact_name || "",
       emergency_contact_phone: client.emergency_contact_phone || "",
       notes: client.notes || "",
+      case_number: client.case_number || "",
     });
     setIsAddDialogOpen(true);
   };
@@ -285,6 +289,12 @@ const Clients = () => {
       return;
     }
 
+    const caseNumber = normalizeCaseNumber(formData.case_number);
+    if ("error" in caseNumber) {
+      toast.error(caseNumber.error);
+      return;
+    }
+
     const clientData = {
       first_name: formData.first_name,
       last_name: formData.last_name,
@@ -298,6 +308,7 @@ const Clients = () => {
       emergency_contact_name: formData.emergency_contact_name,
       emergency_contact_phone: formData.emergency_contact_phone,
       notes: formData.notes,
+      case_number: caseNumber.value,
     };
 
     if (isEditMode && editClient) {
@@ -831,6 +842,7 @@ const Clients = () => {
                                   <Button
                                     variant="outline"
                                     size="sm"
+                                    aria-label="Edit client"
                                     onClick={() => handleOpenEditDialog(client)}
                                   >
                                     <Edit className="h-4 w-4" />
@@ -963,6 +975,16 @@ const Clients = () => {
                   onChange={(e) => setFormData({ ...formData, zip_code: e.target.value })}
                 />
               </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="case_number">Case number</Label>
+              <Input
+                id="case_number"
+                value={formData.case_number}
+                maxLength={CASE_NUMBER_MAX + 8}
+                placeholder="ISK case number (optional)"
+                onChange={(e) => setFormData({ ...formData, case_number: e.target.value })}
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="date_of_birth">Date of Birth</Label>

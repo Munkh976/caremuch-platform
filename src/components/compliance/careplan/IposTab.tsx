@@ -60,7 +60,7 @@ function RowsCard({ clientId, plan, section, editable, onSaved }: { clientId: st
 }
 
 /** IPOS tab (S4): create / renew / edit / upgrade, version history, child rows, authorizations. */
-export function IposTab({ clientId, officeId, onChanged }: { clientId: string; officeId: string | null; onChanged: () => void }) {
+export function IposTab({ clientId, officeId, caseNumber = null, onChanged }: { clientId: string; officeId: string | null; caseNumber?: string | null; onChanged: () => void }) {
   const { data: plans = [], isLoading } = usePlans(clientId);
   const { data: shells = [] } = useShells();
   const [dialog, setDialog] = useState<"create" | "edit" | "renew" | "upgrade" | null>(null);
@@ -90,6 +90,7 @@ export function IposTab({ clientId, officeId, onChanged }: { clientId: string; o
             <div className="space-y-1">
               <CardTitle className="text-base">{humanize(active.plan_type)} plan · v{active.version}</CardTitle>
               <p className="text-sm text-muted-foreground">Training version {active.training_version} · {fmt(active.effective_date)} – {fmt(active.expiration_date)}</p>
+              <p className="text-sm text-muted-foreground" data-testid="ipos-case-number">Case number: <span className="text-foreground">{caseNumber ?? "not set"}</span></p>
               {active.expiration_date && <ExpiryPill expiry={active.expiration_date} />}
             </div>
             <div className="flex flex-wrap gap-2">

@@ -15,12 +15,12 @@ export function useRefreshClient(clientId: string) {
   return () => qc.invalidateQueries({ queryKey: ["cp", clientId] });
 }
 
-export interface ClientHead { id: string; first_name: string | null; last_name: string | null; virtual_office_id: string | null }
+export interface ClientHead { id: string; first_name: string | null; last_name: string | null; virtual_office_id: string | null; case_number: string | null }
 export function useClientHead(clientId: string) {
   return useQuery({
     queryKey: cpKey(clientId, "client"),
     queryFn: async (): Promise<ClientHead | null> => {
-      const { data, error } = await supabase.from("clients").select("id, first_name, last_name, virtual_office_id").eq("id", clientId).maybeSingle();
+      const { data, error } = await supabase.from("clients").select("id, first_name, last_name, virtual_office_id, case_number").eq("id", clientId).maybeSingle();
       if (error) throw error;
       return data;
     },

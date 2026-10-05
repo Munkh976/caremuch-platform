@@ -9,7 +9,7 @@ export interface TrainingRecord { caregiver_id: string; caregiver_name: string; 
 export interface TrainingForm { id: string; training_version: number; plan_document_type: PlanDocType; plan_effective_date: string | null; location: string | null;
   field_snapshot: TemplateField[] | null; field_values: Record<string, unknown>; created_at: string; records: TrainingRecord[] }
 export interface TrainingContext {
-  client_id: string; client_name: string; client_short: string; agency_name: string | null; office_id: string | null; office_name: string | null; as_of: string;
+  client_id: string; client_name: string; client_short: string; case_number: string | null; agency_name: string | null; office_id: string | null; office_name: string | null; as_of: string;
   plan: { care_plan_id: string; version: number; training_version: number; plan_type: "initial" | "annual" | "addendum"; effective_date: string | null; expiration_date: string | null } | null;
   inservice_current: boolean; inservice_forms: InserviceForm[]; training_forms: TrainingForm[]; program_leads: { id: string; name: string | null }[];
   caregivers: TrainingCaregiver[]; inservice_fields: TemplateField[]; training_fields: TemplateField[];

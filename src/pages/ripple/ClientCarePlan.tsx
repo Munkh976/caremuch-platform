@@ -1,14 +1,16 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { ArrowLeft, ClipboardCheck } from "lucide-react";
+import { ArrowLeft, ClipboardCheck, Pencil } from "lucide-react";
 import { ModuleShell } from "@/components/compliance/ModuleShell";
 import { ProvenanceBadge } from "@/components/compliance/ProvenanceBadge";
+import { CaseNumberDialog } from "@/components/compliance/careplan/CaseNumberDialog";
 import { IposTab } from "@/components/compliance/careplan/IposTab";
 import { GoalsTab } from "@/components/compliance/careplan/GoalsTab";
 import { OnboardingTab } from "@/components/compliance/careplan/OnboardingTab";
 import { SchedulingTab } from "@/components/compliance/careplan/SchedulingTab";
 import { useClientHead, useOnboarding, usePlans, useRefreshClient, useShells } from "@/components/compliance/careplan/useCarePlanData";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useComplianceOffices } from "@/hooks/useComplianceOffices";
@@ -34,6 +36,7 @@ export default function ClientCarePlan() {
   const { data: plans = [] } = usePlans(clientId);
   const { data: shells = [] } = useShells();
   const refresh = useRefreshClient(clientId);
+  const [caseOpen, setCaseOpen] = useState(false);
   const active = plans.find((p) => p.status === "active") ?? null;
   const shellName = active?.template_id ? shells.find((s) => s.id === active.template_id)?.name : null;
   useEffect(() => { document.title = "Client care plan · CareMuch"; }, []);
@@ -57,6 +60,11 @@ export default function ClientCarePlan() {
                 <div className="min-w-0">
                   <h2 className="truncate text-xl font-semibold">{name}</h2>
                   <p className="text-sm text-muted-foreground">{office?.name}</p>
+                  <div className="flex items-center gap-1 text-sm" data-testid="case-number">
+                    <span className="text-muted-foreground">Case #</span>
+                    <span className="font-medium">{client.data?.case_number ?? "not set"}</span>
+                    <Button size="icon" variant="ghost" className="h-8 w-8" aria-label="Edit case number" onClick={() => setCaseOpen(true)}><Pencil className="h-3.5 w-3.5" /></Button>
+                  </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   {active && shellName && active.template_version ? <ProvenanceBadge shellName={shellName} version={active.template_version} /> : null}
@@ -77,7 +85,7 @@ export default function ClientCarePlan() {
                   <TabsTrigger value="onboarding">Onboarding &amp; Documents</TabsTrigger>
                 </TabsList>
               </div>
-              <TabsContent value="ipos" className="mt-4"><IposTab clientId={clientId} officeId={officeId} onChanged={refresh} /></TabsContent>
+              <TabsContent value="ipos" className="mt-4"><IposTab clientId={clientId} officeId={officeId} caseNumber={client.data?.case_number ?? null} onChanged={refresh} /></TabsContent>
               <TabsContent value="goals" className="mt-4"><GoalsTab clientId={clientId} officeId={officeId} plan={active} onChanged={refresh} /></TabsContent>
               <TabsContent value="notes" className="mt-4"><Placeholder slice="S8" text="Progress notes for review, return and void." /></TabsContent>
               <TabsContent value="scheduling" className="mt-4"><SchedulingTab clientId={clientId} officeId={officeId} /></TabsContent>
@@ -85,6 +93,7 @@ export default function ClientCarePlan() {
                 <OnboardingTab clientId={clientId} onboarding={onboarding.data} trainingVersion={active?.training_version ?? null} goTo={goTo} onChanged={refresh} />
               </TabsContent>
             </Tabs>
+            <CaseNumberDialog clientId={clientId} current={client.data?.case_number ?? null} open={caseOpen} onOpenChange={setCaseOpen} onSaved={refresh} />
           </>
         )}
       </div>

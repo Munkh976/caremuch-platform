@@ -37,7 +37,7 @@ function TrainingSheet({ ctx, form }: { ctx: TrainingContext; form: TrainingForm
       </header>
       <section className="grid grid-cols-2 sm:grid-cols-3" data-section="header">
         <Cell label="Individual served">{ctx.client_name}</Cell>
-        <Cell label="Case number"><Line /></Cell>
+        <Cell label="Case number">{ctx.case_number ?? <Line />}</Cell>
         <Cell label="Effective date of plan">{fmt(form.plan_effective_date)}</Cell>
         <div className="col-span-2 border border-black p-1.5 sm:col-span-3"><div className="text-[10px] font-semibold uppercase tracking-wide">Type of plan</div>
           <div className="flex flex-wrap pt-1 text-sm">{PLAN_DOC_TYPES.map(([v, l]) => <Box key={v} on={form.plan_document_type === v}>{l}</Box>)}</div></div>
@@ -89,7 +89,7 @@ function InserviceSheet({ ctx, form }: { ctx: TrainingContext; form: InserviceFo
       <header className="text-center"><h1 className="text-lg font-bold uppercase">IPOS In-service</h1><p className="text-xs">Case manager → program lead · plan training version {form.training_version}</p></header>
       <section className="grid grid-cols-2 sm:grid-cols-3" data-section="header">
         <Cell label="Individual served">{ctx.client_name}</Cell>
-        <Cell label="Case number"><Line /></Cell>
+        <Cell label="Case number">{ctx.case_number ?? <Line />}</Cell>
         <Cell label="Provider agency">{ctx.agency_name}</Cell>
         {/* plan details are known only for the current version; an older form gets a line to fill in */}
         <Cell label="IPOS training version">v{form.training_version}</Cell>
