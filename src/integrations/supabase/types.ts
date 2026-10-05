@@ -5172,6 +5172,10 @@ export type Database = {
         }
         Returns: Json
       }
+      correct_service_authorization: {
+        Args: { _changes: Json; _id: string; _reason: string }
+        Returns: Json
+      }
       cp_approve_batch: {
         Args: { _batch_id: string; _clean_only: boolean; _note_ids: string[] }
         Returns: Json
@@ -5186,6 +5190,10 @@ export type Database = {
           _subject_type: string
         }
         Returns: undefined
+      }
+      cp_authorization_projection: {
+        Args: { _as_of: string; _client_id: string; _service_type: string }
+        Returns: Json
       }
       cp_care_plan_goal_in_scope: {
         Args: { _goal_id: string }
@@ -5248,6 +5256,7 @@ export type Database = {
         }
         Returns: unknown
       }
+      cp_plan_row_spec: { Args: { _entity: string }; Returns: Json }
       cp_progress_note_in_scope: {
         Args: { _note_id: string }
         Returns: boolean
@@ -5529,6 +5538,7 @@ export type Database = {
           user_id: string
         }[]
       }
+      get_client_authorizations: { Args: { _client_id: string }; Returns: Json }
       get_client_onboarding_status: {
         Args: { _client_id: string }
         Returns: Json
@@ -5616,6 +5626,10 @@ export type Database = {
       knowledge_document_agency_id: {
         Args: { _document_id: string }
         Returns: string
+      }
+      list_authorization_risk: {
+        Args: { _office_id: string; _within_days?: number }
+        Returns: Json
       }
       list_caregivers_needing_retraining: {
         Args: { _office_id: string }
@@ -5779,6 +5793,10 @@ export type Database = {
         Args: { _office_id: string }
         Returns: Json
       }
+      set_care_plan_rows: {
+        Args: { _care_plan_id: string; _entity: string; _rows: Json }
+        Returns: number
+      }
       set_measure_type_active: {
         Args: { _active: boolean; _id: string }
         Returns: undefined
@@ -5862,6 +5880,10 @@ export type Database = {
       void_progress_note: {
         Args: { _note_id: string; _reason: string }
         Returns: undefined
+      }
+      would_bump_training_version: {
+        Args: { _care_plan_id: string; _goals: Json }
+        Returns: Json
       }
     }
     Enums: {

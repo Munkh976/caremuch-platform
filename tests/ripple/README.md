@@ -63,6 +63,9 @@ skew.
 | `node tests/ripple/dev/soff.cjs after` | S-OFF-1: an office-Y manager is refused on assign, release and compute earnings for office X, and gets 403 from `enable-caregiver-login`, `enable-client-login` and `admin-reset-password`; office-X and unrestricted managers and caregiver self pick-up still work; note shells per service with fallback; NB1 |
 | `node tests/ripple/dev/ui-s2s3.cjs <before|after>` | UI S2 + S3 RPCs on the real project: `before` checks the four new functions are absent; `after` checks template list with usage and edit rights, measure-type upsert/active/delete-when-unused and refusals, credential expiration bands, caregiver compliance (incl. HR lock), office-scope denials, ACLs, NB1 |
 | `node tests/ripple/ui/round2.cjs` | **UI round 2 (S2 + S3) in a real browser**: Form Templates list, field viewer, locked editor, draft diff, publish, measure library; credentials tab, HR entry and renewal, manager override and HR lock, expiration-panel bands at 61/60/30/29/0/-1 days, Kind-Care-only office shows no panel, role denials, 390px fit. Screenshots go to `docs/screenshots/ripple-ui/round2/`. |
+| `node tests/ripple/dev/w1-audit.cjs <before|after>` | W1 audit: the events CHECK (44 types before, 50 after), each measure-library write records one event through real logins, refusals and ACLs unchanged, NB1 |
+| `node tests/ripple/dev/ui-s4.cjs <before|after>` | UI S4 RPCs on the real project: units table (opening balance, FIFO pending), G2 bands, W2 correction refusals + audit, IPOS child rows, role denials, ACLs, NB1 |
+| `node tests/ripple/ui/round3.cjs <s4|s5|all>` | **UI round 3 in a real browser**: care-plans list + risk panel, IPOS create from the shell, ProvenanceBadge header, authorization table + UnitsBar, correction refusals in the dialog, onboarding flips to onboarded, renewal confirmation then expired in-service/training, access (office-Y manager, scheduler, hr_staff, Kind-Care-only manager), 390px. Screenshots go to `docs/screenshots/ripple-ui/round3/`. |
 
 | Command | Local (PGlite) |
 |---|---|
@@ -72,6 +75,10 @@ skew.
 | `node tests/ripple/pglite/rollback-soff.cjs` | S-OFF-1 + shell rollback restores the exact post-D2 catalog; restored bodies byte-identical to DEV (md5) |
 | `node tests/ripple/pglite/ui-s2s3.cjs` | UI S2 + S3 RPCs on PGlite: list/usage, measure library rules, expiration bands, compliance view, denials, ACLs |
 | `node tests/ripple/pglite/rollback-ui-s2s3.cjs` | UI S2 + S3 rollback restores the exact post-S-OFF-1 catalog; re-apply equals the first apply |
+| `node tests/ripple/pglite/harness.cjs` | (library) shared PGlite bootstrap for the round 3 suites: stubs, live scheduling definitions, care-plan migrations up to a cut-off, base fixtures |
+| `node tests/ripple/pglite/w1-audit.cjs` | W1: the CHECK keeps the 44 types and adds 6; one event per measure-library write; fail closed (a failing audit insert rolls the write back); ACLs and refusals unchanged |
+| `node tests/ripple/pglite/ui-s4.cjs` | UI S4: projection equals `cp_projected_units`, units table, G2 bands + units at risk, W2 refusals / audit / denials, `set_care_plan_rows`, ACLs |
+| `node tests/ripple/pglite/rollback-round3.cjs` | Round 3 rollbacks (S5, S4, W1 in reverse) each restore the exact previous catalog; re-apply equals the first apply |
 
 `before` mode is each phase's **pre-push** check: its objects are absent and its baseline is
 recorded. It is only meaningful before that phase's migrations are applied. All four phases are

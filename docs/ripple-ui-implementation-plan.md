@@ -311,6 +311,13 @@ All R and Q items from Oct 1 are resolved except **Q11** (billing week; default 
 office) and **Q12** (bulk-approve clean rows; built as a second button), both open with Ripple; see
 `docs/Ripple_UI_Plan_Decisions_2026-10-01.md`. New open items from this refresh:
 - **W2 (decided Oct 4):** correct (with the three refusals) or void (only if never charged/allocated); never delete. Built in S4.
+  - **Status after S4 (Oct 5):** `correct_service_authorization` is live (additive). **Void waits for owner approval:** the
+    table has no voided state, so a voided authorization would still count in `cp_projected_units` (eligibility),
+    `review_progress_note`, `cp_client_onboarding` and the order-service check. Building it changes those existing
+    functions (one of them scheduling-related) plus a column on `service_authorizations`, so it stops for approval.
+    The UI shows Void only when `get_client_authorizations` returns `void_available = true` (false until then).
+- **S4b (owner, Oct 5):** intake document file upload is not in V1. It needs a private storage bucket with office-scoped
+  storage policies and its own security review. S4 records document metadata only (type, status, dates, N/A reason).
 - **S6b:** group sessions wait for Ripple's staff:client ratio answer (default 1:3, office default
   max clients 3).
 - E-signature acceptance and notifications (R9) remain later phases (known-issues).

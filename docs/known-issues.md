@@ -1310,3 +1310,15 @@ just the named ones), because the service role bypasses RLS and the authenticate
 
 Also before production (separate entries): load the care-plan default catalogs; server-side
 password minimum and leaked-password protection; custom SMTP / Mode A.
+
+## OPEN (Ripple S4): authorization void waits for owner approval; intake upload deferred (S4b)
+
+- **Void (W2):** `correct_service_authorization` shipped in S4 (additive). `void_service_authorization` needs a voided state on
+  `service_authorizations` that every reader skips: `cp_projected_units` (eligibility, scheduling), `review_progress_note`,
+  `cp_client_onboarding`, `cp_check_order_service_authorization`, and the S4 reads. That changes existing functions, so it waits for
+  owner approval (UI plan §8). Until then an authorization entered by mistake can be corrected but not voided.
+- **S4b:** intake documents are metadata only in V1 (type, status, effective/expiration, N/A reason). File upload needs a
+  private bucket with office-scoped storage policies and its own security review. `client_documents` has no free-text note column;
+  the N/A reason is the only note today.
+- **Measure-type / correction audit:** W1 and W2 events carry ids, kinds and changed field names; the correction event also
+  carries the staff-typed reason (owner decision: "audited with the reason").
