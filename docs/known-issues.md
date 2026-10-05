@@ -1266,21 +1266,34 @@ added the caregiver-office = shift-office check.
 Caregiver self-service (`caregiver_pick_up_shift`, trade pick-up) is bound to the caller's own
 caregiver row, and Rule B pins the caregiver's office to the shift's office.
 
-**Still open (bigger than a one-line guard), each tracked:**
-- `shift_trades` staff INSERT/UPDATE policies: agency-only (entry at the top of this file).
-- Staff write policies on `caregiver_availability`, `caregiver_availability_exceptions` and
-  `caregiver_skills` are agency-only: an office-restricted staff member can change another office's
-  caregivers' availability and skills. Needs office-scoped policies (through the caregiver's office)
-  and the RLS write-path audit (every writer, not just the named ones) before tightening.
-- `approve-caregiver-registration` (Edge Function, service role) checks role + agency only.
-  Registrations carry no office yet, so there is nothing to compare. Fix together with "FUTURE:
-  per-office caregiver registration links".
-- `convert_care_request_to_client` (SECURITY DEFINER) checks agency only. Client intake, outside
-  the scheduling/staff sweep. A one-line guard is possible (`care_requests.virtual_office_id` is
-  never NULL on DEV today) but needs a product decision first.
-- `create-user` was not redeployed: it imports the changed `_shared/authz.ts`, but uses only
-  `loadPrincipal`/`hasCallerRole`, whose behaviour for it is unchanged. Redeploy it with its next
-  change.
+**Still open:** the remaining agency-only paths are grouped below as **S-OFF-2**.
+`create-user` was not redeployed: it imports the changed `_shared/authz.ts`, but uses only
+`loadPrincipal`/`hasCallerRole`, whose behaviour for it is unchanged. Redeploy it with its next
+change.
+
+## OPEN: S-OFF-2 — fix before any multi-office agency goes live with real data
+
+**Status:** Grouped 2026-10-04 (owner). No code yet. These are the office-isolation gaps the S-OFF-1
+sweep found and left because each is bigger than a one-line guard. Together they mean an
+office-restricted staff member (M-Office Tier 3) can still act on another office of the same agency
+through these paths. **Gate:** all four are fixed and tested (PGlite + DEV, office-Y vs office-X, as
+in `tests/ripple/dev/soff.cjs`) before any agency with more than one office goes live with real data.
+
+1. **`shift_trades` staff writes.** The INSERT and UPDATE policies are agency-only (details in the
+   `shift_trades` entry at the top of this file). Needs an office for the trade (a column, or one
+   derived through the shift) and office-scoped policies.
+2. **`caregiver_availability`, `caregiver_availability_exceptions`, `caregiver_skills` staff
+   policies.** They are agency-only, so a restricted staff member can change another office's
+   caregivers' availability and skills. Needs office-scoped policies through the caregiver's office.
+3. **`convert_care_request_to_client`** (SECURITY DEFINER) checks agency only. A one-line guard is
+   possible (`care_requests.virtual_office_id` is never NULL on DEV today), but it needs a product
+   decision on who converts which office's requests.
+4. **`approve-caregiver-registration`** (Edge Function, service role) checks role + agency only.
+   Registrations carry no office yet, so there is nothing to compare. Fix together with "FUTURE:
+   per-office caregiver registration links".
+
+Items 1–2 are RLS tightenings. Run the write-path audit first (every writer of those tables, not
+just the named ones), because the service role bypasses RLS and the authenticated client doesn't.
 
 ## OPEN: Ripple care-plan module — defaults awaiting Ripple, and deferred features
 
