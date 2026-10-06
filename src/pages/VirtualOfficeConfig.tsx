@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { AppLayout } from "@/components/AppLayout";
@@ -27,6 +27,8 @@ import {
 
 const VirtualOfficeConfig = () => {
   const { id } = useParams();
+  // S11: the dashboard's "Compliance settings" link opens ?tab=compliance
+  const [search] = useSearchParams();
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
@@ -214,7 +216,7 @@ const VirtualOfficeConfig = () => {
           )}
         </div>
 
-        <Tabs defaultValue="branding" className="space-y-4">
+        <Tabs defaultValue={search.get("tab") === "compliance" ? "compliance" : "branding"} className="space-y-4">
           <TabsList className="h-auto flex-wrap justify-start">
             <TabsTrigger value="branding">Branding</TabsTrigger>
             <TabsTrigger value="area">Service Area</TabsTrigger>

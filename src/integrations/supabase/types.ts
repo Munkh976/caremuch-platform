@@ -5607,6 +5607,10 @@ export type Database = {
           user_id: string
         }[]
       }
+      get_enforcement_readiness: {
+        Args: { _days?: number; _office_id: string }
+        Returns: Json
+      }
       get_my_care_team: {
         Args: never
         Returns: {

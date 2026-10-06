@@ -1362,6 +1362,17 @@ PGlite `ui-s9b`, DEV `ui-s9` and round7; rollback-proven. Q11 (billing week) is 
   event. Same for `care_plan_module_enabled` turned off directly (no RPC turns the module off).
 - Changing that policy (e.g. the guard trigger refusing flag changes outside the RPC) needs separate owner approval.
 
+## OPEN (Ripple S11): dashboard notes
+
+**Status:** Logged 2026-10-06.
+- At 390 px the existing Dashboard (header buttons, charts) is wider than the screen for every user, Kind Care included
+  (round9 K0 baseline). The S11 section itself fits; the older layout was not changed in S11.
+- "Expiring credentials" counts required credentials missing too (as the S3 panel does), so a new caregiver with no
+  credentials adds one row per required type.
+- Enforcement readiness checks the assigned caregiver for assigned shifts; for unassigned shifts only the client-level
+  reasons (authorization / units) can be known. `group_full` and the older rules block whatever the switch, so they
+  aren't counted.
+
 ## OPEN (Ripple S10): smaller eligibility-display notes
 
 **Status:** Logged 2026-10-06.

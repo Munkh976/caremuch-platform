@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AppLayout } from "@/components/AppLayout";
-import { NotesReviewPanel } from "@/components/compliance/notes/NotesReviewPanel";
+import { ComplianceSection } from "@/components/compliance/dashboard/ComplianceSection";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { usePendingApprovals } from "@/hooks/usePendingApprovals";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
@@ -337,8 +337,9 @@ const Dashboard = () => {
             </Button>
           </div>
         </div>
-        {/* Ripple S8: notes to review / overdue (module offices, clinical tier only; renders nothing otherwise) */}
-        <NotesReviewPanel />
+        {/* Ripple S11: "Care plan compliance" (module offices, manager / agency_admin only; renders nothing otherwise).
+            Holds the S8 notes / S9 billing panel, moved here. */}
+        <ComplianceSection />
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {pendingCount > 0 && (

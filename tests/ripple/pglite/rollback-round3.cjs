@@ -1,7 +1,7 @@
 // UI round 3 rollback proofs: each round-3 migration's rollback (docs/rollback/) restores the exact
 // catalog from before it (tables, columns, function bodies + ACLs, triggers, policies, constraints,
 // grants), and re-applying after the rollback equals the first apply. Applied and rolled back in
-// reverse order: S10, S9b, S9, late arrival, S8 fix, S8, S7, S6 case number, S6, W2 void, S5, S4, W1.
+// reverse order: S11, S10, S9b, S9, late arrival, S8 fix, S8, S7, S6 case number, S6, W2 void, S5, S4, W1.
 // Usage: node tests/ripple/pglite/rollback-round3.cjs   (local PGlite, no network)
 const H = require("./harness.cjs");
 // md5(prosrc) of the nine readers W2 changes, as stored on DEV before the W2 push (Oct 5): the W2
@@ -34,6 +34,7 @@ const STEPS = [
   ["20261021120000_ui_s9_weekly_billing.sql", "ui_s9_rollback.sql"],
   ["20261022120000_s9b_billing_supplements.sql", "s9b_billing_supplements_rollback.sql"],
   ["20261023120000_s10_compliance_enforcement_switch.sql", "s10_compliance_enforcement_switch_rollback.sql"],
+  ["20261024120000_s11_enforcement_readiness.sql", "s11_enforcement_readiness_rollback.sql"],
 ].filter(([m]) => require("fs").existsSync(require("path").resolve(__dirname, "../../../supabase/migrations", m)));
 
 (async () => {
