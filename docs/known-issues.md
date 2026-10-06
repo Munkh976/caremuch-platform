@@ -1362,6 +1362,22 @@ PGlite `ui-s9b`, DEV `ui-s9` and round7; rollback-proven. Q11 (billing week) is 
   event. Same for `care_plan_module_enabled` turned off directly (no RPC turns the module off).
 - Changing that policy (e.g. the guard trigger refusing flag changes outside the RPC) needs separate owner approval.
 
+## OPEN (Ripple demo, Oct 6): the persistent demo office changes round1's page-text baseline
+
+**Status:** Logged 2026-10-06 — owner decision needed.
+- The owner-approved demo office ("Ripple Effects – Demo", `tests/ripple/demo/`) lives in the shared DEV demo agency.
+  `ui/round1.cjs` compares the existing Dashboard / Schedule / Clients / Caregivers text of an agency-wide admin (and the
+  Dashboard's agency-wide "Needs Your Attention" for an office manager) with a baseline saved before S0; the demo's
+  rows are agency-visible, so 5 of round1's comparisons differ while the demo exists (data, not code). Rounds 2–9 and
+  every orphan scan pass with the demo present. The demo's dates roll with the calendar, so refreshing the baseline
+  would only hold for a day.
+- Options: run round1 between `teardown-demo --apply` and `seed-demo --reset`; or move the demo into its own demo agency;
+  or teach round1 to leave out the demo office's rows.
+- Mia's ★ overdue credential (demo) also triggers the existing `certification_expired` rule, which blocks her for any later
+  shift whatever the compliance switch; the switch controls training / missing credentials / authorization / units.
+- The requirements document with "Flows 1–5" is not in the repo; the demo script maps the five flows from the
+  architecture doc and the UI slices (setup, onboarding, scheduling with eligibility, caregiver notes, review + billing).
+
 ## OPEN (Ripple S11): dashboard notes
 
 **Status:** Logged 2026-10-06.
