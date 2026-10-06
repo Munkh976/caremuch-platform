@@ -141,8 +141,9 @@ Roles: manager, agency_admin. The existing "Care Plan" (`/order-management`) is 
   (`plan_inservice_forms` / `plan_training_records`, readable by managers). If one exists it shows
   "This change requires retraining all caregivers for this client" and saves only after confirm; the
   server applies the same rule. Measure and narrative edits never warn.
-- **Progress notes tab R:** `progress_notes` + `_entries` (manager tier). **W:** `review_progress_note`,
-  `return_progress_note` (reason required), `void_progress_note`. Staff never author notes.
+- **Progress notes tab R (built in S8):** `list_notes_for_review` filtered to the client; Open / Print per note.
+  **W:** `review_progress_note` (Mark reviewed), `return_progress_note` (Submitted only; reason ≥ 10 characters in the UI).
+  `void_progress_note` is not exposed in S8. Staff never author or edit notes (Q10).
 - **Scheduling tab R:** `shifts`/`shift_assignments` (existing RLS), training rows, `client_orders`.
   Assign/Smart buttons open the **existing** `AssignShiftDialog` / `SmartAssignSheet`; no new assign
   path. **W:** `record_inservice_form`, `record_training_form`.
@@ -298,7 +299,7 @@ suite: Manual, Smart and Auto assign on a Kind Care shift identical); screenshot
 | **S6** | Training workflow + Scheduling tab | In-service / training-form sheets (`record_inservice_form`, `record_training_form`), "who can deliver" list, `list_caregivers_needing_retraining`, client schedules + existing `OrderWizardDialog`, existing Assign/Smart buttons. | Renewal → caregivers flip to "retraining needed" and appear on the list; already-assigned shifts stay assigned; after retraining they're assignable again; no new assign code path (grep). |
 | S6b *(optional, until Ripple answers the ratio question)* | Group sessions | `/group-sessions` page (§3.8): `create_group_session`, `set_shift_group_session`, menu item `group_sessions` (manager, agency_admin, scheduler). | Two caregivers with 3 clients each in one session assign; a 4th client for one caregiver shows `group_full`; linking the same client twice or a wrong slot shows the server message; Schedule screens unchanged. |
 | **S7** (done Oct 5) | Caregiver progress note | `/caregiver/notes/:shiftId`; Today/History buttons, "Notes due"; `create_progress_note_for_shift` → `get_progress_note_for_caregiver` → `save_progress_note_draft` → `submit_progress_note`. | CLS: one block per this_agency objective; respite: narrative required; arrival at +5:01 bills 4 → 3; second open returns the same note; **return/resubmit:** a returned note shows the reason, reopens, and resubmits; another caregiver's shift is refused generically; no PHI in URL/storage/console; works at 390. |
-| **S8** | Staff review + print | Notes tab viewer, `review_progress_note`, `return_progress_note`, `void_progress_note`, print route. | Review FIFO across two authorizations as the server decides; a **per-period cap** refusal shows "would go over the authorization's weekly cap (N needed, M left this week)" and the note stays submitted; **respite note prints with the respite shell** and CLS with the CLS shell; print has no app chrome. |
+| **S8** (done Oct 5) | Staff review + print | `/progress-notes` (queue: Submitted / Returned / Reviewed / Overdue; client, caregiver, week filters; oldest first; menu "Notes to Review" with a count badge; dashboard panel), `/progress-notes/:noteId` (read-only detail, history, Mark reviewed, Return), `/progress-notes/:noteId/print` (paper layout), client Progress Notes tab. New reads `list_notes_for_review`, `get_progress_note_for_staff`, `get_notes_review_counts` (`20261019120000`, fix `20261019120200`); menu seed `20261019120100`. | Review FIFO across two authorizations as the server decides; a **per-period cap** refusal shows "would go over the authorization's weekly cap (N needed, M left this week)" and the note stays submitted; **respite note prints with the respite shell** and CLS with the CLS shell; print has no app chrome. |
 | **S9** | Weekly Billing | Page, `build_billing_batch`, `approve_clean_rows`, `approve_batch_notes`, `mark_batch_billed`, CSV. | Only reviewed notes in the batch, the rest listed as excluded with reasons; clean rows approve in bulk, late/returned ones individually; billed notes and batch locked; a restricted user can't build another office's batch. |
 | **S10** | Eligibility UI + enforcement switch | `EligibilityReport` key fix + Fix → links; Virtual Office Compliance card (G4). | Flag off: compliance issues show as advisory, Confirm enabled, Kind Care identical. Flag on: Blocked with the server text ("N projected units remain", "needs N units; M left this week", `group_full`), Smart omits the caregiver, caregiver Available Shifts shows only "Not bookable yet". |
 | **S11** | Dashboard compliance section | Panels via G1, G2, `list_clients_onboarding`, `list_caregivers_needing_retraining`, `list_overdue_notes`. | Kind-Care-only users see the dashboard exactly as before; counts equal the RPC output on a fixture; every row deep-links to the right record/tab. |
@@ -309,7 +310,8 @@ suite: Manual, Smart and Auto assign on a Kind Care shift identical); screenshot
 ## 8. Decisions and open questions
 
 All R and Q items from Oct 1 are resolved except **Q11** (billing week; default Monday–Sunday per
-office) and **Q12** (bulk-approve clean rows; built as a second button), both open with Ripple; see
+office), open with Ripple. **Q12 decided by the owner (Oct 5): per-note review only** — no bulk "approve clean
+rows" button, not in S8 and not in S9 (`approve_clean_rows` stays in the backend, unused by any screen); see
 `docs/Ripple_UI_Plan_Decisions_2026-10-01.md`. New open items from this refresh:
 - **W2 (decided Oct 4):** correct (with the three refusals) or void (only if never charged/allocated); never delete. Built in S4.
   - **Status after S4 (Oct 5):** `correct_service_authorization` is live (additive). **Void: approved and built after round 3 (`20261015120000`).** Before that, the
@@ -354,6 +356,20 @@ office) and **Q12** (bulk-approve clean rows; built as a second button), both op
   HH:MM in the office time zone (a time field has no seconds: the +5:01 boundary is proven through the RPC, and the UI shows
   only "Late arrival recorded"). Today's "N shifts you can pick up" counts only shifts the caregiver eligibility returns as
   bookable.
+- **S8 (owner decisions, Oct 5, final):**
+  - **Return: Submitted notes only.** `return_progress_note` is unchanged. A Reviewed note is never returned; the program lead
+    returns a note before marking it Reviewed. This is the intended workflow, not a known issue.
+  - **Return reason ≥ 10 characters (trimmed), UI only:** the Return button stays disabled with a hint until it is met; the
+    server keeps its non-empty check (known-issues).
+  - **Per-note review only (Q12).** "Mark reviewed" calls `review_progress_note` (billable; FIFO authorization chosen by the
+    server, its refusal shown and the note stays submitted). Non-billable review is not offered in S8.
+  - **Differences from the schema plan:** the FIFO authorization is chosen at review (the live code), not at submit; the
+    staff detail shows the one review *would* use as "FIFO, at review" for a submitted note. Overdue includes visits with no
+    note yet (started, past the day-after deadline). The audit uses the existing event types (no CHECK change).
+  - **History:** from the audit events (who / when). Only the latest return reason is kept on the note, so earlier returns show
+    who and when without their reason (known-issues).
+  - **Same-slice fix:** `20261019120200` re-creates the new `get_progress_note_for_staff` (same signature) so a note that is
+    neither submitted nor linked to an authorization (right after a return) reads; found by round6, rollback-proven.
 - **S6b:** group sessions wait for Ripple's staff:client ratio answer (default 1:3, office default
   max clients 3).
 - E-signature acceptance and notifications (R9) remain later phases (known-issues).

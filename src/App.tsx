@@ -47,6 +47,9 @@ import PublicOffice from "./pages/PublicOffice";
 import KnowledgeBase from "./pages/KnowledgeBase";
 import CarePlans from "./pages/ripple/CarePlans";
 import ClientCarePlan from "./pages/ripple/ClientCarePlan";
+import ProgressNotes from "./pages/ripple/ProgressNotes";
+import ProgressNoteDetail from "./pages/ripple/ProgressNoteDetail";
+import ProgressNotePrint from "./pages/ripple/ProgressNotePrint";
 import { TrainingClient, TrainingList } from "./pages/ripple/Training";
 import TrainingPrint from "./pages/ripple/TrainingPrint";
 import WeeklyBilling from "./pages/ripple/WeeklyBilling";
@@ -120,6 +123,9 @@ const App = () => (
           <Route path="/admin-user-management" element={<RequireRole allow={MANAGER_OR_ABOVE}><AdminUserManagement /></RequireRole>} />
           {/* Ripple care-plan module (UI S1): clinical tier + an office with the module on (Q3) */}
           <Route path="/care-plans" element={<RequireRole allow={CARE_PLAN_TIER}><RequireModuleOffice><CarePlans /></RequireModuleOffice></RequireRole>} />
+          <Route path="/progress-notes" element={<RequireRole allow={CARE_PLAN_TIER}><RequireModuleOffice><ProgressNotes /></RequireModuleOffice></RequireRole>} />
+          <Route path="/progress-notes/:noteId" element={<RequireRole allow={CARE_PLAN_TIER}><RequireModuleOffice><ProgressNoteDetail /></RequireModuleOffice></RequireRole>} />
+          <Route path="/progress-notes/:noteId/print" element={<RequireRole allow={CARE_PLAN_TIER}><RequireModuleOffice><ProgressNotePrint /></RequireModuleOffice></RequireRole>} />
           <Route path="/care-plans/:clientId" element={<RequireRole allow={CARE_PLAN_TIER}><RequireModuleOffice><ClientCarePlan /></RequireModuleOffice></RequireRole>} />
           <Route path="/training" element={<RequireRole allow={TRAINING_TIER}><RequireModuleOffice><TrainingList /></RequireModuleOffice></RequireRole>} />
           <Route path="/training/:clientId" element={<RequireRole allow={TRAINING_TIER}><RequireModuleOffice><TrainingClient /></RequireModuleOffice></RequireRole>} />

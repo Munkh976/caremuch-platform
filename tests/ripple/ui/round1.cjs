@@ -87,11 +87,12 @@ async function sidebarItems(page) {
 // page text, with the fixtures' own run id normalized (fixture emails carry it), so before/after compare the UI
 const normRun = (t) => t.replace(/ui1-(before|after)-[a-z0-9]+/g, "ui1-RUN");
 // Later slices add sections on purpose (S3: the credential-expirations panel on /caregivers for module
-// offices); they are hidden while reading, so this keeps guarding everything that existed before.
+// offices; S8: the notes-to-review panel on the Dashboard for module-office managers); they are hidden
+// while reading, so this keeps guarding everything that existed before.
 async function mainText(page) {
   await page.waitForTimeout(2500);
   const text = await page.evaluate(() => {
-    const added = [...document.querySelectorAll('[data-testid="expirations-panel"]')];
+    const added = [...document.querySelectorAll('[data-testid="expirations-panel"], [data-testid="notes-review-panel"]')];
     const prev = added.map((e) => e.style.display); added.forEach((e) => { e.style.display = "none"; });
     const t = document.querySelector("main")?.innerText ?? "";
     added.forEach((e, i) => { e.style.display = prev[i]; });

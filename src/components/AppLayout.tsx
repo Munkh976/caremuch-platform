@@ -28,12 +28,14 @@ import {
   ClipboardCheck,
   Receipt,
   FileStack,
+  FileCheck2,
   type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { usePermissions } from "@/hooks/usePermissions";
 import { usePendingApprovals } from "@/hooks/usePendingApprovals";
 import { useMenuBadgeCounts } from "@/hooks/useMenuBadgeCounts";
+import { useNotesReviewCounts } from "@/components/compliance/notes/useStaffNotes";
 import { useComplianceOffices } from "@/hooks/useComplianceOffices";
 
 interface AppLayoutProps {
@@ -54,6 +56,8 @@ export const AppLayout = ({ children }: AppLayoutProps) => {
   const { pendingCount } = usePendingApprovals();
   const menuBadgeCounts = useMenuBadgeCounts();
   const { hasModuleOffice } = useComplianceOffices();
+  const canReviewNotes = permissions.some((p) => p.module_code === "progress_notes_review" && p.can_read);
+  const { data: notesReview } = useNotesReviewCounts(hasModuleOffice && canReviewNotes);
 
   const isSystemAdmin = userRole === "system_admin";
 
@@ -102,6 +106,7 @@ export const AppLayout = ({ children }: AppLayoutProps) => {
     settings: Settings,
     schedule: Calendar,
     client_care_plans: ClipboardCheck,
+    progress_notes_review: FileCheck2,
     weekly_billing: Receipt,
     form_templates: FileStack,
   };
@@ -140,14 +145,14 @@ export const AppLayout = ({ children }: AppLayoutProps) => {
   const CATEGORY_ITEM_ORDER: Record<string, string[]> = {
     operations: [
       "dashboard", "client_inquiries", "clients", "caregiver_approvals", "caregivers",
-      "orders", "client_care_plans", "schedule", "time_off", "shift_trades", "weekly_billing", "notifications_outbox",
+      "orders", "client_care_plans", "progress_notes_review", "schedule", "time_off", "shift_trades", "weekly_billing", "notifications_outbox",
     ],
     administration: ["virtual_offices", "settings", "knowledge_base"],
   };
 
   // Ripple care-plan module items (Q3): only when the user can see an office with the module on.
   // Hidden while that is still loading, so they never flash for other agencies' managers.
-  const RIPPLE_MODULES = ["client_care_plans", "weekly_billing", "form_templates"];
+  const RIPPLE_MODULES = ["client_care_plans", "progress_notes_review", "weekly_billing", "form_templates"];
 
   const readable = permissions
     .filter(p => p.route && p.can_read)
@@ -168,6 +173,8 @@ export const AppLayout = ({ children }: AppLayoutProps) => {
     time_off: menuBadgeCounts.timeOff,
     shift_trades: menuBadgeCounts.shiftTrades,
     notifications_outbox: menuBadgeCounts.notificationOutbox,
+    // Ripple S8: submitted notes waiting for review in the module offices the user's clinical scope covers
+    progress_notes_review: (notesReview ?? []).reduce((n, c) => n + Number(c.to_review), 0),
   };
 
   const dynamicMenuItems = readable

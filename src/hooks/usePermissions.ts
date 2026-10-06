@@ -96,6 +96,7 @@ export const usePermissions = () => {
         client_dashboard: "/client-dashboard",
         // Ripple care-plan module (UI S1); shown only where an office has the module on (AppLayout)
         client_care_plans: "/care-plans",
+        progress_notes_review: "/progress-notes",
         weekly_billing: "/billing/weekly",
         form_templates: "/form-templates",
       };

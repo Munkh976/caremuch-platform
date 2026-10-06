@@ -1330,3 +1330,12 @@ password minimum and leaked-password protection; custom SMTP / Mode A.
 `/training/:clientId/print/inservice/:formId` prints the IPOS In-service form from the architecture description (header,
 case manager and program lead signature lines, shell field values). No scan of the paper form is in the repo; the owner will
 provide a redacted sample, and the layout is adjusted to it then. The 33.01_01F training form print follows arch §1.3.
+
+## OPEN (Ripple S8): return-reason minimum is UI-only; only the latest return reason is kept
+
+**Status:** Logged 2026-10-05 (owner decision 3, Oct 5).
+- The 10-character minimum for a return reason (trimmed) is enforced in the Return dialog only (button disabled with a hint).
+  `return_progress_note` is unchanged and requires a non-empty reason (≤ 1000). A direct API call can return a note with a
+  shorter reason.
+- `progress_notes.returned_reason` holds the latest reason only (the audit payload has no reason by design: no free text in
+  events). The staff history shows every return with who and when, and the reason on the latest one.

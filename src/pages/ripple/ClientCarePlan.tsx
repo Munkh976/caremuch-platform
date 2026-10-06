@@ -8,6 +8,7 @@ import { IposTab } from "@/components/compliance/careplan/IposTab";
 import { GoalsTab } from "@/components/compliance/careplan/GoalsTab";
 import { OnboardingTab } from "@/components/compliance/careplan/OnboardingTab";
 import { SchedulingTab } from "@/components/compliance/careplan/SchedulingTab";
+import { ClientNotesTab } from "@/components/compliance/notes/ClientNotesTab";
 import { useClientHead, useOnboarding, usePlans, useRefreshClient, useShells } from "@/components/compliance/careplan/useCarePlanData";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,10 +18,6 @@ import { useComplianceOffices } from "@/hooks/useComplianceOffices";
 import { onboardedCount, type CarePlanTab } from "@/lib/carePlan";
 
 const TABS: CarePlanTab[] = ["ipos", "goals", "notes", "scheduling", "onboarding"];
-
-function Placeholder({ slice, text }: { slice: string; text: string }) {
-  return <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">{text} <span className="block pt-1 text-xs">Arrives with slice {slice}.</span></CardContent></Card>;
-}
 
 /** /care-plans/:clientId (S4/S5): one client's plan of service. Ids only in the URL (?tab=). */
 export default function ClientCarePlan() {
@@ -87,7 +84,7 @@ export default function ClientCarePlan() {
               </div>
               <TabsContent value="ipos" className="mt-4"><IposTab clientId={clientId} officeId={officeId} caseNumber={client.data?.case_number ?? null} onChanged={refresh} /></TabsContent>
               <TabsContent value="goals" className="mt-4"><GoalsTab clientId={clientId} officeId={officeId} plan={active} onChanged={refresh} /></TabsContent>
-              <TabsContent value="notes" className="mt-4"><Placeholder slice="S8" text="Progress notes for review, return and void." /></TabsContent>
+              <TabsContent value="notes" className="mt-4"><ClientNotesTab clientId={clientId} officeId={officeId} /></TabsContent>
               <TabsContent value="scheduling" className="mt-4"><SchedulingTab clientId={clientId} officeId={officeId} /></TabsContent>
               <TabsContent value="onboarding" className="mt-4">
                 <OnboardingTab clientId={clientId} onboarding={onboarding.data} trainingVersion={active?.training_version ?? null} goTo={goTo} onChanged={refresh} />
