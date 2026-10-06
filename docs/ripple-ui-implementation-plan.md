@@ -173,9 +173,11 @@ manager override), Training for clients (`plan_training_records` ⨝ `care_plans
 Route `/billing/weekly`; manager, agency_admin. Office select (agency-wide users) + week picker
 starting on the office's `billing_week_start` (Q11 default Monday). **R:** `progress_notes`,
 `service_authorizations`, `billing_batches`, `get_billing_batch`, `shifts` (visits without a note).
-**W:** `review_progress_note`, `return_progress_note`, `build_billing_batch`, `approve_clean_rows`
-(Q12), `approve_batch_notes` (individual), `mark_batch_billed` (confirm dialog). Billed rows are
-read-only (server-locked). CSV export client-side, units only.
+**Built in S9 (Oct 6):** R `get_billing_week` (bill lines, exclusions with reasons, pending review, batch status) and
+`list_billing_week_status` (dashboard line). **W:** `build_billing_batch`, `approve_batch_notes` with the bill's notes ("Approve
+week", one confirmed action), `mark_batch_billed` (confirm). Reviews and returns happen in S8 only (the exclusions link there);
+`approve_clean_rows` is never used (Q12). Billed weeks are read-only (server-locked). CSV export client-side, units only, on
+demand, file `ripple-billing-<office code>-<week start>.csv`.
 
 ### 3.7 Form Templates + measure library (S2)
 Route `/form-templates`; manager, agency_admin (Q13: publish = agency_admin, or the office's manager
@@ -300,7 +302,7 @@ suite: Manual, Smart and Auto assign on a Kind Care shift identical); screenshot
 | S6b *(optional, until Ripple answers the ratio question)* | Group sessions | `/group-sessions` page (§3.8): `create_group_session`, `set_shift_group_session`, menu item `group_sessions` (manager, agency_admin, scheduler). | Two caregivers with 3 clients each in one session assign; a 4th client for one caregiver shows `group_full`; linking the same client twice or a wrong slot shows the server message; Schedule screens unchanged. |
 | **S7** (done Oct 5) | Caregiver progress note | `/caregiver/notes/:shiftId`; Today/History buttons, "Notes due"; `create_progress_note_for_shift` → `get_progress_note_for_caregiver` → `save_progress_note_draft` → `submit_progress_note`. | CLS: one block per this_agency objective; respite: narrative required; any late arrival bills 4 → 3 (no grace period since Oct 6: 09:01 is late, 09:00:59 is not); second open returns the same note; **return/resubmit:** a returned note shows the reason, reopens, and resubmits; another caregiver's shift is refused generically; no PHI in URL/storage/console; works at 390. |
 | **S8** (done Oct 5) | Staff review + print | `/progress-notes` (queue: Submitted / Returned / Reviewed / Overdue; client, caregiver, week filters; oldest first; menu "Notes to Review" with a count badge; dashboard panel), `/progress-notes/:noteId` (read-only detail, history, Mark reviewed, Return), `/progress-notes/:noteId/print` (paper layout), client Progress Notes tab. New reads `list_notes_for_review`, `get_progress_note_for_staff`, `get_notes_review_counts` (`20261019120000`, fix `20261019120200`); menu seed `20261019120100`. | Review FIFO across two authorizations as the server decides; a **per-period cap** refusal shows "would go over the authorization's weekly cap (N needed, M left this week)" and the note stays submitted; **respite note prints with the respite shell** and CLS with the CLS shell; print has no app chrome. |
-| **S9** | Weekly Billing | Page, `build_billing_batch`, `approve_clean_rows`, `approve_batch_notes`, `mark_batch_billed`, CSV. | Only reviewed notes in the batch, the rest listed as excluded with reasons; clean rows approve in bulk, late/returned ones individually; billed notes and batch locked; a restricted user can't build another office's batch. |
+| **S9** (done Oct 6) | Weekly Billing | `/billing/weekly`: week picker (office week, last complete week by default), Build week (`build_billing_batch`), bill by client → authorization with totals, "Not in this week's bill" with reasons and fix links, Approve week (one confirmed action = `approve_batch_notes` with the bill's notes; **no bulk "approve clean rows", Q12**), Mark billed (`mark_batch_billed`), Export CSV; dashboard line "Last week: billed / not yet billed". New reads `get_billing_week`, `list_billing_week_status` (`20261021120000`). | Only reviewed notes in the bill, the rest listed with reasons; FIFO across authorizations and the per-period cap shown; units lost to late arrival (no grace period); Approve week only when nothing waits for review and every reviewed note is in the bill; billed locks the batch and its notes (S8 too); CSV totals equal the table; a restricted user can't open another office's week. |
 | **S10** | Eligibility UI + enforcement switch | `EligibilityReport` key fix + Fix → links; Virtual Office Compliance card (G4). | Flag off: compliance issues show as advisory, Confirm enabled, Kind Care identical. Flag on: Blocked with the server text ("N projected units remain", "needs N units; M left this week", `group_full`), Smart omits the caregiver, caregiver Available Shifts shows only "Not bookable yet". |
 | **S11** | Dashboard compliance section | Panels via G1, G2, `list_clients_onboarding`, `list_caregivers_needing_retraining`, `list_overdue_notes`. | Kind-Care-only users see the dashboard exactly as before; counts equal the RPC output on a fixture; every row deep-links to the right record/tab. |
 | S4b *(optional, owner)* | EligibilityReport soft-vs-hard wording | Display only. | Override flow unchanged. |
@@ -372,6 +374,15 @@ rows" button, not in S8 and not in S9 (`approve_clean_rows` stays in the backend
     who and when without their reason (known-issues).
   - **Same-slice fix:** `20261019120200` re-creates the new `get_progress_note_for_staff` (same signature) so a note that is
     neither submitted nor linked to an authorization (right after a return) reads; found by round6, rollback-proven.
+- **S9 (owner decisions Oct 6, final):** per-note review only (Q12: no bulk approve anywhere); Q11 still open, default Monday–Sunday
+  per office in the office time zone; units lost to late arrival = 1 per late note (no grace period, Part 0 of round 7).
+  - **Live batch behaviour (read, not changed):** a note reviewed after the build but before approval is picked up by "Build week";
+    once the week is **approved**, `build_billing_batch` refuses to rebuild ("already reviewed and can't be rebuilt"), so a later
+    review stays out ("Reviewed after the week was approved"); after **billing** it stays out ("Reviewed after billing"). To avoid
+    stranding notes, "Approve week" is enabled only when no note of the week waits for review and every reviewed note is in the bill.
+    A note reviewed after its week is approved or billed still draws units from its authorization (review charges it) although it
+    can't join that week's bill (known-issues).
+  - "Units left after this week" shows the authorization's units and period cap left **now** (later reviews included).
 - **S6b:** group sessions wait for Ripple's staff:client ratio answer (default 1:3, office default
   max clients 3).
 - E-signature acceptance and notifications (R9) remain later phases (known-issues).

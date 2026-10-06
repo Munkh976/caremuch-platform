@@ -1,5 +1,7 @@
 import { Link } from "react-router-dom";
-import { AlertTriangle, FileCheck2 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { AlertTriangle, FileCheck2, Receipt } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { useComplianceOffices } from "@/hooks/useComplianceOffices";
 import { useCurrentProfile } from "@/hooks/useCurrentProfile";
@@ -15,10 +17,29 @@ export function NotesReviewPanel() {
   const { profile } = useCurrentProfile();
   const tier = !!profile?.roles.some((r) => CARE_PLAN_TIER.includes(r));
   const { data } = useNotesReviewCounts(tier && moduleOffices.length > 0);
+  // S9: last complete week's billing status per module office (list_billing_week_status; same tier and scope)
+  const { data: billing } = useQuery({
+    queryKey: ["billing-week-status"], enabled: tier && moduleOffices.length > 0, staleTime: 60 * 1000,
+    queryFn: async (): Promise<{ office_id: string; office_name: string; week_start: string; status: string }[]> => {
+      const { data: rows, error } = await supabase.rpc("list_billing_week_status");
+      if (error) throw error;
+      return (rows as unknown as { office_id: string; office_name: string; week_start: string; status: string }[]) ?? [];
+    },
+  });
   if (!tier || !data || data.length === 0) return null;
   const toReview = data.reduce((n, c) => n + Number(c.to_review), 0), overdue = data.reduce((n, c) => n + Number(c.overdue), 0);
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2" data-testid="notes-review-panel">
+      {(billing ?? []).map((b) => (
+        <Link key={b.office_id} to="/billing/weekly" className="sm:col-span-2" data-testid="billing-line" data-billing-status={b.status}>
+          <Card className="hover:shadow-md"><CardContent className="flex items-center gap-3 p-3">
+            <Receipt className="h-5 w-5 text-primary" aria-hidden="true" />
+            <p className="flex-1 text-sm"><span className="font-semibold">Last week: {b.status === "billed" ? "billed" : "not yet billed"}</span>
+              <span className="text-muted-foreground"> · {billing && billing.length > 1 ? `${b.office_name} · ` : ""}{b.status === "approved" ? "approved, waiting to be marked billed" : b.status === "open" ? "built, not approved" : b.status === "not_built" ? "not built yet" : "locked"}</span></p>
+            <span className="text-sm font-medium text-primary">Weekly Billing</span>
+          </CardContent></Card>
+        </Link>
+      ))}
       <Link to="/progress-notes?status=submitted"><Card className="hover:shadow-md"><CardContent className="flex items-center gap-3 p-4">
         <FileCheck2 className="h-6 w-6 text-primary" aria-hidden="true" />
         <div className="flex-1"><p className="font-semibold">Notes to review</p><p className="text-sm text-muted-foreground">Submitted progress notes waiting for review</p></div>
