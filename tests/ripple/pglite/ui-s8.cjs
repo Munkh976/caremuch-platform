@@ -5,14 +5,14 @@
 // (return Submitted only, resubmit, review, billed lock), audit payloads without PHI, refusals, ACLs.
 // Usage: node tests/ripple/pglite/ui-s8.cjs   (local, no network)
 const H = require("./harness.cjs");
-const S8 = "20261019120000_ui_s8_note_review.sql";
+const S8 = "20261019120000_ui_s8_note_review.sql", S8FIX = "20261019120200_ui_s8_note_detail_fix.sql";
 let seq = 0; const nid = () => H.U(9900 + ++seq);
 const ROW_KEYS = "arrived_late,caregiver_id,caregiver_name,client_first_name,client_id,client_last_initial,due_at,group_session,in_batch,note_id,overdue,returned_count,reviewed_at,scheduled_end,scheduled_start,service_date,service_type,shift_id,status,submitted_at,units_scheduled,units_to_bill";
 
 (async () => {
   const { rec, done } = H.recorder();
   const t = await H.boot(S8); const { db, q, day, call, must } = t;
-  await H.applyFiles(db, [S8]);
+  await H.applyFiles(db, [S8, S8FIX]);
   const { CX, G, OX, A, users } = H;
   await db.query("UPDATE virtual_office SET care_plan_module_enabled_at = now() - interval '10 days' WHERE id = $1", [OX]);
   const mt = Object.fromEntries((await q(`SELECT kind, id FROM measure_types WHERE agency_id IS NULL`)).map((r) => [r.kind, r.id]));
@@ -62,6 +62,9 @@ const ROW_KEYS = "arrived_late,caregiver_id,caregiver_name,client_first_name,cli
     `auth ${d0.authorization && d0.authorization.auth_number} preview ${d0.authorization && d0.authorization.preview}; entries ${d0.entries.map((e) => e.objective_text)}; history ${d0.history.map((h) => h.event.replace("progress_note_", ""))}`);
   // ---- workflow: return (submitted only) -> resubmit -> review -> billed lock ----
   const ret = await call("mgrX", "SELECT return_progress_note($1,$2)", [nC, "Please add the reinforcers used."]);
+  const dRet = await call("mgrX", DET, [nC]);
+  rec("W0 right after a return the staff detail reads (status returned, the reason on the latest return event)",
+    !dRet.err && dRet.v.note.status === "returned" && dRet.v.history.find((h) => h.event === "progress_note_returned")?.reason === "Please add the reinforcers used.", dRet.err || "ok");
   await must("cg", "SELECT submit_progress_note($1,'Gina Test')", [nC]);
   const rv = await call("mgrX", "SELECT review_progress_note($1,true,NULL)", [nC]);
   const d2 = (await call("mgrX", DET, [nC])).v;

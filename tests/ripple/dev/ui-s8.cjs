@@ -49,6 +49,9 @@ async function after(F) {
       && d0.history.map((h) => h.event).join(",") === "progress_note_created,progress_note_submitted"), `auth ${JSON.stringify(d0.authorization)}; history ${d0.history.map((h) => h.event)}`);
   const empty = await rpc(F.mgrX.c, "return_progress_note", { _note_id: nC, _reason: "   " });
   await must(F.mgrX.c, "return_progress_note", { _note_id: nC, _reason: "Please add the reinforcers used." });
+  const dRet = await rpc(F.mgrX.c, "get_progress_note_for_staff", { _note_id: nC });
+  rec("W0 right after a return the staff detail reads (status returned; the reason on the latest return event)",
+    pass(!dRet.err && dRet.v.note.status === "returned" && dRet.v.history.find((h) => h.event === "progress_note_returned")?.reason === "Please add the reinforcers used."), dRet.err || "ok");
   await must(F.cg.c, "submit_progress_note", { _note_id: nC, _typed_signature: "ZZ Caregiver" });
   await must(F.mgrX.c, "review_progress_note", { _note_id: nC, _billable: true, _non_billable_reason: null });
   const retRev = await rpc(F.mgrX.c, "return_progress_note", { _note_id: nC, _reason: "Too late to return this one." });
@@ -89,9 +92,12 @@ async function after(F) {
   let F;
   try {
     if (LABEL === "before") {
+      // S8 itself is live (20261019120000/20261019120100); "before" now gates the same-slice detail fix
+      // (20261019120200): the detail read must still be the body the fix's rollback restores.
       const s = await pgRead(async (c) => (await c.query(`SELECT (SELECT count(*)::int FROM pg_proc WHERE pronamespace='public'::regnamespace AND proname = ANY($1)) fns,
-        (SELECT count(*)::int FROM public.system_modules WHERE module_code = 'progress_notes_review') menu`, [[...NEW_FNS, "cp_office_note_queue"]])).rows[0]);
-      rec("B0 before the push: the 4 S8 functions and the menu entry are absent", pass(s.fns === 0 && s.menu === 0), JSON.stringify(s));
+        (SELECT md5(prosrc) FROM pg_proc WHERE pronamespace='public'::regnamespace AND proname = 'get_progress_note_for_staff') h`, [[...NEW_FNS, "cp_office_note_queue"]])).rows[0]);
+      rec("B0 before the detail fix: the 4 S8 functions are live and get_progress_note_for_staff is still the pre-fix body (md5 the rollback restores)",
+        pass(s.fns === 4 && s.h === "99fe3923e729f8ab0f3e6c3b97a6f3e8"), JSON.stringify(s));
     }
     F = await setup(); await setupB1(F);
     await checkNoBreak(F);
