@@ -5512,6 +5512,10 @@ export type Database = {
       }
       generate_order_number: { Args: never; Returns: string }
       get_billing_batch: { Args: { _batch_id: string }; Returns: Json }
+      get_billing_week: {
+        Args: { _office_id: string; _week_start?: string }
+        Returns: Json
+      }
       get_bookable_caregivers: {
         Args: { _day_of_week: number }
         Returns: {
@@ -5674,6 +5678,7 @@ export type Database = {
         Args: { _office_id: string; _within_days?: number }
         Returns: Json
       }
+      list_billing_week_status: { Args: never; Returns: Json }
       list_caregivers_needing_retraining: {
         Args: { _office_id: string }
         Returns: Json

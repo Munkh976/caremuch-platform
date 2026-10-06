@@ -14,7 +14,7 @@ const STUBS = ["stub.sql", "live_helpers.sql", "stub_b1.sql", "stub_b2.sql", "st
 const SCHED = ["check_assignment_eligibility", "check_assignment_eligibility_bulk", "check_caregiver_shifts_eligibility", "assign_caregiver_to_shift",
   "caregiver_pick_up_shift", "caregiver_pickup_trade_shift", "release_shift_assignments", "compute_earnings_for_time_entry"];
 // care-plan migrations (Phase A .. UI); the S1 menu seed is data for menu tables PGlite doesn't stub
-const migrations = () => fs.readdirSync(MIG).filter((f) => /^2026(10(0[6-9]|1[0-9])|1[12])\d{6}_/.test(f) && !/ripple_ui_menu_seeds/.test(f)).sort();
+const migrations = () => fs.readdirSync(MIG).filter((f) => /^2026(10(0[6-9]|[12][0-9])|1[12])\d{6}_/.test(f) && !/ripple_ui_menu_seeds/.test(f)).sort();
 
 const A = "56fbfe38-e8eb-40c1-ba27-07428f62ed2e", OX = "12faa863-017e-438c-966c-f67be9b726e7", OY = "56785edd-ce66-4bf0-a487-abb628f21fef";
 const B = "bbbbbbbb-0000-0000-0000-000000000001", OZ = "bbbbbbbb-0000-0000-0000-0000000000a1", TZ = "America/New_York";
