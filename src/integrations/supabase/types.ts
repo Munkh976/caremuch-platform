@@ -5247,6 +5247,30 @@ export type Database = {
         Returns: undefined
       }
       cp_objective_measures: { Args: { _objective_id: string }; Returns: Json }
+      cp_office_note_queue: {
+        Args: { _office_id: string }
+        Returns: {
+          arrived_late: boolean
+          caregiver_id: string
+          client_id: string
+          due_at: string
+          group_session: boolean
+          in_batch: boolean
+          note_id: string
+          overdue: boolean
+          returned_count: number
+          reviewed_at: string
+          scheduled_end: string
+          scheduled_start: string
+          service_date: string
+          service_type: string
+          shift_id: string
+          status: string
+          submitted_at: string
+          units_scheduled: number
+          units_used: number
+        }[]
+      }
       cp_period_left: {
         Args: {
           _auth: string
@@ -5609,10 +5633,12 @@ export type Database = {
           status: string
         }[]
       }
+      get_notes_review_counts: { Args: never; Returns: Json }
       get_progress_note_for_caregiver: {
         Args: { _note_id: string }
         Returns: Json
       }
+      get_progress_note_for_staff: { Args: { _note_id: string }; Returns: Json }
       get_public_office: { Args: { p_slug: string }; Returns: Json }
       get_user_role: {
         Args: { _user_id: string }
@@ -5662,6 +5688,7 @@ export type Database = {
         Returns: Json
       }
       list_my_notes_due: { Args: never; Returns: Json }
+      list_notes_for_review: { Args: { _office_id: string }; Returns: Json }
       list_overdue_notes: {
         Args: { _as_of?: string; _office_id: string }
         Returns: Json
