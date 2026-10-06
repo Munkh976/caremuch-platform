@@ -1,4 +1,4 @@
-// Ripple UI round 7 (S9: Weekly Billing) — browser acceptance on DEV with real logins.
+// Ripple UI round 7 (S9 + S9b: Weekly Billing, reopen after approval, supplementary bills) — browser acceptance on DEV with real logins.
 // Usage: node tests/ripple/ui/round7.cjs > some.log 2>&1   (never pipe a DEV suite; see README)
 // Disposable fixtures with readable on-screen names ("Zoe N.", "Ana Rivera"); the run tag stays in client last
 // names (shown as an initial), emails and the office name, where cleanup-orphans finds it.
@@ -133,6 +133,7 @@ const status = async (n) => (await admin.from("progress_notes").select("status")
 async function managerFlows(base, F, browser) {
   const ctx = await ctxFor(browser, 1440); const page = await ctx.newPage();
   const urls = []; page.on("framenavigated", (f) => { if (f === page.mainFrame()) urls.push(f.url()); });
+  const review = (n) => must(F.mgr.c, "review_progress_note", { _note_id: n, _billable: true, _non_billable_reason: null });
   await login(page, base, F.mgr);
   await page.locator('[data-testid="billing-line"]').first().waitFor({ timeout: 30000 }); await page.waitForTimeout(1000);
   const dash0 = await page.locator('[data-testid="billing-line"]').first().innerText();
@@ -144,58 +145,90 @@ async function managerFlows(base, F, browser) {
   rec("W0 default = the last complete week (Mon–Sun, office zone), not built; the reviewed notes show 'build the week to add it'",
     /Last complete week/.test(await page.locator('[data-testid="week-picker"]').innerText()) && /Not built/.test(st0) && r0 === "not_in_bill_yet", `${label0}; ${st0}; n1 ${r0}`);
   // build
-  await page.locator('[data-testid="build-week"]').click(); await page.locator('[data-testid="bill-table"]').waitFor({ timeout: 20000 }); await page.waitForTimeout(1200);
-  const table = await page.locator('[data-testid="bill-table"]').innerText();
-  const approveDisabled = await page.locator('[data-testid="approve-week"]').isDisabled(), blockers = await page.locator('[data-testid="approve-blockers"]').innerText().catch(() => "");
+  await page.locator('[data-testid="build-week"]').click(); await page.locator('[data-testid="batch-0-table"]').waitFor({ timeout: 20000 }); await page.waitForTimeout(1200);
+  const table = await page.locator('[data-testid="batch-0-table"]').innerText();
+  const approveDisabled = await page.locator('[data-testid="batch-0-approve"]').isDisabled(), blockers = await page.locator('[data-testid="batch-0-blockers"]').innerText().catch(() => "");
   await shot(page, "week-built-1440", true);
   await page.locator('[data-testid="exclusions"]').scrollIntoViewIfNeeded(); await shot(page, "exclusions-1440");
   const ex = { n3: await reasonOf(page, F.N.n3), n5: await reasonOf(page, F.N.n5), s6: await reasonOf(page, `shift:${F.S.s6}`) };
-  rec("B1 Build week: the bill groups by client then authorization (FIFO: ISK-2026-0410 takes the 09:00 + 09:01 notes, 8 / 7 / 1 lost to late arrival; respite for Max), client and week totals; nothing unreviewed is in it",
-    /Zoe N\./.test(table) && /Max O\./.test(table) && /#ISK-2026-0410/.test(table) && /#ISK-2026-0502/.test(table) && /Week total \(3 notes\)\s*12\s*11\s*1/.test(table) && !/ISK-2026-0417/.test(table) && !new RegExp(RUN).test(table),
+  rec("B1 Build week: the main bill groups by client then authorization (FIFO: ISK-2026-0410 takes the 09:00 + 09:01 notes, 8 / 7 / 1 lost to late arrival; respite for Max), client and bill totals; nothing unreviewed is in it",
+    /Zoe N\./.test(table) && /Max O\./.test(table) && /#ISK-2026-0410/.test(table) && /#ISK-2026-0502/.test(table) && /Main bill total \(3 notes\)\s*12\s*11\s*1/.test(table) && !/ISK-2026-0417/.test(table) && !new RegExp(RUN).test(table) && /Units left now/.test(table),
     table.replace(/\s+/g, " ").slice(0, 260));
-  rec("X1 Not in this week's bill: submitted (not reviewed), returned (waiting for the caregiver), a visit with no note; Approve week is disabled while a note waits for review",
+  rec("X1 Not in this week's bills: submitted (not reviewed), returned (waiting for the caregiver), a visit with no note; Approve week is disabled while a note waits for review",
     ex.n3 === "not_reviewed" && ex.n5 === "returned" && ex.s6 === "no_note" && approveDisabled && /submitted but not reviewed/.test(blockers), `${JSON.stringify(ex)}; approve disabled ${approveDisabled}; "${blockers.replace(/\s+/g, " ")}"`);
-  // fix one in S8: review the submitted note, then rebuild
+  { const c390 = await ctxFor(browser, 390); const p390 = await c390.newPage(); await login(p390, base, F.mgr); await openBilling(p390, base);
+    await p390.locator('[data-testid="exclusions"]').scrollIntoViewIfNeeded(); await p390.waitForTimeout(400); await shot(p390, "exclusions-390"); await c390.close(); }
+  // fix one in S8, then rebuild
   await page.locator(`[data-excluded="${F.N.n3}"] a`).click(); await page.locator('[data-testid="staff-note"]').waitFor({ timeout: 30000 }); await page.waitForTimeout(800);
   await page.locator('[data-testid="mark-reviewed"]').click(); await page.waitForTimeout(2500);
   await openBilling(page, base);
-  const rAfterReview = await reasonOf(page, F.N.n3), disabledBeforeRebuild = await page.locator('[data-testid="approve-week"]').isDisabled();
+  const rAfterReview = await reasonOf(page, F.N.n3), disabledBeforeRebuild = await page.locator('[data-testid="batch-0-approve"]').isDisabled();
   await page.locator('[data-testid="build-week"]').click(); await page.waitForTimeout(2500);
-  const table2 = await page.locator('[data-testid="bill-table"]').innerText();
-  rec("F1 fix it in S8 (Mark reviewed) → back on Weekly Billing it reads 'build the week to add it' (Approve still disabled) → Build week again adds it on the next authorization (FIFO rollover to ISK-2026-0417, weekly cap 16)",
-    rAfterReview === "not_in_bill_yet" && disabledBeforeRebuild && /#ISK-2026-0417/.test(table2) && /16 \/ week · 12 left/.test(table2) && /Week total \(4 notes\)\s*16\s*15\s*1/.test(table2),
+  const table2 = await page.locator('[data-testid="batch-0-table"]').innerText();
+  rec("F1 fix it in S8 (Mark reviewed) → 'build the week to add it' (Approve still disabled) → Build week again adds it on the next authorization (FIFO rollover to ISK-2026-0417, weekly cap 16)",
+    rAfterReview === "not_in_bill_yet" && disabledBeforeRebuild && /#ISK-2026-0417/.test(table2) && /16 \/ week · 12 left/.test(table2) && /Main bill total \(4 notes\)\s*16\s*15\s*1/.test(table2),
     `${rAfterReview}; disabled ${disabledBeforeRebuild}; ${table2.replace(/\s+/g, " ").slice(0, 200)}`);
   // approve (confirm with totals)
-  await page.locator('[data-testid="approve-week"]').click(); await page.locator('[data-testid="approve-confirm"]').waitFor(); await page.waitForTimeout(400);
+  await page.locator('[data-testid="batch-0-approve"]').click(); await page.locator('[data-testid="approve-confirm"]').waitFor(); await page.waitForTimeout(400);
   const confirmText = await page.locator('[data-testid="confirm-totals"]').innerText();
   await shot(page, "approve-confirm-1440");
-  await page.locator('[data-testid="confirm-approve"]').click(); await page.locator('[data-testid="approved-banner"]').waitFor({ timeout: 20000 }); await page.waitForTimeout(5000);
-  const buildGone = (await page.locator('[data-testid="build-week"]').count()) === 0;
-  rec("A1 Approve week: one action with a confirm showing the totals (4 notes, 16 scheduled, 15 billed, 1 lost); afterwards 'Approved … by Bren Miller', no Build button (an approved week can't be rebuilt)",
-    /Notes\s*4/.test(confirmText) && /Units billed\s*15/.test(confirmText) && /Units lost to late arrival\s*1/.test(confirmText) && /Bren Miller/.test(await page.locator('[data-testid="approved-banner"]').innerText()) && buildGone,
+  await page.locator('[data-testid="confirm-approve"]').click(); await page.locator('[data-testid="batch-0-approved-banner"]').waitFor({ timeout: 20000 }); await page.waitForTimeout(5000);
+  rec("A1 Approve week: one action with a confirm showing the totals (4 notes, 16 scheduled, 15 billed, 1 lost); afterwards 'Approved … by Bren Miller'",
+    /Notes\s*4/.test(confirmText) && /Units billed\s*15/.test(confirmText) && /Units lost to late arrival\s*1/.test(confirmText) && /Bren Miller/.test(await page.locator('[data-testid="batch-0-approved-banner"]').innerText()),
     confirmText.replace(/\s+/g, " "));
+  // S9b (a): a note reviewed after approval -> Build week again reopens -> approve again
+  await must(F.cgA.c, "submit_progress_note", { _note_id: F.N.n5, _typed_signature: "Ana Rivera" }); await review(F.N.n5);
+  await openBilling(page, base);
+  const rReopen = await reasonOf(page, F.N.n5), reopenLabel = await page.locator('[data-testid="build-week"]').innerText();
+  await page.locator('[data-testid="build-week"]').click(); await page.waitForTimeout(2500);
+  const st1 = await page.locator('[data-testid="batch-0-status"]').innerText(), table3 = await page.locator('[data-testid="batch-0-table"]').innerText();
+  await shot(page, "reopened-1440", true);
+  rec("S9b-A a note reviewed after approval: 'Reviewed after approval: build the week again to reopen it'; 'Build week again (reopens the approved bill)' → the main bill is open again with the note (5 notes) and must be approved again",
+    rReopen === "reviewed_after_approval" && /reopens the approved bill/.test(reopenLabel) && /Built — not approved/.test(st1) && /Main bill total \(5 notes\)\s*20\s*19\s*1/.test(table3),
+    `${rReopen}; "${reopenLabel}"; ${st1}; ${table3.replace(/\s+/g, " ").slice(-60)}`);
+  await page.locator('[data-testid="batch-0-approve"]').click(); await page.locator('[data-testid="approve-confirm"]').waitFor(); await page.locator('[data-testid="confirm-approve"]').click();
+  await page.locator('[data-testid="batch-0-approved-banner"]').waitFor({ timeout: 20000 }); await page.waitForTimeout(1500);
   // mark billed
-  await page.locator('[data-testid="mark-billed"]').click(); await page.locator('[data-testid="bill-confirm"]').waitFor(); await page.locator('[data-testid="confirm-bill"]').click();
-  await page.locator('[data-testid="billed-banner"]').waitFor({ timeout: 20000 }); await page.waitForTimeout(5000);   // let the toast clear before the screenshot
-  const banner = await page.locator('[data-testid="billed-banner"]').innerText(), actions = await page.locator('[data-testid="billing-actions"] button').allInnerTexts();
+  await page.locator('[data-testid="batch-0-mark-billed"]').click(); await page.locator('[data-testid="bill-confirm"]').waitFor(); await page.locator('[data-testid="confirm-bill"]').click();
+  await page.locator('[data-testid="batch-0-billed-banner"]').waitFor({ timeout: 20000 }); await page.waitForTimeout(5000);
+  const banner = await page.locator('[data-testid="batch-0-billed-banner"]').innerText();
+  const btns = await page.locator('[data-testid="batch-0"] button').allInnerTexts(), buildLeft = await page.locator('[data-testid="billing-actions"]').count();
   await shot(page, "billed-banner-1440", true);
-  rec("BL1 Mark billed → 'Billed on … by Bren Miller' banner; the page is read-only (only Export CSV remains); every bill note is billed",
-    /Billed on .* by Bren Miller/.test(banner) && actions.join(",") === "Export CSV" && (await status(F.N.n1)) === "billed" && (await status(F.N.n3)) === "billed", `actions ${actions.join(",")}`);
-  // CSV
-  const [dl] = await Promise.all([page.waitForEvent("download"), page.locator('[data-testid="export-csv"]').click()]);
-  const file = await dl.path(); const csv = fs.readFileSync(file, "utf8"); const name = dl.suggestedFilename();
-  const lines = csv.trim().split(/\r?\n/), total = lines[lines.length - 1].split(",");
-  rec("C1 Export CSV: ripple-billing-<office code>-<week start>.csv (no client names); one row per client x authorization + TOTAL that equals the table (4 notes, 16 / 15 / 1); units only",
-    name === `ripple-billing-re-portage-${F.ws}.csv` && lines.length === 5 && total[3] === "TOTAL" && total.slice(-4).join(",") === "4,16,15,1" && !/Nolan|Ortiz|\$/.test(csv + name),
-    `${name}; ${lines.length} lines; total ${total.slice(-4).join(",")}`);
-  // S8 shows the lock
+  rec("BL1 Mark billed → 'Billed on … by Bren Miller'; the bill is read-only (only Export CSV remains; no Build while nothing waits); every note billed",
+    /Billed on .* by Bren Miller/.test(banner) && btns.join(",") === "Export CSV" && buildLeft === 0 && (await status(F.N.n1)) === "billed" && (await status(F.N.n5)) === "billed", `buttons ${btns.join(",")}; build area ${buildLeft}`);
+  // CSV (main)
+  const [dl] = await Promise.all([page.waitForEvent("download"), page.locator('[data-testid="batch-0-export"]').click()]);
+  const csv = fs.readFileSync(await dl.path(), "utf8"); const name = dl.suggestedFilename(); const lines = csv.trim().split(/\r?\n/), total = lines[lines.length - 1].split(",");
+  rec("C1 Export CSV (main bill): ripple-billing-<office code>-<week start>.csv (no client names); one row per client x authorization + TOTAL equal to the table (5 notes, 20 / 19 / 1); units only",
+    name === `ripple-billing-re-portage-${F.ws}.csv` && lines.length === 5 && total[4] === "TOTAL" && total.slice(-4).join(",") === "5,20,19,1" && !/Nolan|Ortiz|\$/.test(csv + name), `${name}; ${lines.length} lines; total ${total.slice(-4).join(",")}`);
+  // S8 lock
   await page.goto(`${base}/progress-notes/${F.N.n1}`); await page.locator('[data-testid="staff-note"]').waitFor({ timeout: 30000 }); await page.waitForTimeout(800);
-  const locked = await page.locator('[data-testid="note-locked"]').count(), buttons = await page.locator('[data-testid="mark-reviewed"], [data-testid="open-return"]').count();
-  rec("L1 the S8 note detail shows 'Billed — locked' and no actions", locked === 1 && buttons === 0, `locked ${locked}; buttons ${buttons}`);
-  // late review after billing: the returned note is resubmitted and reviewed -> stays out
-  await must(F.cgA.c, "submit_progress_note", { _note_id: F.N.n5, _typed_signature: "Ana Rivera" }); await must(F.mgr.c, "review_progress_note", { _note_id: F.N.n5, _billable: true, _non_billable_reason: null });
+  const locked = await page.locator('[data-testid="note-locked"]').count(), sButtons = await page.locator('[data-testid="mark-reviewed"], [data-testid="open-return"]').count();
+  rec("L1 the S8 note detail shows 'Billed — locked' and no actions", locked === 1 && sButtons === 0, `locked ${locked}; buttons ${sButtons}`);
+  // S9b (b): a note reviewed after billing -> Build supplement 1 -> approve -> billed -> CSV -s1
+  const n6 = await must(F.cgA.c, "create_progress_note_for_shift", { _shift_id: F.S.s6 });
+  const st6 = (await admin.from("progress_notes").select("scheduled_start").eq("id", n6).single()).data.scheduled_start;
+  await must(F.cgA.c, "save_progress_note_draft", { _note_id: n6, _header: { client_arrived_at: st6 }, _entries: [], _narrative_text: null });
+  await must(F.cgA.c, "submit_progress_note", { _note_id: n6, _typed_signature: "Ana Rivera" }); await review(n6);
   await openBilling(page, base, `?week=${F.ws}`);
-  rec("LR1 a note reviewed after billing stays out of the billed week and shows 'Reviewed after billing'", (await reasonOf(page, F.N.n5)) === "reviewed_after_billing", await reasonOf(page, F.N.n5));
+  const rSup = await reasonOf(page, n6), supLabel = await page.locator('[data-testid="build-supplement"]').innerText();
+  await page.locator('[data-testid="build-supplement"]').click(); await page.locator('[data-testid="batch-1-table"]').waitFor({ timeout: 20000 }); await page.waitForTimeout(5000);
+  const sup = await page.locator('[data-testid="batch-1"]').innerText(), mainStill = await page.locator('[data-testid="batch-0-status"]').innerText();
+  await shot(page, "supplement-built-1440", true);
+  rec("S9b-B1 a note reviewed after billing: 'Reviewed after billing: build a supplement' + 'Build supplement 1' → Supplement 1 holds only that note (4 / 4), the main bill stays billed",
+    rSup === "reviewed_after_billing" && /Build supplement 1/.test(supLabel) && /Supplement 1/.test(sup) && /Supplement 1 total \(1 note\)\s*4\s*4\s*0/.test(sup) && /Billed/.test(mainStill), `${rSup}; "${supLabel}"; main ${mainStill}`);
+  await page.locator('[data-testid="batch-1-approve"]').click(); await page.locator('[data-testid="approve-confirm"]').waitFor(); await page.waitForTimeout(300);
+  const supConfirm = await page.locator('[data-testid="confirm-totals"]').innerText();
+  await page.locator('[data-testid="confirm-approve"]').click(); await page.locator('[data-testid="batch-1-approved-banner"]').waitFor({ timeout: 20000 }); await page.waitForTimeout(1200);
+  await page.locator('[data-testid="batch-1-mark-billed"]').click(); await page.locator('[data-testid="bill-confirm"]').waitFor(); await page.locator('[data-testid="confirm-bill"]').click();
+  await page.locator('[data-testid="batch-1-billed-banner"]').waitFor({ timeout: 20000 }); await page.waitForTimeout(5000);
+  const weekBadge = await page.locator('[data-testid="batch-status"]').innerText();
+  await shot(page, "supplement-billed-1440", true);
+  const [dl2] = await Promise.all([page.waitForEvent("download"), page.locator('[data-testid="batch-1-export"]').click()]);
+  const csv2 = fs.readFileSync(await dl2.path(), "utf8"); const name2 = dl2.suggestedFilename(); const l2 = csv2.trim().split(/\r?\n/), t2 = l2[l2.length - 1].split(",");
+  rec("S9b-B2 Supplement 1: approve (confirm shows Bill: Supplement 1 and its totals) → Mark billed → locked; the week reads 'Billed (main + 1 supplement)'; its CSV is …-s1.csv with its own totals (1 note, 4 / 4 / 0)",
+    /Bill\s*Supplement 1/.test(supConfirm) && (await status(n6)) === "billed" && /Billed \(main \+ 1 supplement\)/.test(weekBadge) && name2 === `ripple-billing-re-portage-${F.ws}-s1.csv` && t2.slice(-4).join(",") === "1,4,4,0" && /supplement 1/.test(csv2),
+    `${weekBadge}; ${name2}; total ${t2.slice(-4).join(",")}`);
   // week picker across a month boundary
   const prev = await page.locator('[data-testid="week-label"]').innerText();
   await page.getByRole("button", { name: "Previous week" }).click(); await page.waitForTimeout(1500);
@@ -206,14 +239,14 @@ async function managerFlows(base, F, browser) {
   await shot(page, "week-picker-current-1440");
   rec("P1 week picker: previous / next by 7 days across the Sep/Oct boundary (office week start); the URL holds only the week date; the current week is the last one",
     prevLabel !== prev && /^\?week=\d{4}-\d{2}-\d{2}$/.test(prevUrl) && nextDisabled && curLabel !== prev, `${prev} ← ${prevLabel}; current ${curLabel}; next disabled ${nextDisabled}`);
-  // dashboard after billing
+  // dashboard after billing (main + supplement)
   await page.goto(`${base}/dashboard`); await page.locator('[data-testid="billing-line"]').first().waitFor({ timeout: 30000 }); await page.waitForTimeout(800);
   const dash1 = await page.locator('[data-testid="billing-line"]').first().innerText();
   await shot(page, "dashboard-line-billed-1440");
-  rec("D2 dashboard line after billing: 'Last week: billed'", /Last week: billed/.test(dash1), dash1.replace(/\s+/g, " "));
+  rec("D2 dashboard line after the main bill and its supplement are billed: 'Last week: billed · locked (main + 1 supplement)'", /Last week: billed/.test(dash1) && /main \+ 1 supplement/.test(dash1), dash1.replace(/\s+/g, " "));
   const st = await storage(page);
   rec("S1 URLs carry only ids and the week date; storage holds only the auth token (the CSV is never stored)",
-    urls.every((u) => !/Zoe|Nolan|Max|Ortiz/.test(decodeURIComponent(u))) && Object.keys(st.local).every((k) => /^sb-.*-auth-token$/.test(k)) && Object.keys(st.session).length === 0 && !/ISK-|Week total|csv/i.test(JSON.stringify(st)),
+    urls.every((u) => !/Zoe|Nolan|Max|Ortiz/.test(decodeURIComponent(u))) && Object.keys(st.local).every((k) => /^sb-.*-auth-token$/.test(k)) && Object.keys(st.session).length === 0 && !/ISK-|total|csv/i.test(JSON.stringify(st)),
     `local ${Object.keys(st.local).map((k) => k.replace(/^sb-[a-z0-9]+-/, "sb-…-")).join(",")}; session ${Object.keys(st.session).length}`);
   await ctx.close();
 }
@@ -221,10 +254,10 @@ async function managerFlows(base, F, browser) {
 async function mobile(base, F, browser) {
   const c = await ctxFor(browser, 390); const p = await c.newPage(); await login(p, base, F.mgr);
   await p.locator('[data-testid="billing-line"]').first().waitFor({ timeout: 30000 }); await p.waitForTimeout(800); await shot(p, "dashboard-line-390");
-  await openBilling(p, base, `?week=${F.ws}`); await shot(p, "billed-banner-390"); await shot(p, "week-built-390", true);
+  await openBilling(p, base, `?week=${F.ws}`); await shot(p, "billed-banner-390"); await shot(p, "week-built-390", true); await shot(p, "supplement-billed-390", true);
   const fit = await noHScroll(p);
-  await p.locator('[data-testid="exclusions"]').scrollIntoViewIfNeeded(); await shot(p, "exclusions-390");
-  rec("M1 390px: the billed week (cards), exclusions and dashboard line render without horizontal page scroll", fit && (await p.locator('[data-testid="bill-cards"]').isVisible()), `fits ${fit}`);
+  // (exclusions-390 is taken right after the first build, while the list is populated)
+  rec("M1 390px: the billed week (cards), exclusions and dashboard line render without horizontal page scroll", fit && (await p.locator('[data-testid="batch-0-cards"]').isVisible()), `fits ${fit}`);
   await c.close();
 }
 
@@ -240,7 +273,7 @@ async function approveMobile(base, F, browser) {
   await must(F.mgr.c, "review_progress_note", { _note_id: note, _billable: true, _non_billable_reason: null });
   const c = await ctxFor(browser, 390); const p = await c.newPage(); await login(p, base, F.mgr);
   await openBilling(p, base, `?week=${n}`); await p.locator('[data-testid="build-week"]').click(); await p.waitForTimeout(2500);
-  await p.locator('[data-testid="approve-week"]').click(); await p.locator('[data-testid="approve-confirm"]').waitFor(); await p.waitForTimeout(400);
+  await p.locator('[data-testid="batch-0-approve"]').click(); await p.locator('[data-testid="approve-confirm"]').waitFor(); await p.waitForTimeout(400);
   await shot(p, "approve-confirm-390"); await p.keyboard.press("Escape");
   rec("M2 approve confirm at 390 (cancelled: the week stays open)", (await p.locator('[data-testid="batch-status"]').innerText()).includes("Built"), "");
   await c.close();

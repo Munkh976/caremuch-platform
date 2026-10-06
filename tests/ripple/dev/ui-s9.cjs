@@ -1,4 +1,5 @@
-// UI S9 Weekly Billing on DEV through real logins (mirrors pglite/ui-s9.cjs): grants; the week read (default
+// UI S9 + S9b Weekly Billing on DEV through real logins (mirrors pglite/ui-s9.cjs + ui-s9b.cjs): S9b reopen after approval, supplements 1 and 2,
+// no note in two batches, units charged once, per-batch totals; grants; the week read (default
 // last complete week, bill by client x authorization with FIFO across two authorizations, a weekly cap, a
 // 09:01 arrival = 1 unit lost, exclusions with reasons, pending review); the live writes (build / rebuild,
 // approve with the bill's notes, mark billed); late reviews before approval / after approval / after billing;
@@ -21,7 +22,7 @@ async function after(F) {
   const at = async (k) => pgRead(async (c) => (await c.query(`SELECT ($1::date + $2::int)::text d`, [ws, k])).rows[0].d);
   await must(F.mgrX.c, "create_care_plan", { _client_id: F.CX, _plan_type: "initial", _header: { effective_date: await at(-30), expiration_date: await at(300) } });
   await must(F.mgrX.c, "create_service_authorization", { _client_id: F.CX, _service_type: "cls", _auth_number: `ZZ-EARLY-${RUN}`, _units_authorized: 8, _effective_date: await at(-30), _expiration_date: await at(20) });
-  await must(F.mgrX.c, "create_service_authorization", { _client_id: F.CX, _service_type: "cls", _auth_number: `ZZ-LATE-${RUN}`, _units_authorized: 40, _effective_date: await at(-30), _expiration_date: await at(90), _period_type: "per_week", _units_per_period: 16 });
+  await must(F.mgrX.c, "create_service_authorization", { _client_id: F.CX, _service_type: "cls", _auth_number: `ZZ-LATE-${RUN}`, _units_authorized: 40, _effective_date: await at(-30), _expiration_date: await at(90), _period_type: "per_week", _units_per_period: 24 });
   await ins("caregiver_skills", [{ caregiver_id: F.G, care_type_code: "RESP0001", is_demo: true }]);
   const sh = async (k, code = "CLS0001", start = "09:00", end = "10:00") => {
     const id = await ins("shifts", { agency_id: A, virtual_office_id: F.OX, client_id: F.CX, order_title: `ZZ ${RUN}`, care_type_code: code, shift_date: await at(k), start_time: start, end_time: end, duration_hours: 1, status: "open", is_demo: true });
@@ -40,55 +41,93 @@ async function after(F) {
   await must(F.mgrX.c, "return_progress_note", { _note_id: N.e, _reason: "Please add the reinforcers." });
   const reasons = (w) => Object.fromEntries(w.excluded.map((x) => [Object.keys(S).find((k) => S[k] === x.shift_id), x.reason]));
   const week = (c = F.mgrX.c) => must(c, "get_billing_week", { _office_id: F.OX, _week_start: ws });
+  const main = (w) => w.batches.find((b) => b.supplement === 0) || null;
+  const lineOf = (b, k) => b.lines.find((l) => l.authorization.auth_number === `ZZ-${k}-${RUN}`);
+  const noteIds = (b) => b.lines.flatMap((l) => l.notes.map((n) => n.note_id));
   const w0 = await must(F.mgrX.c, "get_billing_week", { _office_id: F.OX, _week_start: null });
-  rec("W0 default week = last complete week (Monday, office zone); no batch: reviewed notes 'not_in_bill_yet'", pass(w0.week_start === ws && w0.batch === null && reasons(w0).a === "not_in_bill_yet"), `${w0.week_start}; ${JSON.stringify(reasons(w0))}`);
+  rec("W0 default week = last complete week (Monday, office zone); no batch: reviewed notes 'not_in_bill_yet'; next action 'build'",
+    pass(w0.week_start === ws && w0.batches.length === 0 && w0.next_action === "build" && reasons(w0).a === "not_in_bill_yet"), `${w0.week_start}; ${w0.next_action}; ${JSON.stringify(reasons(w0))}`);
   const t0 = await dbNow();
   await must(F.mgrX.c, "build_billing_batch", { _office_id: F.OX, _week_start: ws });
-  const w1 = await week(); const line = (w, k) => w.lines.find((l) => l.authorization.auth_number === `ZZ-${k}-${RUN}`);
-  const E = line(w1, "EARLY"), L = line(w1, "LATE"); const r1 = reasons(w1);
-  rec("B1 bill: reviewed notes only, FIFO across two authorizations (EARLY: 09:00 + 09:01 = 8 scheduled / 7 billed / 1 lost to late arrival; LATE: the rollover), weekly cap 16 with 12 left, totals",
-    pass(E && E.units_scheduled === 8 && E.units_billed === 7 && E.units_lost_late === 1 && L && L.notes.length === 1 && L.authorization.period_left === 12 && w1.totals.units_billed === 11 && w1.totals.units_lost_late === 1),
-    `EARLY ${E && `${E.units_scheduled}/${E.units_billed}/${E.units_lost_late}`}; LATE ${L && `${L.units_billed}, left ${L.authorization.period_left}`}; totals ${JSON.stringify(w1.totals)}`);
+  const w1 = await week(); const m1 = main(w1);
+  const E = lineOf(m1, "EARLY"), L = lineOf(m1, "LATE"); const r1 = reasons(w1);
+  rec("B1 bill: reviewed notes only, FIFO across two authorizations (EARLY: 09:00 + 09:01 = 8 scheduled / 7 billed / 1 lost to late arrival; LATE: the rollover), weekly cap 24 with 20 left, totals",
+    pass(E && E.units_scheduled === 8 && E.units_billed === 7 && E.units_lost_late === 1 && L && L.notes.length === 1 && L.authorization.period_left === 20 && m1.totals.units_billed === 11 && m1.totals.units_lost_late === 1),
+    `EARLY ${E && `${E.units_scheduled}/${E.units_billed}/${E.units_lost_late}`}; LATE ${L && `${L.units_billed}, left ${L.authorization.period_left}`}; totals ${JSON.stringify(m1.totals)}`);
   rec("X1 exclusions: not_reviewed, returned, not_submitted / overdue draft, no_note, no_authorization_fits (respite without authorization); pending review 2",
     pass(r1.d === "not_reviewed" && r1.e === "returned" && ["not_submitted", "overdue"].includes(r1.f) && r1.g === "no_note" && r1.h === "no_authorization_fits" && w1.pending_review === 2), `${JSON.stringify(r1)}; pending ${w1.pending_review}`);
-  const gb = await must(F.mgrX.c, "get_billing_batch", { _batch_id: w1.batch.id });
-  const gbTot = gb.lines.reduce((a, l) => ({ s: a.s + Number(l.units_scheduled), b: a.b + Number(l.units_billed), l: a.l + Number(l.units_lost_late) }), { s: 0, b: 0, l: 0 });
-  rec("T1 the week read's totals equal the existing batch read's lines (scheduled / billed / lost to late)", pass(gbTot.s === w1.totals.units_scheduled && gbTot.b === w1.totals.units_billed && gbTot.l === w1.totals.units_lost_late), JSON.stringify(gbTot));
+  const perBatch = async (b) => { const gb = await must(F.mgrX.c, "get_billing_batch", { _batch_id: b.id });
+    const t = gb.lines.reduce((a, l) => ({ s: a.s + Number(l.units_scheduled), b: a.b + Number(l.units_billed), l: a.l + Number(l.units_lost_late) }), { s: 0, b: 0, l: 0 });
+    return t.s === b.totals.units_scheduled && t.b === b.totals.units_billed && t.l === b.totals.units_lost_late; };
+  rec("T1 the week read's totals equal the existing batch read's lines (scheduled / billed / lost to late)", pass(await perBatch(m1)), JSON.stringify(m1.totals));
   await review(N.d);
-  const lr1 = reasons(await week()).d; await must(F.mgrX.c, "build_billing_batch", { _office_id: F.OX, _week_start: ws }); const w2 = await week();
-  rec("LR1 reviewed after the build, before approval: 'not_in_bill_yet', then Build week picks it up", pass(lr1 === "not_in_bill_yet" && line(w2, "LATE").notes.length === 2), `before ${lr1}; LATE notes ${line(w2, "LATE").notes.length}`);
-  const bad = await rpc(F.mgrX.c, "approve_batch_notes", { _batch_id: w2.batch.id, _note_ids: [N.e] });
-  const earlyBill = await rpc(F.mgrX.c, "mark_batch_billed", { _batch_id: w2.batch.id });
-  await must(F.mgrX.c, "approve_batch_notes", { _batch_id: w2.batch.id, _note_ids: w2.lines.flatMap((l) => l.notes.map((n) => n.note_id)) });
+  const lr1 = reasons(await week()).d; await must(F.mgrX.c, "build_billing_batch", { _office_id: F.OX, _week_start: ws }); const w2 = await week(); const m2 = main(w2);
+  rec("LR1 reviewed after the build, before approval: 'not_in_bill_yet', then Build week picks it up", pass(lr1 === "not_in_bill_yet" && lineOf(m2, "LATE").notes.length === 2), `before ${lr1}; LATE notes ${lineOf(m2, "LATE").notes.length}`);
+  const bad = await rpc(F.mgrX.c, "approve_batch_notes", { _batch_id: m2.id, _note_ids: [N.e] });
+  const earlyBill = await rpc(F.mgrX.c, "mark_batch_billed", { _batch_id: m2.id });
+  await must(F.mgrX.c, "approve_batch_notes", { _batch_id: m2.id, _note_ids: noteIds(m2) });
   const w3 = await week();
   rec("A1 approving an unreviewed note (not in the bill) and billing before approval are refused; Approve week (the bill's notes) -> approved",
-    pass(/not in this batch/.test(bad.err || "") && /Approve every line/.test(earlyBill.err || "") && w3.batch.status === "approved"), `bad "${(bad.err || "ACCEPTED").slice(0, 30)}"; early bill "${(earlyBill.err || "ACCEPTED").slice(0, 30)}"; ${w3.batch.status}`);
+    pass(/not in this batch/.test(bad.err || "") && /Approve every line/.test(earlyBill.err || "") && main(w3).status === "approved"), `bad "${(bad.err || "ACCEPTED").slice(0, 30)}"; early bill "${(earlyBill.err || "ACCEPTED").slice(0, 30)}"; ${main(w3).status}`);
+  // S9b (a): reviewed after approval -> Build week again reopens -> re-approve
   await must(F.cg.c, "submit_progress_note", { _note_id: N.e, _typed_signature: "ZZ Caregiver" }); await review(N.e);
-  const rb = await rpc(F.mgrX.c, "build_billing_batch", { _office_id: F.OX, _week_start: ws }); const lr2 = reasons(await week()).e;
-  rec("LR2 (live) reviewed after approval: the rebuild is refused and the note shows 'reviewed_after_approval'", pass(/can't be rebuilt/.test(rb.err || "") && lr2 === "reviewed_after_approval"), `rebuild "${(rb.err || "ACCEPTED").slice(0, 45)}"; ${lr2}`);
-  await must(F.mgrX.c, "mark_batch_billed", { _batch_id: w2.batch.id });
+  const w4a = await week(); const lr2 = reasons(w4a).e;
+  const rb = await must(F.mgrX.c, "build_billing_batch", { _office_id: F.OX, _week_start: ws }); const w4 = await week(); const m4 = main(w4);
+  const approvedLeft = ((await admin.from("progress_notes").select("batch_approved_at").eq("billing_batch_id", m4.id)).data || []).filter((x) => x.batch_approved_at).length;
+  await must(F.mgrX.c, "approve_batch_notes", { _batch_id: m4.id, _note_ids: noteIds(m4) });
+  const reapproved = main(await week()).status;
+  rec("S9b-A reviewed after approval: 'reviewed_after_approval', next action 'reopen'; Build week again reopens the main bill (approvals cleared, the note added, open), then approve again",
+    pass(lr2 === "reviewed_after_approval" && w4a.next_action === "reopen" && rb.reopened === true && rb.supplement === 0 && w4.batches.length === 1 && m4.status === "open"
+      && noteIds(m4).includes(N.e) && approvedLeft === 0 && reapproved === "approved"), `reason ${lr2}; next ${w4a.next_action}; reopened ${rb.reopened}; approvals after reopen ${approvedLeft}; re-approved ${reapproved}`);
+  // billed
+  await must(F.mgrX.c, "mark_batch_billed", { _batch_id: m4.id });
+  const lock = { ret: await rpc(F.mgrX.c, "return_progress_note", { _note_id: N.a, _reason: "Billed note - try anyway" }), rev: await rpc(F.mgrX.c, "review_progress_note", { _note_id: N.a, _billable: true, _non_billable_reason: null }),
+    cg: await rpc(F.cg.c, "save_progress_note_draft", { _note_id: N.a, _header: {}, _entries: [], _narrative_text: null }),
+    nothing: await rpc(F.mgrX.c, "build_billing_batch", { _office_id: F.OX, _week_start: ws }) };
+  const w5 = await week(); const billedNotes = ((await admin.from("progress_notes").select("status").eq("billing_batch_id", m4.id)).data || []).map((x) => x.status);
+  rec("BL1 billed: main bill billed (by, when), every note billed; S8 return / review and the caregiver's save refused; with nothing waiting a rebuild is refused",
+    pass(main(w5).status === "billed" && !!main(w5).billed_at && !!main(w5).billed_by_name && billedNotes.every((x) => x === "billed") && Object.values(lock).every((x) => !!x.err) && /no reviewed note is waiting/.test(lock.nothing.err || "")),
+    `notes ${billedNotes.join(",")}; refusals ${Object.entries(lock).map(([k, v]) => `${k}:${v.err ? "ok" : "ACCEPTED"}`).join(",")}`);
+  // S9b (b): billed + late review -> supplement 1 -> approve -> billed -> locked; a second late note -> supplement 2
+  const av = async () => ((await admin.from("service_authorizations").select("units_authorized, units_available").eq("client_id", F.CX)).data || []).reduce((a, x) => a + Number(x.units_authorized) - Number(x.units_available), 0);
   await must(F.cg.c, "save_progress_note_draft", { _note_id: N.f, _header: {}, _entries: [], _narrative_text: null });
   await must(F.cg.c, "submit_progress_note", { _note_id: N.f, _typed_signature: "ZZ Caregiver" }); await review(N.f);
-  const w5 = await week();
-  const lock = { ret: await rpc(F.mgrX.c, "return_progress_note", { _note_id: N.a, _reason: "Billed note - try anyway" }), rev: await rpc(F.mgrX.c, "review_progress_note", { _note_id: N.a, _billable: true, _non_billable_reason: null }),
-    cg: await rpc(F.cg.c, "save_progress_note_draft", { _note_id: N.a, _header: {}, _entries: [], _narrative_text: null }), rebuild: await rpc(F.mgrX.c, "build_billing_batch", { _office_id: F.OX, _week_start: ws }) };
-  const billedNotes = ((await admin.from("progress_notes").select("status").eq("billing_batch_id", w2.batch.id)).data || []).map((x) => x.status);
-  rec("BL1 billed: batch billed (by, when), every bill note billed; S8 return / review, the caregiver's save and a rebuild refused; reviewed after billing stays out",
-    pass(w5.batch.status === "billed" && !!w5.batch.billed_at && !!w5.batch.billed_by_name && billedNotes.every((s) => s === "billed") && Object.values(lock).every((x) => !!x.err) && reasons(w5).f === "reviewed_after_billing"),
-    `${w5.batch.status}; notes ${billedNotes.join(",")}; refusals ${Object.entries(lock).map(([k, v]) => `${k}:${v.err ? "ok" : "ACCEPTED"}`).join(",")}; f ${reasons(w5).f}`);
-  const ev = ((await admin.from("events").select("event_type, payload, created_at").eq("subject_id", w2.batch.id).gte("created_at", t0)).data || []);
+  const w6a = await week(); const st6 = (await must(F.mgrX.c, "list_billing_week_status", {})).find((x) => x.office_id === F.OX); const used6 = await av();
+  const s1 = await must(F.mgrX.c, "build_billing_batch", { _office_id: F.OX, _week_start: ws }); const w6 = await week(); const b1 = w6.batches.find((b) => b.supplement === 1);
+  rec("S9b-B1 billed week + a later review: 'reviewed_after_billing', next 'supplement', dashboard 'supplement_needed'; Build creates supplement 1 with only that note; units unchanged by the build",
+    pass(reasons(w6a).f === "reviewed_after_billing" && w6a.next_action === "supplement" && st6.status === "supplement_needed" && s1.supplement === 1 && b1 && noteIds(b1).join() === N.f && (await av()) === used6),
+    `reason ${reasons(w6a).f}; next ${w6a.next_action}; dashboard ${st6.status}; s1 notes ${b1 && noteIds(b1).length}; units used ${used6} -> ${await av()}`);
+  await must(F.mgrX.c, "approve_batch_notes", { _batch_id: b1.id, _note_ids: noteIds(b1) }); await must(F.mgrX.c, "mark_batch_billed", { _batch_id: b1.id });
+  const lockF = await rpc(F.mgrX.c, "return_progress_note", { _note_id: N.f, _reason: "Billed in the supplement" });
+  const n7 = await must(F.cg.c, "create_progress_note_for_shift", { _shift_id: S.g });
+  const st7 = (await admin.from("progress_notes").select("scheduled_start").eq("id", n7).single()).data.scheduled_start;
+  await must(F.cg.c, "save_progress_note_draft", { _note_id: n7, _header: { client_arrived_at: st7 }, _entries: [], _narrative_text: null });
+  await must(F.cg.c, "submit_progress_note", { _note_id: n7, _typed_signature: "ZZ Caregiver" }); await review(n7);
+  const s2 = await must(F.mgrX.c, "build_billing_batch", { _office_id: F.OX, _week_start: ws }); const w7 = await week(); const b2 = w7.batches.find((b) => b.supplement === 2);
+  await must(F.mgrX.c, "approve_batch_notes", { _batch_id: b2.id, _note_ids: noteIds(b2) }); await must(F.mgrX.c, "mark_batch_billed", { _batch_id: b2.id });
+  const w8 = await week(); const st8 = (await must(F.mgrX.c, "list_billing_week_status", {})).find((x) => x.office_id === F.OX);
+  rec("S9b-B2 supplement 1 approved, billed, its note locked; a second late note -> supplement 2 -> billed; dashboard 'billed' with 2 supplements",
+    pass(!!lockF.err && w8.batches.find((b) => b.supplement === 1).status === "billed" && s2.supplement === 2 && noteIds(b2).join() === n7 && w8.batches.find((b) => b.supplement === 2).status === "billed" && st8.status === "billed" && st8.supplements === 2),
+    `lock ${lockF.err ? "refused" : "ACCEPTED"}; s2 ${s2.supplement}; dashboard ${st8.status}/${st8.supplements}`);
+  const all = (await admin.from("progress_notes").select("id, billing_batch_id, units_used, billable, status").eq("client_id", F.CX)).data || [];
+  const inBatches = all.filter((x) => w8.batches.some((b) => b.id === x.billing_batch_id));
+  const listed = w8.batches.flatMap(noteIds);
+  const charged = await av(); const notesUnits = all.filter((x) => x.billable && ["reviewed", "billed"].includes(x.status)).reduce((a, x) => a + Number(x.units_used), 0);
+  rec("C1 no note sits in two batches (each billed note listed once across main + 2 supplements); units charged once (authorization use = the reviewed notes' units)",
+    pass(listed.length === new Set(listed).size && listed.length === inBatches.length && charged === notesUnits), `listed ${listed.length} unique ${new Set(listed).size}; charged ${charged}, notes ${notesUnits}`);
+  const tots = []; for (const b of w8.batches) tots.push(await perBatch(b));
+  rec("T2 per batch (main, s1, s2) the totals equal the batch read's lines (what the CSV is built from)", pass(tots.every(Boolean) && tots.length === 3), tots.join(","));
+  const ev = ((await admin.from("events").select("event_type, payload").in("subject_id", w8.batches.map((b) => b.id)).gte("created_at", t0)).data || []);
   const types = ev.map((e) => e.event_type);
-  rec("A2 audit: build, approve and billed events on the batch (existing types), payloads ids / counts only (no names, no text)",
-    pass(types.includes("billing_batch_built") && types.includes("billing_batch_approved") && types.includes("billing_batch_billed") && !/ZZ|Park|reinforcers/.test(JSON.stringify(ev.map((e) => e.payload)))
-      && ev.every((e) => Object.keys(e.payload).every((k) => ["batch_id", "included", "excluded", "approved", "remaining", "clean_only", "notes", "units"].includes(k)))), `${types.join(", ")}`);
-  const st = (await must(F.mgrX.c, "list_billing_week_status", {})).find((x) => x.office_id === F.OX);
-  rec("D1 dashboard status: office X last week billed", pass(st && st.status === "billed" && st.week_start === ws), JSON.stringify(st));
+  rec("AU1 audit: builds (incl. reopened / supplement flags), approvals and billings on all three batches (existing types), ids / counts / flags only (no names, no text)",
+    pass(types.filter((x) => x === "billing_batch_billed").length === 3 && ev.some((e) => e.payload.reopened === true) && ev.some((e) => e.payload.supplement === 2) && !/ZZ|Park|reinforcers/.test(JSON.stringify(ev.map((e) => e.payload)))
+      && ev.every((e) => Object.keys(e.payload).every((k) => ["batch_id", "included", "excluded", "approved", "remaining", "clean_only", "notes", "units", "supplement", "reopened"].includes(k)))), `${ev.length} events: ${[...new Set(types)].join(", ")}`);
   const dl = []; let dn = 0;
   for (const [label, c] of [["hr_staff", F.hrX.c], ["scheduler", F.schX.c], ["caregiver", F.cg.c], ["client", F.cl.c], ["anon", anon], ["office-Y manager", F.mgrY.c], ["agency-B admin", F.aaB.c], ["system_admin", F.sysA.c]])
-    for (const [fn, args] of [["get_billing_week", { _office_id: F.OX, _week_start: ws }], ["build_billing_batch", { _office_id: F.OX, _week_start: ws }], ["approve_batch_notes", { _batch_id: w2.batch.id, _note_ids: [N.a] }], ["mark_batch_billed", { _batch_id: w2.batch.id }]]) {
+    for (const [fn, args] of [["get_billing_week", { _office_id: F.OX, _week_start: ws }], ["build_billing_batch", { _office_id: F.OX, _week_start: ws }], ["approve_batch_notes", { _batch_id: b2.id, _note_ids: [n7] }], ["mark_batch_billed", { _batch_id: b2.id }]]) {
       const r = await rpc(c, fn, args); dn++; if (!r.err || !DENY.test(r.err)) dl.push(`${label}->${fn}: ${r.err || "ALLOWED"}`); }
   const yStatus = await must(F.mgrY.c, "list_billing_week_status", {});
-  rec("R1 week read, build, approve and mark billed refused (generic) for hr_staff, scheduler, caregiver, client, anon, office-Y manager, agency-B admin, system_admin; office Y's status list doesn't show X",
+  rec("R1 week read, build (reopen / supplement), approve and mark billed refused (generic) for hr_staff, scheduler, caregiver, client, anon, office-Y manager, agency-B admin, system_admin; office Y's status doesn't show X",
     pass(dl.length === 0 && !yStatus.some((x) => x.office_id === F.OX)), dl.join("; ") || `${dn} refused`);
 }
 
@@ -98,8 +137,14 @@ async function after(F) {
   let F;
   try {
     if (LABEL === "before") {
-      const n = await pgRead(async (c) => (await c.query(`SELECT count(*)::int n FROM pg_proc WHERE pronamespace='public'::regnamespace AND proname = ANY($1)`, [NEW_FNS])).rows[0].n);
-      rec("B0 the 2 S9 reads are absent before the push", pass(n === 0), `${n}/2 present`);
+      // S9 itself is live; "before" now gates S9b (20261022120000): the pre-S9b schema and function bodies
+      const s = await pgRead(async (c) => (await c.query(`SELECT
+          (SELECT count(*)::int FROM information_schema.columns WHERE table_schema='public' AND table_name='billing_batches' AND column_name='supplement') col,
+          (SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname='billing_batches_virtual_office_id_week_start_key') uq,
+          (SELECT json_object_agg(proname, md5(prosrc)) FROM pg_proc WHERE pronamespace='public'::regnamespace AND proname IN ('build_billing_batch','get_billing_week','list_billing_week_status')) h`)).rows[0]);
+      rec("B0 before S9b: no supplement column, the one-batch-per-week unique constraint, the three bodies the rollback restores (md5)",
+        pass(s.col === 0 && s.uq === "UNIQUE (virtual_office_id, week_start)" && s.h.build_billing_batch === "5ac05000b721c324c463757ff77b011e" && s.h.get_billing_week === "2efc8f40105da7a0bf12ac5a927642f4" && s.h.list_billing_week_status === "e80f555a97ed6b509d22aa9ab5886066"),
+        JSON.stringify(s));
     }
     F = await setup(); await setupB1(F);
     await checkNoBreak(F);

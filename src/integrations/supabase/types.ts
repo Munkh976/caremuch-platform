@@ -117,6 +117,7 @@ export type Database = {
           reviewed_at: string | null
           reviewed_by: string | null
           status: Database["public"]["Enums"]["billing_batch_status"]
+          supplement: number
           virtual_office_id: string
           week_end: string
           week_start: string
@@ -132,6 +133,7 @@ export type Database = {
           reviewed_at?: string | null
           reviewed_by?: string | null
           status?: Database["public"]["Enums"]["billing_batch_status"]
+          supplement?: number
           virtual_office_id: string
           week_end: string
           week_start: string
@@ -147,6 +149,7 @@ export type Database = {
           reviewed_at?: string | null
           reviewed_by?: string | null
           status?: Database["public"]["Enums"]["billing_batch_status"]
+          supplement?: number
           virtual_office_id?: string
           week_end?: string
           week_start?: string

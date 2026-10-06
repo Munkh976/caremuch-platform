@@ -24,8 +24,10 @@ async function afterTests(F) {
   const put = async (t, scope, row, idcol = "id") => { const r = await ins(t, row, idcol); ((S[t] = S[t] || {})[scope] = S[t][scope] || []).push(r); return r; };
   const T = {}; for (const [sc, ag, of] of [["X", A, F.OX], ["Y", A, F.OY], ["Z", F.B, null]]) T[sc] = await put("form_templates", sc, { agency_id: ag, virtual_office_id: of, name: `ZZ IPOS ${sc} ${RUN}`, kind: "ipos" });
   T.W = await put("form_templates", "W", { agency_id: A, virtual_office_id: null, name: `ZZ IPOS agency-wide ${RUN}`, kind: "ipos" });
-  const V = {}; for (const sc of ["X", "Y", "Z", "W"]) V[sc] = await put("form_template_versions", sc, { template_id: T[sc], version: 1, status: "published", is_current: true });
+  // fields first, then publish: since Phase B1 the fields of a published version can't be changed (guard trigger)
+  const V = {}; for (const sc of ["X", "Y", "Z", "W"]) V[sc] = await put("form_template_versions", sc, { template_id: T[sc], version: 1, status: "draft", is_current: false });
   for (const sc of ["X", "Y", "Z", "W"]) await put("form_template_fields", sc, { template_version_id: V[sc], field_key: "f", label: "F", field_type: "text", storage: "field_value" });
+  for (const sc of ["X", "Y", "Z", "W"]) { const { error } = await admin.from("form_template_versions").update({ status: "published", is_current: true }).eq("id", V[sc]); if (error) throw new Error(`publish ${sc}: ${error.message}`); }
   await put("measure_types", "Z", { agency_id: F.B, kind: "tally", label: `ZZ tally ${RUN}` });
   const mA = await put("measure_types", "A", { agency_id: A, kind: "tally", label: `ZZ tally A ${RUN}` });
   const mZ = S.measure_types.Z[0];
@@ -106,8 +108,8 @@ async function afterTests(F) {
   const avail = async () => Number((await admin.from("service_authorizations").select("units_available").eq("id", AU.X).single()).data.units_available);
   const note = (shift, extra) => ({ agency_id: A, virtual_office_id: F.OX, client_id: F.CX, caregiver_id: F.G, shift_id: shift, authorization_id: AU.X, note_kind: "cls", units_scheduled: 4, ...extra });
   const steps = [`authorized 20 -> available ${await avail()}`];
-  const n1 = await put("progress_notes", "U", note(F.shifts[0], { service_date: "2026-11-02", scheduled_start: "2026-11-02T13:00:00Z", client_arrived_at: "2026-11-02T13:04:00Z" }));
-  const a1 = await avail(); steps.push(`on-time (4 min) 4 -> ${a1}`);
+  const n1 = await put("progress_notes", "U", note(F.shifts[0], { service_date: "2026-11-02", scheduled_start: "2026-11-02T13:00:00Z", client_arrived_at: "2026-11-02T13:00:00Z" }));
+  const a1 = await avail(); steps.push(`on-time (13:00) 4 -> ${a1}`);
   const n2 = await put("progress_notes", "U", note(F.shifts[1], { service_date: "2026-11-03", scheduled_start: "2026-11-03T13:00:00Z", client_arrived_at: "2026-11-03T13:06:00Z" }));
   const l = (await admin.from("progress_notes").select("units_used, arrived_late").eq("id", n2).single()).data; const a2 = await avail();
   steps.push(`late (6 min) 4 -> used ${l.units_used} late=${l.arrived_late}, available ${a2}`);

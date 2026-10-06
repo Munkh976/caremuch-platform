@@ -1334,9 +1334,15 @@ password minimum and leaked-password protection; custom SMTP / Mode A.
 case manager and program lead signature lines, shell field values). No scan of the paper form is in the repo; the owner will
 provide a redacted sample, and the layout is adjusted to it then. The 33.01_01F training form print follows arch §1.3.
 
-## OPEN (Ripple S9): a note reviewed after its week was approved or billed stays out of that bill but still uses units
+## RESOLVED (Ripple S9b, 2026-10-06): a note reviewed after its week was approved or billed stays out of that bill but still uses units
 
-**Status:** Logged 2026-10-06 (live behaviour of the B2 billing RPCs; no function changed).
+**Resolution:** owner-approved S9b (`20261022120000`). An approved, unbilled bill is reopened by "Build week again" (approval
+cleared, note set rebuilt, audited, approve again). A billed week gets supplementary bills for the same week
+(`billing_batches.supplement`, unique per office + week + supplement) holding only reviewed notes outside every bill; each is
+approved, billed, locked and exported (`-s<N>.csv`) on its own. Signatures and grants unchanged; no new event type. Proven by
+PGlite `ui-s9b`, DEV `ui-s9` and round7; rollback-proven. Q11 (billing week) is still open with Ripple.
+
+**Original status:** Logged 2026-10-06 (live behaviour of the B2 billing RPCs; no function changed).
 - `build_billing_batch` refuses to rebuild a batch once it is approved (`reviewed`) or billed. Its own code has a branch meant
   to reopen an approved batch on rebuild, but the earlier refusal makes it unreachable.
 - So a note reviewed after its week was approved or billed stays out of that week's bill ("Reviewed after the week was approved" /

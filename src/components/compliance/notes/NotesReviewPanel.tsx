@@ -20,10 +20,10 @@ export function NotesReviewPanel() {
   // S9: last complete week's billing status per module office (list_billing_week_status; same tier and scope)
   const { data: billing } = useQuery({
     queryKey: ["billing-week-status"], enabled: tier && moduleOffices.length > 0, staleTime: 60 * 1000,
-    queryFn: async (): Promise<{ office_id: string; office_name: string; week_start: string; status: string }[]> => {
+    queryFn: async (): Promise<{ office_id: string; office_name: string; week_start: string; status: string; supplements: number }[]> => {
       const { data: rows, error } = await supabase.rpc("list_billing_week_status");
       if (error) throw error;
-      return (rows as unknown as { office_id: string; office_name: string; week_start: string; status: string }[]) ?? [];
+      return (rows as unknown as { office_id: string; office_name: string; week_start: string; status: string; supplements: number }[]) ?? [];
     },
   });
   if (!tier || !data || data.length === 0) return null;
@@ -35,7 +35,8 @@ export function NotesReviewPanel() {
           <Card className="hover:shadow-md"><CardContent className="flex items-center gap-3 p-3">
             <Receipt className="h-5 w-5 text-primary" aria-hidden="true" />
             <p className="flex-1 text-sm"><span className="font-semibold">Last week: {b.status === "billed" ? "billed" : "not yet billed"}</span>
-              <span className="text-muted-foreground"> · {billing && billing.length > 1 ? `${b.office_name} · ` : ""}{b.status === "approved" ? "approved, waiting to be marked billed" : b.status === "open" ? "built, not approved" : b.status === "not_built" ? "not built yet" : "locked"}</span></p>
+              <span className="text-muted-foreground"> · {billing && billing.length > 1 ? `${b.office_name} · ` : ""}{b.status === "approved" ? "approved, waiting to be marked billed" : b.status === "open" ? "built, not approved" : b.status === "not_built" ? "not built yet"
+                : b.status === "supplement_needed" ? "a note reviewed after billing needs a supplement" : b.supplements > 0 ? `locked (main + ${b.supplements} supplement${b.supplements === 1 ? "" : "s"})` : "locked"}</span></p>
             <span className="text-sm font-medium text-primary">Weekly Billing</span>
           </CardContent></Card>
         </Link>

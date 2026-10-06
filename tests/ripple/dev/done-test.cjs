@@ -144,7 +144,7 @@ async function scenario(F) {
     await must(F.cg.c, "save_progress_note_draft", { _note_id: N[k], _header: { client_arrived_at: plus(n, lateSec) },
       _entries: es.map((e) => ({ entry_id: e.id, data: Object.fromEntries(ms.map((m) => [m, { value: "Yes" }])) })), _narrative_text: n.note_kind === "respite" ? "Fixture respite session." : null });
     await must(F.cg.c, "submit_progress_note", { _note_id: N[k], _typed_signature: "ZZ G" }); };
-  await fill("n1", 0); await fill("n2", 301); await fill("n3", 59);   // on time at minute precision (no grace period, Oct 6) await fill("n4", 0); await fill("r1", 0);
+  await fill("n1", 0); await fill("n2", 301); await fill("n3", 59); await fill("n4", 0); await fill("r1", 0);   // n3 +0:59: on time at minute precision (no grace period, Oct 6)
   const ret = await rpc(F.mgrX.c, "return_progress_note", { _note_id: N.n2, _reason: "Please confirm the arrival time" });
   const afterRet = (await row(N.n2)).status;
   await fill("n2", 301);   // caregiver corrects and resubmits
