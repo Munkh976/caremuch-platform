@@ -2,7 +2,7 @@
 // as the demo program lead (Pat Morgan), inside a READ ONLY transaction that is rolled back (no session, no password).
 // Usage: node tests/ripple/demo/verify-demo.cjs
 const D = require("./demo-lib.cjs");
-const { pgRead, A } = D;
+const { pgRead } = D;
 const rows = []; const rec = (id, ok, d) => { rows.push({ id, ok }); console.log(`${id} ${ok ? "PASS" : "FAIL"}${d ? " :: " + d : ""}`); };
 
 (async () => {
@@ -14,6 +14,8 @@ const rows = []; const rec = (id, ok, d) => { rows.push({ id, ok }); console.log
     await c.query("BEGIN READ ONLY");
     try {
       const pre = {
+        agency: (await c.query(`SELECT (SELECT count(*)::int FROM public.virtual_office WHERE agency_id = $1) offices,
+          (SELECT count(*)::int FROM public.profiles WHERE email LIKE $2 AND agency_id <> $1) + (SELECT count(*)::int FROM public.virtual_office WHERE code = 'RPLDEMO' AND agency_id <> $1) elsewhere`, [off.agency_id, `%${D.EMAIL_TAG}`])).rows[0],
         office: (await c.query(`SELECT name, care_plan_module_enabled m, compliance_enforcement_enabled e FROM public.virtual_office WHERE id = $1`, [off.id])).rows[0],
         clients: (await c.query(`SELECT id, first_name || ' ' || last_name n, case_number FROM public.clients WHERE virtual_office_id = $1 ORDER BY 2`, [off.id])).rows,
       };
@@ -47,7 +49,8 @@ const rows = []; const rec = (id, ok, d) => { rows.push({ id, ok }); console.log
   });
   const name = new Map(r.clients.map((x) => [x.id, x.n]));
   const onb = Object.fromEntries(r.onboarding.map((o) => [name.get(o.client_id), o.onboarded ? "onboarded" : `${o.items.filter((i) => ["complete", "not_applicable"].includes(i.status)).length} of 8`]));
-  rec("O office: 'Ripple Effects – Demo', module on, enforcement OFF", r.office.name === D.OFFICE_NAME && r.office.m && !r.office.e, JSON.stringify(r.office));
+  rec("O own agency 'Ripple Effects – Demo Agency' with one office 'Ripple Effects – Demo', module on, enforcement OFF; nothing of the demo in any other agency",
+    r.office.name === D.OFFICE_NAME && r.office.m && !r.office.e && r.agency.offices === 1 && r.agency.elsewhere === 0, `${JSON.stringify(r.office)}; ${JSON.stringify(r.agency)}`);
   rec("F1 setup: active plans use ≥ 6 of the 8 measure types", r.kinds.n >= 6, `${r.kinds.n}: ${r.kinds.k}`);
   rec("F2 onboarding: Zoe and Max onboarded, Lily 5 of 8 (Clients pending); Zoe's IPOS v2 after a renewal (v1 superseded)",
     onb["Zoe Nguyen"] === "onboarded" && onb["Max Ortiz"] === "onboarded" && onb["Lily Park"] === "5 of 8" && r.zoePlan.length === 2 && r.zoePlan[1].version === 2 && r.zoePlan[1].status === "active",

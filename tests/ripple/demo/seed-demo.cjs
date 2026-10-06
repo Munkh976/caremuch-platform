@@ -1,4 +1,5 @@
-// Seeds the persistent Ripple demo office on DEV ("Ripple Effects – Demo", owner-approved data write, Oct 6).
+// Seeds the persistent Ripple demo on DEV: its own agency "Ripple Effects – Demo Agency" with the office "Ripple Effects – Demo"
+// (owner-approved data write, Oct 6; own agency per the owner's decision (b)).
 // Usage: node tests/ripple/demo/seed-demo.cjs [--apply | --reset]
 //   default  DRY RUN, read-only: the planned rows per table and what exists now.
 //   --apply  creates the demo office (refuses if it already exists).
@@ -8,13 +9,13 @@
 // without an RPC (the office, users, caregivers, clients, shifts, skills, case number) are written the way the UI's
 // own pages do, with is_demo = true. All names, goals and objectives are fictional and written for this demo.
 const D = require("./demo-lib.cjs");
-const { admin, pgRead, A, TZ } = D;
+const { admin, pgRead, TZ } = D;
 const APPLY = process.argv.includes("--apply"), RESET = process.argv.includes("--reset");
 const log = (...a) => console.log(...a);
 
 // ---- the scenario (also drives the dry-run plan) ----
 const PLAN = {
-  virtual_office: 1, profiles: 7, user_roles: 7, caregivers: 3, caregiver_skills: 6, clients: 3,
+  agency: 1, virtual_office: 1, profiles: 7, credential_types: "the default catalog", user_roles: 7, caregivers: 3, caregiver_skills: 6, clients: 3,
   form_templates: 10, care_plans: 4, service_authorizations: 4, group_sessions: 1,
 };
 
@@ -55,7 +56,8 @@ async function seed() {
   const day = (k) => at(W0, k);                 // k days after this Monday (negative = earlier weeks)
   log(`clock: today ${TODAY}, this week from ${W0} (office time zone ${TZ})`);
 
-  // ---- office + users ----
+  // ---- the demo agency (no RPC creates an agency; the test fixtures insert it the same way) + office + users ----
+  const A = await one("agency", { agency_name: D.AGENCY_NAME, city: "Portage", state: "MI", is_active: true });
   const OFF = await one("virtual_office", { agency_id: A, name: D.OFFICE_NAME, code: D.OFFICE_CODE, timezone: TZ, city: "Portage", state: "MI", is_demo: true });
   const U = {};
   for (const u of D.USERS) {
