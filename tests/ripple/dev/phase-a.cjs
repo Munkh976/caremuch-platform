@@ -117,14 +117,14 @@ async function afterTests(F) {
   await admin.from("progress_notes").update({ units_used: 99 }).eq("id", n1); const forced = (await admin.from("progress_notes").select("units_used").eq("id", n1).single()).data;
   await admin.from("service_authorizations").update({ units_available: 999 }).eq("id", AU.X); const a5 = await avail();
   steps.push(`direct set units_used=99 -> ${forced.units_used}; units_available=999 -> ${a5}`);
-  const e500 = await put("progress_notes", "U", note(F.shifts[4], { service_date: "2026-11-06", scheduled_start: "2026-11-06T13:00:00Z", client_arrived_at: "2026-11-06T13:05:00Z" }));
-  const e501 = await put("progress_notes", "U", note(F.shifts[5], { service_date: "2026-11-07", scheduled_start: "2026-11-07T13:00:00Z", client_arrived_at: "2026-11-07T13:05:01Z" }));
+  const e500 = await put("progress_notes", "U", note(F.shifts[4], { service_date: "2026-11-06", scheduled_start: "2026-11-06T13:00:00Z", client_arrived_at: "2026-11-06T13:00:59Z" }));
+  const e501 = await put("progress_notes", "U", note(F.shifts[5], { service_date: "2026-11-07", scheduled_start: "2026-11-07T13:00:00Z", client_arrived_at: "2026-11-07T13:01:00Z" }));
   const r500 = (await admin.from("progress_notes").select("units_used, arrived_late").eq("id", e500).single()).data;
   const r501 = (await admin.from("progress_notes").select("units_used, arrived_late").eq("id", e501).single()).data;
-  steps.push(`+5:00 -> used ${r500.units_used} late=${r500.arrived_late}; +5:01 -> used ${r501.units_used} late=${r501.arrived_late}`);
+  steps.push(`+0:59 -> used ${r500.units_used} late=${r500.arrived_late}; +1:00 -> used ${r501.units_used} late=${r501.arrived_late}`);   // no grace period (Oct 6): minute precision
   const colTypes = await pgRead(async (c) => (await c.query(`SELECT string_agg(column_name||':'||data_type, ', ' ORDER BY column_name) t FROM information_schema.columns WHERE table_schema='public' AND table_name='progress_notes' AND column_name IN ('scheduled_start','scheduled_end','client_arrived_at')`)).rows[0].t);
   steps.push(`types: ${colTypes}`);
-  rec("U1 units trigger: insert/void cycle, non-billable 0, late 4 -> 3, +5:00 not late / +5:01 late, derived columns not settable",
+  rec("U1 units trigger: insert/void cycle, non-billable 0, late 4 -> 3, +0:59 not late / +1:00 late (no grace period, Oct 6), derived columns not settable",
     pass(a1 === 16 && Number(l.units_used) === 3 && l.arrived_late === true && a2 === 13 && a3 === 16 && Number(nb.units_used) === 0 && a4 === 16 && Number(forced.units_used) === 4 && a5 === 16
       && Number(r500.units_used) === 4 && r500.arrived_late === false && Number(r501.units_used) === 3 && r501.arrived_late === true
       && colTypes === "client_arrived_at:timestamp with time zone, scheduled_end:timestamp with time zone, scheduled_start:timestamp with time zone"), steps.join("; "));

@@ -106,19 +106,19 @@ async function afterB2(F) {
   rec("N1/N2 create (idempotent, CM objective excluded) + caregiver payload exact keys", pass(!c1.err && c1b.v === c1.v && keysOk && view.entries.length === 1),
     `${c1.err || "ok"}; same id ${c1b.v === c1.v}; entries ${view && view.entries.length}; keys exact ${keysOk}`);
   const n1 = await note(c1.v); const { data: e1 } = await admin.from("progress_note_entries").select("id").eq("progress_note_id", c1.v);
-  await rpc(F.cg.c, "save_progress_note_draft", { _note_id: c1.v, _header: { client_arrived_at: plus(n1, 180) }, _entries: [{ entry_id: e1[0].id, data: data() }] });
+  await rpc(F.cg.c, "save_progress_note_draft", { _note_id: c1.v, _header: { client_arrived_at: plus(n1, 0) }, _entries: [{ entry_id: e1[0].id, data: data() }] });
   const sub = await audited("submit", F.cg.c, "submit_progress_note", { _note_id: c1.v, _typed_signature: "Fixture Caregiver" }, "progress_note_submitted");
   const rv = await audited("review", F.mgrX.c, "review_progress_note", { _note_id: c1.v, _billable: true }, "progress_note_reviewed", () => c1.v);
   rec("N4 submit + review FIFO (earliest-expiring authorization)", pass(!sub.err && !rv.err && (await note(c1.v)).authorization_id === F.early && (await avail(F.early)) === 4),
     `submit ${sub.err || "ok"}; review ${rv.err || "ok"}; EARLY left ${await avail(F.early)}`);
   // boundary + rollover
-  const n2 = await fill("S2", 300); await rpc(F.cg.c, "submit_progress_note", { _note_id: n2, _typed_signature: "x" });
-  const n3 = await fill("S3", 301); await rpc(F.cg.c, "submit_progress_note", { _note_id: n3, _typed_signature: "x" });
+  const n2 = await fill("S2", 59); await rpc(F.cg.c, "submit_progress_note", { _note_id: n2, _typed_signature: "x" });
+  const n3 = await fill("S3", 60); await rpc(F.cg.c, "submit_progress_note", { _note_id: n3, _typed_signature: "x" });
   await rpc(F.mgrX.c, "review_progress_note", { _note_id: n2, _billable: true }); const r3 = await rpc(F.mgrX.c, "review_progress_note", { _note_id: n3, _billable: true });
   const N2 = await note(n2), N3 = await note(n3);
-  rec("N6 +5:00 -> 4 not late; +5:01 -> 3 late; FIFO rolls to the later authorization once the earliest is exhausted",
+  rec("N6 +0:59 -> 4 not late; +1:00 -> 3 late (no grace period, Oct 6); FIFO rolls to the later authorization once the earliest is exhausted",
     pass(Number(N2.units_used) === 4 && !N2.arrived_late && Number(N3.units_used) === 3 && N3.arrived_late && N2.authorization_id === F.early && N3.authorization_id === F.late && !r3.err),
-    `+5:00 ${N2.units_used}/${N2.arrived_late}; +5:01 ${N3.units_used}/${N3.arrived_late}; S2 -> ${N2.authorization_id === F.early ? "EARLY" : "?"} (EARLY now ${await avail(F.early)}), S3 -> ${N3.authorization_id === F.late ? "LATE" : "?"}`);
+    `+0:59 ${N2.units_used}/${N2.arrived_late}; +1:00 ${N3.units_used}/${N3.arrived_late}; S2 -> ${N2.authorization_id === F.early ? "EARLY" : "?"} (EARLY now ${await avail(F.early)}), S3 -> ${N3.authorization_id === F.late ? "LATE" : "?"}`);
   // concurrency: two reviews race for the last units of one authorization (RACE: 4 units; two 4-unit respite notes)
   const ra = await fill("R3", 0), rb = await fill("RX", 0);
   for (const id of [ra, rb]) { await rpc(F.cg.c, "save_progress_note_draft", { _note_id: id, _narrative_text: "Calm session" }); await rpc(F.cg.c, "submit_progress_note", { _note_id: id, _typed_signature: "x" }); }

@@ -58,13 +58,13 @@ async function after(F) {
   F.notes = [nA];
   const nA2 = await must(F.cg.c, "create_progress_note_for_shift", { _shift_id: S.a });
   const n0 = (await admin.from("progress_notes").select("scheduled_start, units_scheduled").eq("id", nA).single()).data;
-  await must(F.cg.c, "save_progress_note_draft", { _note_id: nA, _header: { client_arrived_at: new Date(Date.parse(n0.scheduled_start) + 301000).toISOString() }, _entries: [], _narrative_text: null });
+  await must(F.cg.c, "save_progress_note_draft", { _note_id: nA, _header: { client_arrived_at: new Date(Date.parse(n0.scheduled_start) + 60000).toISOString() }, _entries: [], _narrative_text: null });
   const n1 = (await admin.from("progress_notes").select("units_used, arrived_late").eq("id", nA).single()).data;
   const notesForShift = ((await admin.from("progress_notes").select("id").eq("shift_id", S.a)).data || []).length;
   await must(F.cg.c, "submit_progress_note", { _note_id: nA, _typed_signature: "ZZ Caregiver" });
   await must(F.mgrX.c, "return_progress_note", { _note_id: nA, _reason: "Please add the reinforcers" });
   const l1 = await must(F.cg.c, "list_my_notes_due", {});
-  rec("N2 one note per shift; arrival +5:01 is late (units_used = scheduled - 1); after a return the list shows 'returned' with the reviewer's reason",
+  rec("N2 one note per shift; arrival 09:01 is late (no grace period) (units_used = scheduled - 1); after a return the list shows 'returned' with the reviewer's reason",
     pass(nA === nA2 && notesForShift === 1 && n1.arrived_late && n1.units_used === n0.units_scheduled - 1 && by(l1, S.a).note_status === "returned" && by(l1, S.a).returned_reason === "Please add the reinforcers"),
     `same id ${nA === nA2}; notes ${notesForShift}; units ${n0.units_scheduled} -> ${n1.units_used} (late ${n1.arrived_late}); a ${by(l1, S.a).note_status} "${by(l1, S.a).returned_reason}"`);
   const other = await rpc(F.cg.c, "create_progress_note_for_shift", { _shift_id: S.other });

@@ -103,7 +103,7 @@ async function setup() {
   F.S1 = await sh(F.CX, -1, "09:00", "10:00", "CLS0001", F.G1);            // CLS: write, save, late, submit, return, resubmit
   F.S2 = await sh(F.CX, -1, "11:00", "12:00", "RESP0001", F.G1);           // respite
   F.S3 = await sh(F.CX, 0, "00:15", "01:15", "CLS0001", F.G1);             // today, started
-  F.S4 = await sh(F.CX, -3, "09:00", "10:00", "CLS0001", F.G1);            // overdue; +5:01 arrival via the RPC
+  F.S4 = await sh(F.CX, -3, "09:00", "10:00", "CLS0001", F.G1);            // overdue; 09:00 then 09:01 arrival in the UI
   F.S5 = await sh(F.CX, -1, "13:00", "14:00", "CLS0001", F.G2);            // another caregiver's
   F.S6 = await sh(F.CX, 9, "09:00", "10:00", "CLS0001", F.G1);             // assigned, then released (cancelled assignment)
   await must(F.mgr.c, "release_shift_assignments", { _shift_ids: [F.S6], _reason: "round5 fixture: released" });
@@ -291,14 +291,15 @@ async function caregiverFlows(base, F, browser) {
     kind === "respite" && respBlocks === 0 && blocked && /session narrative/.test(missing) && /session narrative/.test(emptyRpc.error?.message || "") && (await noteRow(F.S2))[0].status === "submitted",
     `kind ${kind}; blocks ${respBlocks}; UI blocked ${blocked}; server "${(emptyRpc.error?.message || "ACCEPTED").slice(0, 50)}"`);
 
-  // ---- +5:01 arrival (exact boundary through the RPC), shown in the UI ----
-  const s4 = await must(F.cgA.c, "create_progress_note_for_shift", { _shift_id: F.S4 });
-  const s4row = (await admin.from("progress_notes").select("scheduled_start").eq("id", s4).single()).data;
-  await must(F.cgA.c, "save_progress_note_draft", { _note_id: s4, _header: { client_arrived_at: new Date(Date.parse(s4row.scheduled_start) + 301000).toISOString() }, _entries: [], _narrative_text: null });
+  // ---- 09:01 arrival (no grace period, Oct 6: one minute late loses the first unit), typed in the UI ----
   await openNote(page, base, F.S4);
+  await page.fill("#arrival", "09:00"); await page.getByRole("button", { name: "Save", exact: true }).click(); await page.waitForTimeout(2500);
+  const s4on = (await noteRow(F.S4))[0]; const s4onLate = await page.locator('[data-testid="late-arrival"]').count();
+  await page.fill("#arrival", "09:01"); await page.getByRole("button", { name: "Save", exact: true }).click(); await page.waitForTimeout(2500);
   const s4n = (await noteRow(F.S4))[0]; const s4late = await page.locator('[data-testid="late-arrival"]').isVisible(); const s4text = await page.locator("body").innerText();
-  rec("N8 arrival at +5:01 (seconds can't be typed in a time field, so set through the caregiver's RPC): the DB has units_used = scheduled - 1; the UI shows only 'Late arrival recorded'",
-    s4n.arrived_late && s4n.units_used === s4n.units_scheduled - 1 && s4late && !/\bunits?\b/i.test(s4text), `units ${s4n.units_scheduled} -> ${s4n.units_used}; UI late ${s4late}`);
+  rec("N8 no grace period: arrival 09:00 bills in full with no late notice; 09:01 (typed in the time field) gives units_used = scheduled - 1 in the DB and the UI shows only 'Late arrival recorded'",
+    !s4on.arrived_late && s4on.units_used === s4on.units_scheduled && s4onLate === 0 && s4n.arrived_late && s4n.units_used === s4n.units_scheduled - 1 && s4late && !/\bunits?\b/i.test(s4text),
+    `09:00 ${s4on.units_scheduled} -> ${s4on.units_used}; 09:01 ${s4n.units_scheduled} -> ${s4n.units_used}; UI late ${s4late}`);
 
   // ---- another caregiver's shift ----
   await openNote(page, base, F.S5);

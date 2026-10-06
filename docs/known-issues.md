@@ -1303,9 +1303,12 @@ just the named ones), because the service role bypasses RLS and the authenticate
 **Status:** Logged 2026-10-04 (backend A–D done on DEV). Current defaults (schema plan §12, §13):
 - **Q11 billing week:** Monday–Sunday, per office (`virtual_office.billing_week_start`, default 1)
   until Ripple confirms ISK's week.
-- **Q12 review:** per-note review plus "bulk-approve clean rows" until Ripple says otherwise.
-- **Q18 late arrival / early departure:** the current rule is kept (more than 5 minutes late loses
-  the first 15-minute unit). Billing only the units actually delivered awaits Ripple.
+- **Q12 review: decided by the owner (Oct 5):** per-note review only; no bulk "approve clean rows" in any screen.
+- **Late arrival, Ripple open question 4 (was Q18):** since Oct 6 there is **no grace period**: any arrival
+  after the scheduled start, at minute precision (09:00:59 is on time, 09:01 is late), loses the first
+  15-minute unit (`20261020120000`, units trigger). Notes submitted before that keep their stored units.
+  Still open with Ripple: what 1-4 minutes late, longer delays and early departure should cost (billing only
+  the full 15-minute units delivered). Not built until Ripple answers.
 - **E-signature:** notes carry a typed signature and timestamp. Acceptance of that as an
   e-signature awaits Ripple; electronic archiving is a later phase.
 - **Notifications (R9):** V1 shows computed status only (overdue notes, retraining list,
