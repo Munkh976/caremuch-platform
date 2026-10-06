@@ -20,6 +20,11 @@ import {
   type MyTradeRequest,
 } from "@/lib/caregiverBoard";
 import type { EligibilityResult } from "@/lib/shiftEligibility";
+import { dedupeIssues } from "@/lib/eligibilityCompliance";
+
+/** S10 (R6): the server reports every client-side care-plan check to the caregiver as one generic
+ *  'not_bookable' issue; show it once, and badge the shift "Not bookable yet" instead of "Not eligible". */
+const notBookable = (e: EligibilityResult | undefined) => !!e && e.blockers.some((b) => !b.overridable && b.code === "not_bookable");
 
 interface OpenShift {
   id: string;
@@ -274,7 +279,7 @@ const AvailableShifts = () => {
                               {t.clients?.first_name || "Unknown"} {t.clients?.last_name || ""}
                             </h3>
                             <Badge variant="secondary">Trade</Badge>
-                            {blocked && <Badge variant="destructive">Not eligible</Badge>}
+                            {blocked && <Badge variant="destructive" data-testid="badge-not-eligible">{notBookable(elig) ? "Not bookable yet" : "Not eligible"}</Badge>}
                             {needsApproval && <Badge variant="outline" className="border-warning/40 text-warning">Needs approval</Badge>}
                           </div>
                           <Badge variant="outline" className="mb-2">
@@ -319,15 +324,15 @@ const AvailableShifts = () => {
 
                       {blocked && elig && (
                         <div className="mt-2 text-xs text-destructive space-y-0.5">
-                          {elig.blockers.filter((b) => !b.overridable).map((b) => (
-                            <p key={b.code}>• {b.detail}</p>
+                          {dedupeIssues(elig.blockers.filter((b) => !b.overridable)).map((b, i) => (
+                            <p key={`${b.code}-${i}`} data-testid={`blocked-line-${b.code}`}>• {b.detail}</p>
                           ))}
                         </div>
                       )}
                       {needsApproval && elig && (
                         <div className="mt-2 text-xs text-warning space-y-0.5">
-                          {elig.overridable.map((b) => (
-                            <p key={b.code}>• {b.detail}</p>
+                          {elig.overridable.map((b, i) => (
+                            <p key={`${b.code}-${i}`}>• {b.detail}</p>
                           ))}
                         </div>
                       )}
@@ -377,7 +382,7 @@ const AvailableShifts = () => {
                             <h3 className="text-xl font-semibold">
                               {shift.clients?.first_name || "Unknown"} {shift.clients?.last_name || ""}
                             </h3>
-                            {blocked && <Badge variant="destructive">Not eligible</Badge>}
+                            {blocked && <Badge variant="destructive" data-testid="badge-not-eligible">{notBookable(elig) ? "Not bookable yet" : "Not eligible"}</Badge>}
                           </div>
                           <Badge variant="outline" className="mb-3">
                             {getCareTypeLabel(shift.care_type_code)}
@@ -429,16 +434,16 @@ const AvailableShifts = () => {
 
                       {blocked && elig && (
                         <div className="mt-3 text-xs text-destructive space-y-0.5">
-                          {elig.blockers.filter((b) => !b.overridable).map((b) => (
-                            <p key={b.code}>• {b.detail}</p>
+                          {dedupeIssues(elig.blockers.filter((b) => !b.overridable)).map((b, i) => (
+                            <p key={`${b.code}-${i}`} data-testid={`blocked-line-${b.code}`}>• {b.detail}</p>
                           ))}
                         </div>
                       )}
                       {!blocked && softIssues.length > 0 && (
                         <div className="mt-3 text-xs text-warning space-y-0.5">
                           <p className="font-medium">Heads up:</p>
-                          {softIssues.map((b) => (
-                            <p key={b.code}>• {b.detail}</p>
+                          {softIssues.map((b, i) => (
+                            <p key={`${b.code}-${i}`}>• {b.detail}</p>
                           ))}
                         </div>
                       )}

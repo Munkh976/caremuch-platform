@@ -1353,6 +1353,24 @@ PGlite `ui-s9b`, DEV `ui-s9` and round7; rollback-proven. Q11 (billing week) is 
   reviewed after billing should be billed (a supplementary batch for the same week, or the next week's bill).
 - Q11 (billing week) is still open with Ripple; the default is Monday–Sunday per office.
 
+## OPEN (Ripple S10): a direct table update of the enforcement flag bypasses the audit (close before production)
+
+**Status:** Logged 2026-10-06 (owner decision, S10 option 1).
+- The Compliance card changes `virtual_office.compliance_enforcement_enabled` only through `set_compliance_enforcement`, which
+  audits `compliance_enforcement_changed` {enabled, was_enabled}. The older path, a direct `UPDATE virtual_office` by an
+  agency_admin / system_admin (RLS + the admin-only guard trigger `guard_virtual_office_flags`), still works and writes no
+  event. Same for `care_plan_module_enabled` turned off directly (no RPC turns the module off).
+- Changing that policy (e.g. the guard trigger refusing flag changes outside the RPC) needs separate owner approval.
+
+## OPEN (Ripple S10): smaller eligibility-display notes
+
+**Status:** Logged 2026-10-06.
+- The caregiver pick-up refusal (`caregiver_pick_up_shift`, unchanged) repeats "This shift can't be booked yet…" once per
+  hidden check (e.g. training + units); Available Shifts shows it once (display dedupe only).
+- At 390 px the existing Schedule page's Unassigned table clips its Actions column (pre-existing scheduling layout, not
+  changed in S10; round8 opens the dialog with a dispatched click there).
+- The enforcement warning has no readiness counts (how many upcoming shifts would block); S11's dashboard panels cover them.
+
 ## OPEN (Ripple S8): return-reason minimum is UI-only; only the latest return reason is kept
 
 **Status:** Logged 2026-10-05 (owner decision 3, Oct 5).

@@ -31,7 +31,9 @@ import {
   durationHours,
 } from "@/lib/shiftAssignment";
 import { evaluateEligibilityBulk, type EligibilityResult } from "@/lib/shiftEligibility";
-import { EligibilityReport } from "@/components/schedule/EligibilityReport";
+import { ComplianceLines, EligibilityReport } from "@/components/schedule/EligibilityReport";
+import { complianceLines } from "@/lib/eligibilityCompliance";
+import { useComplianceOffices } from "@/hooks/useComplianceOffices";
 
 interface AssignShiftDialogProps {
   open: boolean;
@@ -182,6 +184,18 @@ export const AssignShiftDialog = ({
 
   const selectedResult = caregiverId ? eligibility.get(caregiverId) ?? null : null;
   const hardBlocked = !!selectedResult && !selectedResult.eligible;
+  // S10: an office using the care-plan module shows its care-plan checks with Fix links
+  // (advisory while enforcement is off). Display only; check_assignment_eligibility decides.
+  const { offices: complianceOffices } = useComplianceOffices();
+  const rippleOffice = complianceOffices.find((o) => o.id === shift?.virtual_office_id);
+  const eligContext = {
+    ripple: !!rippleOffice && (rippleOffice.moduleEnabled || rippleOffice.enforcementEnabled),
+    caregiverId,
+    clientId: shift?.client_id ?? null,
+  };
+  const advisoryLines = eligContext.ripple && selectedResult && selectedResult.eligible
+    ? complianceLines(selectedResult, eligContext).filter((l) => !l.blocked)
+    : [];
 
   // Proactively surface the override note for a hard-clean, soft-flagged pick,
   // instead of waiting for the server to reject the first submit attempt. Hard
@@ -324,7 +338,13 @@ export const AssignShiftDialog = ({
                 <Ban className="h-4 w-4" />
                 This caregiver cannot be assigned
               </div>
-              <EligibilityReport result={selectedResult} />
+              <EligibilityReport result={selectedResult} context={eligContext} />
+            </div>
+          )}
+
+          {advisoryLines.length > 0 && (
+            <div className="rounded-lg border border-warning/40 bg-warning/5 p-3">
+              <ComplianceLines lines={advisoryLines} />
             </div>
           )}
 

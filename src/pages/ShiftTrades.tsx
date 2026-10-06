@@ -24,6 +24,7 @@ import { assignShift } from "@/lib/shiftAssignment";
 import { evaluateEligibility, loadEligibilityRules, type EligibilityResult } from "@/lib/shiftEligibility";
 import { EligibilityReport } from "@/components/schedule/EligibilityReport";
 import { queueNotification } from "@/lib/notifications";
+import { useComplianceOffices } from "@/hooks/useComplianceOffices";
 
 const STAFF_ROLES = ["manager", "agency_admin", "system_admin", "scheduler"];
 
@@ -48,6 +49,8 @@ const ShiftTrades = () => {
   const [saving, setSaving] = useState(false);
 
   const isStaff = role !== null && STAFF_ROLES.includes(role);
+  // S10: care-plan checks with Fix links for an office using the module (staff only; display only).
+  const { offices: complianceOffices } = useComplianceOffices();
 
   const fetchTrades = useCallback(async () => {
     const { data, error } = await supabase
@@ -56,7 +59,7 @@ const ShiftTrades = () => {
         `*,
          shifts:shift_id (
            id, shift_date, start_time, end_time, duration_hours, care_type_code,
-           required_skills, client_id, status, order_title, pay_rate, agency_id,
+           required_skills, client_id, status, order_title, pay_rate, agency_id, virtual_office_id,
            clients ( first_name, last_name, city, zip_code )
          ),
          original_caregiver:original_caregiver_id ( id, first_name, last_name, email ),
@@ -427,7 +430,10 @@ const ShiftTrades = () => {
                 <Loader2 className="h-4 w-4 animate-spin" /> Running eligibility checks…
               </div>
             )}
-            {result && !checking && <EligibilityReport result={result} />}
+            {result && !checking && (() => {
+              const o = complianceOffices.find((x) => x.id === active?.shifts?.virtual_office_id);
+              return <EligibilityReport result={result} context={{ ripple: !!o && (o.moduleEnabled || o.enforcementEnabled), caregiverId: takerId || null, clientId: active?.shifts?.client_id ?? null }} />;
+            })()}
 
             {result && !result.autoApprovable && isStaff && (
               <div className="space-y-2">

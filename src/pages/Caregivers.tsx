@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -46,6 +46,9 @@ const Caregivers = () => {
   // Ripple care-plan module (S3): credentials panel + Details tab, training tier on module offices only
   const complianceTier = useComplianceTier();
   const [viewTab, setViewTab] = useState<"overview" | "credentials">("overview");
+  // S10: "Fix →" from an assign dialog opens /caregivers?caregiver=<id>&tab=credentials (ids only, no PHI)
+  const [deepLink] = useSearchParams();
+  const deepLinkDone = useRef(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const { services: careTypes, groupedOptions, optionFor } = useCareServices();
   const [availabilityCaregiver, setAvailabilityCaregiver] = useState<any>(null);
@@ -114,6 +117,15 @@ const Caregivers = () => {
 
     return () => subscription.unsubscribe();
   }, [navigate]);
+
+  useEffect(() => {
+    const id = deepLink.get("caregiver");
+    if (deepLinkDone.current || !id || caregivers.length === 0) return;
+    deepLinkDone.current = true;   // once per visit; the URL is tidied without a router navigation (no remount)
+    const cg = caregivers.find((c) => c.id === id);
+    if (cg) { setViewTab(deepLink.get("tab") === "credentials" ? "credentials" : "overview"); setViewCaregiver(cg); }
+    window.history.replaceState(window.history.state, "", window.location.pathname);
+  }, [caregivers, deepLink]);
 
   const fetchCaregivers = async (userId: string) => {
     try {

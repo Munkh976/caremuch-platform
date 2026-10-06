@@ -11,6 +11,7 @@ import { BrandingCard } from "@/components/virtual-office/BrandingCard";
 import { ServiceAreaCard } from "@/components/virtual-office/ServiceAreaCard";
 import { OperatingHoursCard } from "@/components/virtual-office/OperatingHoursCard";
 import { ContactCard, ContactValues } from "@/components/virtual-office/ContactCard";
+import { ComplianceCard } from "@/components/virtual-office/ComplianceCard";
 import {
   SchedulingOverridesCard,
   AgencyDefaults,
@@ -214,12 +215,13 @@ const VirtualOfficeConfig = () => {
         </div>
 
         <Tabs defaultValue="branding" className="space-y-4">
-          <TabsList>
+          <TabsList className="h-auto flex-wrap justify-start">
             <TabsTrigger value="branding">Branding</TabsTrigger>
             <TabsTrigger value="area">Service Area</TabsTrigger>
             <TabsTrigger value="hours">Operating Hours</TabsTrigger>
             <TabsTrigger value="contact">Contact</TabsTrigger>
             <TabsTrigger value="overrides">Scheduling Overrides</TabsTrigger>
+            <TabsTrigger value="compliance" data-testid="tab-compliance">Compliance</TabsTrigger>
           </TabsList>
 
           <TabsContent value="branding">
@@ -252,6 +254,9 @@ const VirtualOfficeConfig = () => {
               onChange={setOverrides}
               onWeightsTextChange={setWeightsText}
             />
+          </TabsContent>
+          <TabsContent value="compliance">
+            <ComplianceCard officeId={vo.id} officeName={vo.name} canManage={canManage} />
           </TabsContent>
         </Tabs>
       </div>

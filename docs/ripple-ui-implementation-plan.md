@@ -157,11 +157,14 @@ record, not a role ranking; owner, Oct 5). **Built in S7 (Oct 5).** Flow:
 carries only the shift id. Nothing is cached in local storage.
 
 ### 3.4 Eligibility display + enforcement switch (S10)
-`EligibilityReport`: the key fix (`${code}-${i}`) and an optional "Fix →" link per compliance code
-(`authorization_*`, `units_short*` → IPOS tab; `training_missing` → Scheduling tab; `credential_missing`
-→ caregiver profile). Text comes from the server. Virtual Office **Compliance card**: module switch,
-enforcement switch (warning + readiness counts), go-live date (read-only). Admin-only edit (guard
-trigger enforces).
+`EligibilityReport`: the key fix (`${code}-${i}`) and a "Fix →" link per compliance code
+(`authorization_*`, `units_short*` → IPOS / Authorizations; `training_missing` → the client's training page;
+`credential_missing`, `certification_*` → the caregiver's Credentials tab). Text comes from the server; only
+offices with the module (or enforcement) get the grouped care-plan lines, Kind-Care-only offices render as before.
+Virtual Office **Compliance card** (S10, done): module status and go-live date (read-only; Turn on via the existing
+audited seed RPC), enforcement switch with a confirm that states what changes; admin-only edit through
+`set_compliance_enforcement` (audited); managers read-only. Readiness counts in the warning were not built (S11
+dashboard panels cover them).
 
 ### 3.5 Caregiver profile (S3)
 Route `/caregivers/:caregiverId`, staff roles. Tabs: Overview (existing data), Background checks /
@@ -304,7 +307,7 @@ suite: Manual, Smart and Auto assign on a Kind Care shift identical); screenshot
 | **S8** (done Oct 5) | Staff review + print | `/progress-notes` (queue: Submitted / Returned / Reviewed / Overdue; client, caregiver, week filters; oldest first; menu "Notes to Review" with a count badge; dashboard panel), `/progress-notes/:noteId` (read-only detail, history, Mark reviewed, Return), `/progress-notes/:noteId/print` (paper layout), client Progress Notes tab. New reads `list_notes_for_review`, `get_progress_note_for_staff`, `get_notes_review_counts` (`20261019120000`, fix `20261019120200`); menu seed `20261019120100`. | Review FIFO across two authorizations as the server decides; a **per-period cap** refusal shows "would go over the authorization's weekly cap (N needed, M left this week)" and the note stays submitted; **respite note prints with the respite shell** and CLS with the CLS shell; print has no app chrome. |
 | **S9** (done Oct 6) | Weekly Billing | `/billing/weekly`: week picker (office week, last complete week by default), Build week (`build_billing_batch`), bill by client → authorization with totals, "Not in this week's bill" with reasons and fix links, Approve week (one confirmed action = `approve_batch_notes` with the bill's notes; **no bulk "approve clean rows", Q12**), Mark billed (`mark_batch_billed`), Export CSV; dashboard line "Last week: billed / not yet billed". New reads `get_billing_week`, `list_billing_week_status` (`20261021120000`). | Only reviewed notes in the bill, the rest listed with reasons; FIFO across authorizations and the per-period cap shown; units lost to late arrival (no grace period); Approve week only when nothing waits for review and every reviewed note is in the bill; billed locks the batch and its notes (S8 too); CSV totals equal the table; a restricted user can't open another office's week. |
 | **S9b** (done Oct 6) | Billing after approval / billing | Same page. Build week on an **approved, unbilled** bill reopens it (approval cleared, note set rebuilt, audited) → approve again. On a **billed** week, "Build supplement N" creates a supplementary bill for the same week (`billing_batches.supplement` 0 = main, 1, 2, …; unique (office, week, supplement)) with only reviewed notes outside every bill; each bill has its own status, totals, Approve, Mark billed and CSV (`…-<week>-s1.csv`). Exclusion "Reviewed after billing: build a supplement". Column "Units left now". Dashboard line: billed only when every bill of the week is billed. Migration `20261022120000` (column + unique swap; `build_billing_batch`, `get_billing_week`, `list_billing_week_status` re-created with the same signatures and grants; no new event type, `billing_batch_built` payload gains `supplement`, `reopened`). | Reopen → re-approve; supplement 1 and 2 bill only late-reviewed notes; no note in two bills; units charged once (at review); rebuild of a billed week with nothing waiting is refused; rollback restores the old bodies and the old unique byte-identical. |
-| **S10** | Eligibility UI + enforcement switch | `EligibilityReport` key fix + Fix → links; Virtual Office Compliance card (G4). | Flag off: compliance issues show as advisory, Confirm enabled, Kind Care identical. Flag on: Blocked with the server text ("N projected units remain", "needs N units; M left this week", `group_full`), Smart omits the caregiver, caregiver Available Shifts shows only "Not bookable yet". |
+| **S10** (done Oct 6) | Eligibility UI + enforcement switch | `EligibilityReport` key fix (`${code}-${i}`) + care-plan lines with the server text and Fix → links (caregiver Credentials tab via `/caregivers?caregiver=<id>&tab=credentials`, `/training/:clientId`, `/care-plans/:clientId?tab=ipos`); `group_full` reads "Group is full (1:N)"; advisory lines also shown for an eligible pick in Assign; Shift Trades dialog gets the same lines; caregiver Available Shifts shows "Not bookable yet" once. Virtual Office **Compliance** tab (G4): module status (+ Turn on via `seed_office_care_plan_defaults`), enforcement switch through the new audited `set_compliance_enforcement` (owner option 1: one new event type `compliance_enforcement_changed`, `20261023120000`), confirm stating what changes; managers read-only. `check_assignment_eligibility` and every assign path unchanged (md5). | Flag off: compliance issues show as advisory, Confirm enabled, Kind Care identical. Flag on: Blocked with the server text ("N projected units remain", "needs N units; M left this week", `group_full`), Smart omits the caregiver, caregiver Available Shifts shows only "Not bookable yet". |
 | **S11** | Dashboard compliance section | Panels via G1, G2, `list_clients_onboarding`, `list_caregivers_needing_retraining`, `list_overdue_notes`. | Kind-Care-only users see the dashboard exactly as before; counts equal the RPC output on a fixture; every row deep-links to the right record/tab. |
 | S4b *(optional, owner)* | EligibilityReport soft-vs-hard wording | Display only. | Override flow unchanged. |
 
@@ -385,6 +388,11 @@ rows" button, not in S8 and not in S9 (`approve_clean_rows` stays in the backend
     one bill only (single `billing_batch_id`); units are charged once, at review. "Approve" is still enabled only when nothing waits
     for review and every reviewed note is in the bill.
   - "Units left now" (column renamed in S9b) shows the authorization's units and period cap left **now** (later reviews included).
+- **S10 (owner decisions Oct 6):** the switch is audited through a new RPC `set_compliance_enforcement` and one new event
+  type `compliance_enforcement_changed` (option 1); the Compliance card uses only that RPC. The existing direct UPDATE of the
+  flag and its admin-only guard trigger are unchanged (a direct update bypasses the audit: known-issues, close before
+  production). Turning enforcement on requires the module on. `group_full` is hard on the server whatever the switch
+  (unchanged engine), so it shows Blocked even with enforcement off.
 - **S6b:** group sessions wait for Ripple's staff:client ratio answer (default 1:3, office default
   max clients 3).
 - E-signature acceptance and notifications (R9) remain later phases (known-issues).

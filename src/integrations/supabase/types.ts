@@ -5854,6 +5854,10 @@ export type Database = {
         Args: { _care_plan_id: string; _entity: string; _rows: Json }
         Returns: number
       }
+      set_compliance_enforcement: {
+        Args: { _enabled: boolean; _office_id: string }
+        Returns: Json
+      }
       set_measure_type_active: {
         Args: { _active: boolean; _id: string }
         Returns: undefined
