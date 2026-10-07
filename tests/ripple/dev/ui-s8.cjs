@@ -33,7 +33,7 @@ async function after(F) {
   const write = async (shift, narrative = null) => {
     const n = await must(F.cg.c, "create_progress_note_for_shift", { _shift_id: shift });
     const st = (await admin.from("progress_notes").select("scheduled_start").eq("id", n).single()).data.scheduled_start;
-    await must(F.cg.c, "save_progress_note_draft", { _note_id: n, _header: { client_arrived_at: new Date(Date.parse(st) + 360000).toISOString() }, _entries: [], _narrative_text: narrative });
+    await must(F.cg.c, "save_progress_note_draft", { _note_id: n, _header: { client_arrived_at: new Date(Date.parse(st) + 360000).toISOString(), actual_end: (await admin.from("progress_notes").select("scheduled_end").eq("id", n).single()).data.scheduled_end }, _entries: [], _narrative_text: narrative });
     await must(F.cg.c, "submit_progress_note", { _note_id: n, _typed_signature: "ZZ Caregiver" });
     return n; };
   const nC = await write(S.cls), nR = await write(S.resp, "We went to the park.");

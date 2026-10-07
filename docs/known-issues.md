@@ -1301,14 +1301,17 @@ just the named ones), because the service role bypasses RLS and the authenticate
 ## OPEN: Ripple care-plan module — defaults awaiting Ripple, and deferred features
 
 **Status:** Logged 2026-10-04 (backend A–D done on DEV). Current defaults (schema plan §12, §13):
-- **Q11 billing week:** Monday–Sunday, per office (`virtual_office.billing_week_start`, default 1)
-  until Ripple confirms ISK's week.
+- **Q11 billing week: answered by Ripple (Oct 6): Sunday–Saturday** (their billing spreadsheet). Set per office with the
+  existing `virtual_office.billing_week_start` (ISO 7 = Sunday; agency admin only); the demo office uses it. The column
+  default stays 1 (Monday) for offices not set yet; set it to 7 when an office turns the module on.
 - **Q12 review: decided by the owner (Oct 5):** per-note review only; no bulk "approve clean rows" in any screen.
-- **Late arrival, Ripple open question 4 (was Q18):** since Oct 6 there is **no grace period**: any arrival
-  after the scheduled start, at minute precision (09:00:59 is on time, 09:01 is late), loses the first
-  15-minute unit (`20261020120000`, units trigger). Notes submitted before that keep their stored units.
-  Still open with Ripple: what 1-4 minutes late, longer delays and early departure should cost (billing only
-  the full 15-minute units delivered). Not built until Ripple answers.
+- **RESOLVED — late arrival / early departure, Ripple question 4 (answered Oct 6, S12 `20261025120000` + fix
+  `20261025120100`):** only the shift's scheduled 15-minute blocks that lie completely inside [arrival, end] are billed,
+  at minute precision (09:01 → 3 of 4, 09:20 → 2, 09:00–09:50 → 3, 09:20–09:50 → 1); CLS, respite and group notes alike;
+  no grace period. An end time is required to submit. Notes submitted before S12 keep their stored units (0 of 5 unbilled
+  submitted / reviewed notes on DEV would have differed). Weekly Billing shows "Units not billed (late / early)".
+- **Q5 group ratio (answered Oct 6):** up to 1:3 allowed (group_full above 3 unchanged); above 1:2 an advisory "Above
+  Ripple's preferred ratio (1:2)" in the assign dialog and on a group note (computed in the UI; never blocks).
 - **E-signature:** notes carry a typed signature and timestamp. Acceptance of that as an
   e-signature awaits Ripple; electronic archiving is a later phase.
 - **Notifications (R9):** V1 shows computed status only (overdue notes, retraining list,
@@ -1377,6 +1380,20 @@ the five flows from the architecture doc and the UI slices.
 
 **Original issue:** round1 compares existing pages' text for an agency-wide admin with a saved baseline; the demo
 office's rows were agency-visible in the shared agency, so 5 comparisons differed while it existed.
+
+## OPEN (Ripple S12, Oct 7): items found while testing S12 (none caused by S12)
+
+**Status:** Logged 2026-10-07.
+- **round1's page-text baseline depends on the date (pre-existing):** the existing Dashboard computes "today" as the UTC
+  date (`toISOString`), so from 20:00 Eastern it counts tomorrow's shifts; the shared DEV data has 3 pre-existing shifts
+  on Oct 7 (created Sep 9). On such dates round1's agency-admin Dashboard comparison ("Today's Shifts 0" in the baseline)
+  differs. Not changed (existing page, not approved); round1 passed earlier on Oct 6.
+- **match-caregiver returned HTTP 500 "Unknown error" intermittently** (a database error object thrown inside the Edge
+  Function): NB1's Smart-match probe failed twice, then passed on re-runs; an existing DEV shift failed twice. The same
+  queries succeed with the service role from Node. Not investigated further (scheduling, unchanged).
+- `cp_approve_batch(_clean_only)` still treats only late arrivals as "not clean"; no screen uses it (Q12: no bulk approve).
+- At 390 px the assign dialog on the existing Schedule page sits partly off-screen (the page is wider than the screen,
+  logged in S10); round8 and demo-capture pick the caregiver with the keyboard there.
 
 ## OPEN (Ripple S11): dashboard notes
 

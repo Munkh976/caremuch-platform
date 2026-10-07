@@ -240,9 +240,9 @@ async function managerFlows(base, F, browser) {
   await p2.emulateMedia({ media: "print" }); const toolbar = await p2.locator('[data-testid="print-toolbar"]').isVisible(); await p2.emulateMedia({ media: "screen" });
   await p2.goto(`${base}/progress-notes/${F.N2}/print`); await p2.locator('[data-print="note"]').waitFor({ timeout: 30000 });
   const secsR = await p2.locator("[data-section]").evaluateAll((els) => els.map((e) => e.getAttribute("data-section"))), ptR = await p2.locator('[data-print="note"]').innerText();
-  rec("PR1 print (CLS and respite): no app chrome, toolbar hidden in print; header, objectives with Instructions / Notes / Data (CLS) or the narrative (respite), billing footer (case number, units scheduled 4 / billed 3, late arrival, auth number), typed signature with time, wet-signature line, program-lead review line",
+  rec("PR1 print (CLS and respite): no app chrome, toolbar hidden in print; header, objectives with Instructions / Notes / Data (CLS) or the narrative (respite), billing footer (case number, units scheduled 4 / billed 3, S12 'Units not billed: 1 (late arrival)', auth number), typed signature with time, wet-signature line, program-lead review line",
     JSON.stringify(secs) === '["header","objectives","billing","signatures"]' && JSON.stringify(secsR) === '["header","narrative","billing","signatures"]' && chrome === 0 && !toolbar
-      && /Instructions for Staff/i.test(pt) && /Notes \(include reinforcers\)/i.test(pt) && /ISK-00123/.test(pt) && /ISK-2026-0417/.test(pt) && /Yes \(first unit not billed\)/i.test(pt)
+      && /Instructions for Staff/i.test(pt) && /Notes \(include reinforcers\)/i.test(pt) && /ISK-00123/.test(pt) && /ISK-2026-0417/.test(pt) && /Units not billed\s+1 \(late arrival\)/i.test(pt)
       && /Signed electronically by Ana Rivera/.test(pt) && /Staff signature/i.test(pt) && /Program lead review/i.test(pt) && /baked bread/.test(ptR),
     `CLS ${secs.join(",")}; respite ${secsR.join(",")}; chrome ${chrome}; toolbar in print ${toolbar}`);
   // client care plan -> Progress Notes tab (same actions)

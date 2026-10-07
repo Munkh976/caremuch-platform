@@ -1,23 +1,25 @@
 import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, CheckCircle2, ShieldAlert } from "lucide-react";
-import type { EligibilityResult } from "@/lib/shiftEligibility";
+import type { EligibilityIssue, EligibilityResult } from "@/lib/shiftEligibility";
 import { complianceLines, isComplianceCode, type ComplianceLine } from "@/lib/eligibilityCompliance";
+import { GROUP_RATIO_CODE } from "@/lib/groupRatio";
 
 /**
  * Ripple context (S10): pass `ripple` for an office using the care-plan module; its care-plan checks
  * are then grouped as "Care-plan checks" with a Fix → link each (advisory while enforcement is off,
  * Blocked once it is on, as the server reports them). Without it the report is exactly as before.
  */
-export type EligibilityContext = { ripple: boolean; caregiverId?: string | null; clientId?: string | null };
+export type EligibilityContext = { ripple: boolean; caregiverId?: string | null; clientId?: string | null; extra?: EligibilityIssue[] };
 
 export function ComplianceLines({ lines }: { lines: ComplianceLine[] }) {
   if (lines.length === 0) return null;
   const blocked = lines.some((l) => l.blocked);
-  const advisory = lines.some((l) => !l.blocked);
+  const advisory = lines.some((l) => !l.blocked && l.issue.code !== GROUP_RATIO_CODE);   // switch-controlled advisories
+  const groupOnly = !advisory && lines.some((l) => l.issue.code === GROUP_RATIO_CODE);
   return (
     <div className="space-y-1" data-testid="elig-compliance" data-mode={blocked ? "blocked" : "advisory"}>
       <p className={`text-xs font-medium ${blocked ? "text-destructive" : "text-warning"}`}>
-        Care-plan checks{advisory ? " — Advisory lines don't block: enforcement is off for this office" : ""}
+        Care-plan checks{advisory ? " — Advisory lines don't block: enforcement is off for this office" : groupOnly ? " — Advisory lines don't block" : ""}
       </p>
       {lines.map((l, i) => (
         <div key={`${l.issue.code}-${i}`} data-testid={`elig-line-${l.issue.code}`} data-blocked={l.blocked ? "true" : "false"}
@@ -43,7 +45,7 @@ export function ComplianceLines({ lines }: { lines: ComplianceLine[] }) {
 
 export function EligibilityReport({ result, context }: { result: EligibilityResult; context?: EligibilityContext }) {
   const ripple = !!context?.ripple;
-  const lines = ripple ? complianceLines(result, { caregiverId: context?.caregiverId, clientId: context?.clientId }) : [];
+  const lines = ripple ? complianceLines(result, { caregiverId: context?.caregiverId, clientId: context?.clientId, extra: context?.extra }) : [];
   const blockers = ripple ? result.blockers.filter((b) => b.overridable || !isComplianceCode(b.code)) : result.blockers;
   const flags = ripple ? result.flags.filter((f) => !isComplianceCode(f.code)) : result.flags;
   const advisoryOnly = lines.length > 0 && lines.every((l) => !l.blocked);

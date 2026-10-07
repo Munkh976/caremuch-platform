@@ -71,14 +71,14 @@ function BatchSection({ w, b, newest, busy, onApprove, onBill }: { w: BillingWee
             <div className="hidden overflow-x-auto md:block" data-testid={`${tag}-table`}>
               <Table>
                 <TableHeader><TableRow><TableHead>Client / authorization</TableHead><TableHead>Service · dates</TableHead><TableHead className="text-right">Scheduled</TableHead>
-                  <TableHead className="text-right">Billed</TableHead><TableHead className="text-right">Lost to late arrival</TableHead><TableHead>Cap · left now</TableHead><TableHead className="text-right">Units left now</TableHead></TableRow></TableHeader>
+                  <TableHead className="text-right">Billed</TableHead><TableHead className="text-right">Units not billed (late / early)</TableHead><TableHead>Cap · left now</TableHead><TableHead className="text-right">Units left now</TableHead></TableRow></TableHeader>
                 <TableBody>
                   {byClient(b.lines).map((c) => [
                     <TableRow key={c.client_id} className="bg-muted/40" data-client-row={c.client_id}><TableCell colSpan={7} className="font-semibold">{c.name}{c.case_number ? <span className="font-normal text-muted-foreground"> · Case {c.case_number}</span> : null}</TableCell></TableRow>,
                     ...c.lines.map((l) => (
                       <TableRow key={`${c.client_id}-${l.authorization.id}`} data-bill-line={l.authorization.auth_number}>
                         <TableCell><p className="font-medium">#{l.authorization.auth_number}</p>
-                          <p className="text-xs text-muted-foreground">{l.notes.map((n, i) => <span key={n.note_id}>{i ? " · " : ""}<Link to={`/progress-notes/${n.note_id}`} className="hover:underline">{fmtDay(n.service_date)}{n.arrived_late ? " (late)" : ""}</Link></span>)}</p></TableCell>
+                          <p className="text-xs text-muted-foreground">{l.notes.map((n, i) => <span key={n.note_id}>{i ? " · " : ""}<Link to={`/progress-notes/${n.note_id}`} className="hover:underline">{fmtDay(n.service_date)}{n.arrived_late && n.left_early ? " (late, left early)" : n.arrived_late ? " (late)" : n.left_early ? " (left early)" : ""}</Link></span>)}</p></TableCell>
                         <TableCell className="text-sm">{SERVICE_LABEL[l.authorization.service_type] ?? l.authorization.service_type}{l.authorization.service_code ? ` · ${l.authorization.service_code}` : ""}<br /><span className="text-xs text-muted-foreground">{fmtDay(l.authorization.effective_date)} – {fmtDay(l.authorization.expiration_date)}</span></TableCell>
                         <TableCell className="text-right tabular-nums">{l.units_scheduled}</TableCell><TableCell className="text-right tabular-nums font-medium">{l.units_billed}</TableCell>
                         <TableCell className="text-right tabular-nums">{l.units_lost_late}</TableCell><TableCell className="text-sm">{capText(l.authorization)}</TableCell>
@@ -100,9 +100,9 @@ function BatchSection({ w, b, newest, busy, onApprove, onBill }: { w: BillingWee
                   {c.lines.map((l) => (
                     <div key={l.authorization.id} className="mt-2 border-t pt-2 text-sm">
                       <p className="font-medium">#{l.authorization.auth_number} · {SERVICE_LABEL[l.authorization.service_type] ?? l.authorization.service_type}</p>
-                      <p>Scheduled {l.units_scheduled} · Billed <b>{l.units_billed}</b> · Lost to late arrival {l.units_lost_late}</p>
+                      <p>Scheduled {l.units_scheduled} · Billed <b>{l.units_billed}</b> · Units not billed (late / early) {l.units_lost_late}</p>
                       <p className="text-muted-foreground">Cap {capText(l.authorization)} · {l.authorization.units_left} unit{Number(l.authorization.units_left) === 1 ? "" : "s"} left now</p>
-                      <p className="text-xs">{l.notes.map((n, i) => <span key={n.note_id}>{i ? " · " : ""}<Link to={`/progress-notes/${n.note_id}`} className="text-primary hover:underline">{fmtDay(n.service_date)}{n.arrived_late ? " (late)" : ""}</Link></span>)}</p>
+                      <p className="text-xs">{l.notes.map((n, i) => <span key={n.note_id}>{i ? " · " : ""}<Link to={`/progress-notes/${n.note_id}`} className="text-primary hover:underline">{fmtDay(n.service_date)}{n.arrived_late && n.left_early ? " (late, left early)" : n.arrived_late ? " (late)" : n.left_early ? " (left early)" : ""}</Link></span>)}</p>
                     </div>))}
                   <p className="mt-2 border-t pt-2 text-sm font-semibold">Total: {c.totals.s} scheduled · {c.totals.b} billed · {c.totals.l} lost</p>
                 </li>))}
@@ -218,7 +218,7 @@ export default function WeeklyBilling() {
                   <dt className="text-muted-foreground">Notes</dt><dd>{c.totals.notes}</dd>
                   <dt className="text-muted-foreground">Units scheduled</dt><dd>{c.totals.units_scheduled}</dd>
                   <dt className="text-muted-foreground">Units billed</dt><dd className="font-semibold">{c.totals.units_billed}</dd>
-                  <dt className="text-muted-foreground">Units lost to late arrival</dt><dd>{c.totals.units_lost_late}</dd>
+                  <dt className="text-muted-foreground">Units not billed (late / early)</dt><dd>{c.totals.units_lost_late}</dd>
                 </dl>
                 <DialogFooter>
                   <Button variant="outline" className={outline} onClick={() => setConfirm(null)}>Cancel</Button>

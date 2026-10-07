@@ -74,7 +74,7 @@ async function setup() {
   ids.groups.push(F.GS);
   F.SG = [];
   for (const c of F.CG) { const s = await sh(F.RX, c, 1, "09:00", "10:00"); await must(F.mgr.c, "set_shift_group_session", { _shift_id: s, _group_session_id: F.GS }); F.SG.push(s); }
-  for (const s of F.SG.slice(0, 3)) await must(F.mgr.c, "assign_caregiver_to_shift", { _shift_id: s, _caregiver_id: F.G1, _method: "manual", _notes: "round8 fixture", _override_reason: "round8 fixture (disposable)" });
+  for (const s of F.SG.slice(0, 2)) await must(F.mgr.c, "assign_caregiver_to_shift", { _shift_id: s, _caregiver_id: F.G1, _method: "manual", _notes: "round8 fixture", _override_reason: "round8 fixture (disposable)" });
   return F;
 }
 
@@ -128,7 +128,11 @@ async function openAssign(page, first, caregiver, { dispatch = false } = {}) {
   const dlg = page.locator('[role="dialog"]').last(); await dlg.waitFor(); await page.waitForTimeout(2500);
   await dlg.getByPlaceholder("Search caregivers...").fill(caregiver.split(" ")[0]); await page.waitForTimeout(300);
   await dlg.locator('button[role="combobox"]').first().click();
-  await page.getByRole("option", { name: new RegExp(caregiver) }).first().click(); await page.waitForTimeout(800);
+  // at 390 the existing Schedule page is wider than the screen, so the dialog sits partly off-screen: pick the
+  // (highlighted, filtered) option with the keyboard there
+  if (dispatch) { await page.getByRole("option", { name: new RegExp(caregiver) }).first().waitFor(); await page.keyboard.press("Enter"); }
+  else await page.getByRole("option", { name: new RegExp(caregiver) }).first().click();
+  await page.waitForTimeout(800);
   return dlg;
 }
 // Escape until no dialog / listbox is open (Radix keeps pointer events off the page while one is)
@@ -159,13 +163,24 @@ async function offPhase(base, F, browser) {
       && Object.entries(want).every(([c, h]) => hrefs.some(([k, href, t]) => k === c && href === h && t === "_blank")) && /needs 4 units; 2 projected units remain/.test(ptext) && !confirmDisabled,
     `${JSON.stringify(lines)}; confirm disabled ${confirmDisabled}`);
   await closeAll(page);
+  // S12 (Ripple): a 3rd client in Ana's group session is allowed (1:3) but above the preferred 1:2 -> advisory, never blocks
+  dlg = await openAssign(page, "Ivy", "Ana Rivera");
+  const ra = dlg.locator('[data-testid="elig-line-group_ratio_preferred"]'); await ra.waitFor({ timeout: 15000 });
+  const raText = await ra.innerText(); const raBlocked = await ra.getAttribute("data-blocked"); const raDisabled = await confirmBtn(dlg).isDisabled();
+  await ra.scrollIntoViewIfNeeded(); await shot(page, "assign-group-ratio-advisory-1440");
+  rec("G2 a 3rd client in Ana's group session (1:3): 'Above Ripple's preferred ratio (1:2)' as an Advisory line (not blocked, no group_full), Confirm enabled",
+    /Above Ripple's preferred ratio \(1:2\)/.test(raText) && /3 clients/.test(raText) && raBlocked === "false" && !raDisabled && (await dlg.locator('[data-testid="elig-line-group_full"]').count()) === 0,
+    raText.replace(/\s+/g, " "));
+  await closeAll(page);
+  await must(F.mgr.c, "assign_caregiver_to_shift", { _shift_id: F.SG[2], _caregiver_id: F.G1, _method: "manual", _notes: "round8 fixture", _override_reason: "round8 fixture (disposable)" });
   // group_full (hard on the server whatever the switch): "Group is full (1:3)"
   dlg = await openAssign(page, "Ray", "Ana Rivera");
   const gl = dlg.locator('[data-testid="elig-line-group_full"]'); await gl.waitFor({ timeout: 15000 });
   const gtext = await gl.innerText(); const gDisabled = await confirmBtn(dlg).isDisabled();
   await gl.scrollIntoViewIfNeeded(); await shot(page, "assign-group-full-1440");
   rec("O2 a 4th client in Ana's group session: 'Group is full (1:3)' with the server text, Blocked (the server blocks group_full whatever the switch), Confirm disabled",
-    /Group is full \(1:3\)/.test(gtext) && /already has 3 of 3 clients/.test(gtext) && (await gl.getAttribute("data-blocked")) === "true" && gDisabled, gtext.replace(/\s+/g, " "));
+    /Group is full \(1:3\)/.test(gtext) && /already has 3 of 3 clients/.test(gtext) && (await gl.getAttribute("data-blocked")) === "true" && gDisabled
+      && (await dlg.locator('[data-testid="elig-line-group_ratio_preferred"][data-blocked="false"]').count()) === 1, gtext.replace(/\s+/g, " "));
   await closeAll(page);
   const sm = await smartNames(page, "Zoe"); await shot(page, "smart-off-1440");
   rec("O3 enforcement OFF: Smart assign keeps Ana (advisory checks don't filter)", /Ana Rivera/.test(sm.text), sm.text.replace(/\s+/g, " ").slice(0, 160));

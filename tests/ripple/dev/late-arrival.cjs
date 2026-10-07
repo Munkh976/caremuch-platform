@@ -25,7 +25,7 @@ async function run(F) {
     await must(F.mgrAll.c, "assign_caregiver_to_shift", { _shift_id: id, _caregiver_id: F.G, _method: "manual", _notes: "late fixture", _override_reason: "late fixture (disposable)" });
     const n = await must(F.cg.c, "create_progress_note_for_shift", { _shift_id: id });
     const st = (await admin.from("progress_notes").select("scheduled_start").eq("id", n).single()).data.scheduled_start;
-    await must(F.cg.c, "save_progress_note_draft", { _note_id: n, _header: { client_arrived_at: new Date(Date.parse(st) + off * 1000).toISOString() }, _entries: [], _narrative_text: code === "RESP0001" ? "We went to the park." : null });
+    await must(F.cg.c, "save_progress_note_draft", { _note_id: n, _header: { client_arrived_at: new Date(Date.parse(st) + off * 1000).toISOString(), actual_end: (await admin.from("progress_notes").select("scheduled_end").eq("id", n).single()).data.scheduled_end }, _entries: [], _narrative_text: code === "RESP0001" ? "We went to the park." : null });
     await must(F.cg.c, "submit_progress_note", { _note_id: n, _typed_signature: "ZZ Caregiver" });
     const r = (await admin.from("progress_notes").select("units_scheduled, units_used, arrived_late").eq("id", n).single()).data;
     out.push({ label, kind: code === "CLS0001" ? "CLS" : "respite", used: Number(r.units_used), sched: Number(r.units_scheduled), late: r.arrived_late });

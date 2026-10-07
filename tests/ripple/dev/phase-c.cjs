@@ -254,7 +254,7 @@ async function afterC(F) {
     const s = await sh(CRV.id, lw + k, "15:00", "16:00"); await assignLoose(s, F.G);
     const id = await must(F.mgrX.c, "create_progress_note_for_shift", { _shift_id: s }); (ids.progress_notes = ids.progress_notes || []).push(id);
     const st0 = (await admin.from("progress_notes").select("scheduled_start").eq("id", id).single()).data.scheduled_start;
-    await must(F.cg.c, "save_progress_note_draft", { _note_id: id, _header: { client_arrived_at: st0 }, _entries: [], _narrative_text: null });
+    await must(F.cg.c, "save_progress_note_draft", { _note_id: id, _header: { client_arrived_at: st0, actual_end: (await admin.from("progress_notes").select("scheduled_end").eq("id", id).single()).data.scheduled_end }, _entries: [], _narrative_text: null });
     await must(F.cg.c, "submit_progress_note", { _note_id: id, _typed_signature: "ZZ G" }); notes.push(id);
   }
   const REV = (id) => rpc(F.mgrX.c, "review_progress_note", { _note_id: id, _billable: true, _non_billable_reason: null });

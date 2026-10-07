@@ -30,8 +30,8 @@ async function after(F) {
     await must(F.mgrAll.c, "assign_caregiver_to_shift", { _shift_id: id, _caregiver_id: F.G, _method: "manual", _notes: "S9 fixture", _override_reason: "S9 fixture (disposable)" }); return id; };
   const note = async (shift, { off = 0, submit = true, narrative = null } = {}) => {
     const n = await must(F.cg.c, "create_progress_note_for_shift", { _shift_id: shift });
-    const st = (await admin.from("progress_notes").select("scheduled_start").eq("id", n).single()).data.scheduled_start;
-    await must(F.cg.c, "save_progress_note_draft", { _note_id: n, _header: { client_arrived_at: new Date(Date.parse(st) + off * 1000).toISOString() }, _entries: [], _narrative_text: narrative });
+    const { scheduled_start: st, scheduled_end: se } = (await admin.from("progress_notes").select("scheduled_start, scheduled_end").eq("id", n).single()).data;
+    await must(F.cg.c, "save_progress_note_draft", { _note_id: n, _header: { client_arrived_at: new Date(Date.parse(st) + off * 1000).toISOString(), actual_end: se }, _entries: [], _narrative_text: narrative });
     if (submit) await must(F.cg.c, "submit_progress_note", { _note_id: n, _typed_signature: "ZZ Caregiver" });
     return n; };
   const review = (n) => must(F.mgrX.c, "review_progress_note", { _note_id: n, _billable: true, _non_billable_reason: null });
@@ -101,7 +101,7 @@ async function after(F) {
   const lockF = await rpc(F.mgrX.c, "return_progress_note", { _note_id: N.f, _reason: "Billed in the supplement" });
   const n7 = await must(F.cg.c, "create_progress_note_for_shift", { _shift_id: S.g });
   const st7 = (await admin.from("progress_notes").select("scheduled_start").eq("id", n7).single()).data.scheduled_start;
-  await must(F.cg.c, "save_progress_note_draft", { _note_id: n7, _header: { client_arrived_at: st7 }, _entries: [], _narrative_text: null });
+  await must(F.cg.c, "save_progress_note_draft", { _note_id: n7, _header: { client_arrived_at: st7, actual_end: (await admin.from("progress_notes").select("scheduled_end").eq("id", n7).single()).data.scheduled_end }, _entries: [], _narrative_text: null });
   await must(F.cg.c, "submit_progress_note", { _note_id: n7, _typed_signature: "ZZ Caregiver" }); await review(n7);
   const s2 = await must(F.mgrX.c, "build_billing_batch", { _office_id: F.OX, _week_start: ws }); const w7 = await week(); const b2 = w7.batches.find((b) => b.supplement === 2);
   await must(F.mgrX.c, "approve_batch_notes", { _batch_id: b2.id, _note_ids: noteIds(b2) }); await must(F.mgrX.c, "mark_batch_billed", { _batch_id: b2.id });
@@ -129,6 +129,49 @@ async function after(F) {
   const yStatus = await must(F.mgrY.c, "list_billing_week_status", {});
   rec("R1 week read, build (reopen / supplement), approve and mark billed refused (generic) for hr_staff, scheduler, caregiver, client, anon, office-Y manager, agency-B admin, system_admin; office Y's status doesn't show X",
     pass(dl.length === 0 && !yStatus.some((x) => x.office_id === F.OX)), dl.join("; ") || `${dn} refused`);
+  // ---- S12 (B): Ripple's billing week is Sunday–Saturday (Q11). The existing per-office setting (billing_week_start, ISO 7 =
+  // Sunday), set by the agency admin; earlier weeks than the Monday checks above, so nothing overlaps their bills. ----
+  const { error: wkErr } = await F.aaA.c.from("virtual_office").update({ billing_week_start: 7 }).eq("id", F.OX);
+  if (wkErr) throw new Error(`week start: ${wkErr.message}`);
+  const kdd = await pgRead(async (c) => (await c.query(`WITH t AS (SELECT (now() AT TIME ZONE 'America/New_York')::date d), s AS (SELECT d - (extract(isodow FROM d)::int % 7) - 7 AS last_sun FROM t)
+    SELECT last_sun::text ls, (last_sun - 14)::text s2, (last_sun - 13)::text mon2,
+      (SELECT w::date::text FROM generate_series(last_sun - 21, last_sun - 70, '-7 days'::interval) w WHERE extract(month FROM w) <> extract(month FROM w + interval '6 days') LIMIT 1) m
+    FROM s`)).rows[0]);
+  const kplus = (d, k) => pgRead(async (c) => (await c.query(`SELECT ($1::date + $2::int)::text d`, [d, k])).rows[0].d);
+  const kmonthEdge = await pgRead(async (c) => (await c.query(`SELECT (date_trunc('month', $1::date + 6) - interval '1 day')::date::text last, date_trunc('month', $1::date + 6)::date::text first`, [kdd.m])).rows[0]);
+  await must(F.mgrX.c, "create_service_authorization", { _client_id: F.CX, _service_type: "cls", _auth_number: `ZZ-SUN-${RUN}`, _units_authorized: 400, _effective_date: await kplus(kdd.m, -7), _expiration_date: await kplus(kdd.ls, 90) });
+  const kshd = async (date) => { const id = await ins("shifts", { agency_id: A, virtual_office_id: F.OX, client_id: F.CX, order_title: `ZZ ${RUN}`, care_type_code: "CLS0001", shift_date: date, start_time: "09:00", end_time: "10:00", duration_hours: 1, status: "open", is_demo: true });
+    F.b2shifts = (F.b2shifts || []).concat(id);
+    await must(F.mgrAll.c, "assign_caregiver_to_shift", { _shift_id: id, _caregiver_id: F.G, _method: "manual", _notes: "S12 week fixture", _override_reason: "S12 week fixture (disposable)" }); return id; };
+  const ksat = await kplus(kdd.s2, 6), ksun = await kplus(kdd.s2, 7);
+  const kW = { sat: await note(await kshd(ksat)), sun: await note(await kshd(ksun)), last: await note(await kshd(kmonthEdge.last)), first: await note(await kshd(kmonthEdge.first)) };
+  for (const k of ["sat", "sun", "last", "first"]) await review(kW[k]);
+  const kdef = await must(F.mgrX.c, "get_billing_week", { _office_id: F.OX });
+  const kisodow = (d) => pgRead(async (c) => (await c.query(`SELECT extract(isodow FROM $1::date)::int n`, [d])).rows[0].n);
+  const kmon = await rpc(F.mgrX.c, "get_billing_week", { _office_id: F.OX, _week_start: kdd.mon2 });
+  const kst = (await must(F.mgrX.c, "list_billing_week_status", {})).find((x) => x.office_id === F.OX);
+  rec("SW0 Sunday-start office: the default 'last complete week' is Sunday–Saturday (week picker / dashboard line follow it); a Monday start is refused",
+    pass(kdef.week_start === kdd.ls && (await kisodow(kdef.week_start)) === 7 && (await kisodow(kdef.week_end)) === 6 && kdef.office.billing_week_start === 7 && kst.week_start === kdd.ls && !!kmon.err && /ISO day 7/.test(kmon.err)),
+    `default ${kdef.week_start}..${kdef.week_end}; dashboard ${kst.week_start}; Monday ${kmon.err}`);
+  await must(F.mgrX.c, "build_billing_batch", { _office_id: F.OX, _week_start: kdd.s2 });
+  const kw2 = await must(F.mgrX.c, "get_billing_week", { _office_id: F.OX, _week_start: kdd.s2 });
+  const kids2 = noteIds(kw2.batches[0]);
+  const kw3 = await must(F.mgrX.c, "get_billing_week", { _office_id: F.OX, _week_start: ksun });
+  rec("SW1 Saturday/Sunday boundary: the Saturday visit is in the Sun–Sat week's bill, the next day (Sunday) starts the next week (not_in_bill_yet there)",
+    pass(kw2.week_end === ksat && kids2.includes(kW.sat) && !kids2.includes(kW.sun) && kw3.excluded.some((x) => x.note_id === kW.sun && x.reason === "not_in_bill_yet")), `${kw2.week_start}..${kw2.week_end}: ${kids2.length} note(s)`);
+  await must(F.mgrX.c, "build_billing_batch", { _office_id: F.OX, _week_start: kdd.m });
+  const kwm = await must(F.mgrX.c, "get_billing_week", { _office_id: F.OX, _week_start: kdd.m }); const kidm = noteIds(kwm.batches[0]);
+  rec("SW2 a week across a month boundary (Sun–Sat): the last day of the month and the first of the next are in the same bill",
+    pass(kwm.week_end === await kplus(kdd.m, 6) && kidm.includes(kW.last) && kidm.includes(kW.first)), `${kwm.week_start}..${kwm.week_end} (${kmonthEdge.last} / ${kmonthEdge.first})`);
+  const kb2 = kw2.batches[0];
+  await must(F.mgrX.c, "approve_batch_notes", { _batch_id: kb2.id, _note_ids: kids2 }); await must(F.mgrX.c, "mark_batch_billed", { _batch_id: kb2.id });
+  const klate = await note(await kshd(await kplus(kdd.s2, 3))); await review(klate);
+  const kw4 = await must(F.mgrX.c, "get_billing_week", { _office_id: F.OX, _week_start: kdd.s2 });
+  const ksup = await must(F.mgrX.c, "build_billing_batch", { _office_id: F.OX, _week_start: kdd.s2 });
+  const kw5 = await must(F.mgrX.c, "get_billing_week", { _office_id: F.OX, _week_start: kdd.s2 });
+  rec("SW3 supplements follow the office's week: a Sun–Sat week billed, a note of that week reviewed later -> supplement 1 for the same Sunday week",
+    pass(kw4.next_action === "supplement" && ksup.supplement === 1 && kw5.batches.length === 2 && noteIds(kw5.batches[1]).join() === klate), `${kw4.next_action}; supplement ${ksup.supplement}`);
+
 }
 
 (async () => {

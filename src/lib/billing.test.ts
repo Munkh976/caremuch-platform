@@ -23,7 +23,7 @@ describe("weekly billing helpers", () => {
     const w = week({}); const csv = billingCsv(w, w.batches[0]);
     const rows = csv.trim().split("\r\n");
     expect(rows).toHaveLength(5);
-    expect(rows[0]).toContain("Units lost to late arrival");
+    expect(rows[0]).toContain("Units not billed (late / early)");
     expect(rows[1]).toContain('"Portage, MI"');
     expect(rows[4].split(",").slice(-4)).toEqual(["4", "16", "15", "1"]);
     expect(csv).not.toMatch(/\$|dollar|rate/i);

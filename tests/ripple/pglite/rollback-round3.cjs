@@ -1,7 +1,7 @@
 // UI round 3 rollback proofs: each round-3 migration's rollback (docs/rollback/) restores the exact
 // catalog from before it (tables, columns, function bodies + ACLs, triggers, policies, constraints,
 // grants), and re-applying after the rollback equals the first apply. Applied and rolled back in
-// reverse order: S11, S10, S9b, S9, late arrival, S8 fix, S8, S7, S6 case number, S6, W2 void, S5, S4, W1.
+// reverse order: S12 fix, S12, S11, S10, S9b, S9, late arrival, S8 fix, S8, S7, S6 case number, S6, W2 void, S5, S4, W1.
 // Usage: node tests/ripple/pglite/rollback-round3.cjs   (local PGlite, no network)
 const H = require("./harness.cjs");
 // md5(prosrc) of the nine readers W2 changes, as stored on DEV before the W2 push (Oct 5): the W2
@@ -14,6 +14,9 @@ const DEV_BEFORE_W2 = { correct_service_authorization: "2229d4e933296df59105c4f0
 // md5(prosrc) of get_progress_note_for_staff as stored on DEV before the S8 detail fix (Oct 5).
 // md5(prosrc) of the units trigger function as stored on DEV before the late-arrival change (Oct 6).
 // md5(prosrc) of the three billing functions as stored on DEV before S9b (Oct 6).
+// md5(prosrc) of the units trigger function and the two billing reads as stored on DEV before S12 (Oct 6).
+const DEV_BEFORE_S12FIX = { cp_derive_progress_note_units: "c7881d288c75985f5ac8dc8afe4ec1ff" };   // the S12 body as pushed
+const DEV_BEFORE_S12 = { cp_derive_progress_note_units: "e12266dfee9e132959f78d24e1a272da", get_billing_week: "d0997a1bd589352fa23ea3729f2a5952", get_billing_batch: "d173ba584832f9a951ede264a819c96d" };
 // md5(pg_get_constraintdef) of events_event_type_check as stored on DEV before S10 (Oct 6, 50 values).
 const DEV_BEFORE_S10_CHECK = "2e1f625f440f78a943157be43556a314";
 const DEV_BEFORE_S9B = { build_billing_batch: "5ac05000b721c324c463757ff77b011e", get_billing_week: "2efc8f40105da7a0bf12ac5a927642f4", list_billing_week_status: "e80f555a97ed6b509d22aa9ab5886066" };
@@ -35,6 +38,8 @@ const STEPS = [
   ["20261022120000_s9b_billing_supplements.sql", "s9b_billing_supplements_rollback.sql"],
   ["20261023120000_s10_compliance_enforcement_switch.sql", "s10_compliance_enforcement_switch_rollback.sql"],
   ["20261024120000_s11_enforcement_readiness.sql", "s11_enforcement_readiness_rollback.sql"],
+  ["20261025120000_s12_units_full_blocks.sql", "s12_units_full_blocks_rollback.sql"],
+  ["20261025120100_s12_units_no_schedule_fix.sql", "s12_units_no_schedule_fix_rollback.sql"],
 ].filter(([m]) => require("fs").existsSync(require("path").resolve(__dirname, "../../../supabase/migrations", m)));
 
 (async () => {
@@ -51,6 +56,18 @@ const STEPS = [
       const off = h.filter((r) => DEV_BEFORE_W2[r.proname] !== r.h).map((r) => r.proname);
       console.log(`  restored reader bodies byte-identical to DEV before W2 (md5): ${off.length === 0 && h.length === 9}${off.length ? " DIFFER: " + off.join(", ") : ""}`);
       if (off.length || h.length !== 9) ok = false;
+    }
+    if (STEPS[i][1] === "s12_units_no_schedule_fix_rollback.sql") {
+      const h = (await db.query(`SELECT md5(prosrc) h FROM pg_proc WHERE pronamespace='public'::regnamespace AND proname = 'cp_derive_progress_note_units'`)).rows;
+      const same = h.length === 1 && h[0].h === DEV_BEFORE_S12FIX.cp_derive_progress_note_units;
+      console.log(`  restored units trigger function byte-identical to the S12 body as pushed (md5): ${same}`);
+      if (!same) ok = false;
+    }
+    if (STEPS[i][1] === "s12_units_full_blocks_rollback.sql") {
+      const h = (await db.query(`SELECT proname, md5(prosrc) h FROM pg_proc WHERE pronamespace='public'::regnamespace AND proname = ANY($1)`, [Object.keys(DEV_BEFORE_S12)])).rows;
+      const off = h.filter((r) => DEV_BEFORE_S12[r.proname] !== r.h).map((r) => r.proname);
+      console.log(`  restored units trigger + billing reads byte-identical to DEV before S12 (md5): ${off.length === 0 && h.length === 3}${off.length ? " DIFFER: " + off.join(", ") : ""}`);
+      if (off.length || h.length !== 3) ok = false;
     }
     if (STEPS[i][1] === "s10_compliance_enforcement_switch_rollback.sql") {
       const c = (await db.query(`SELECT md5(pg_get_constraintdef(oid)) h FROM pg_constraint WHERE conname = 'events_event_type_check'`)).rows;

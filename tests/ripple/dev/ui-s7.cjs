@@ -58,7 +58,7 @@ async function after(F) {
   F.notes = [nA];
   const nA2 = await must(F.cg.c, "create_progress_note_for_shift", { _shift_id: S.a });
   const n0 = (await admin.from("progress_notes").select("scheduled_start, units_scheduled").eq("id", nA).single()).data;
-  await must(F.cg.c, "save_progress_note_draft", { _note_id: nA, _header: { client_arrived_at: new Date(Date.parse(n0.scheduled_start) + 60000).toISOString() }, _entries: [], _narrative_text: null });
+  await must(F.cg.c, "save_progress_note_draft", { _note_id: nA, _header: { client_arrived_at: new Date(Date.parse(n0.scheduled_start) + 60000).toISOString(), actual_end: (await admin.from("progress_notes").select("scheduled_end").eq("id", nA).single()).data.scheduled_end }, _entries: [], _narrative_text: null });
   const n1 = (await admin.from("progress_notes").select("units_used, arrived_late").eq("id", nA).single()).data;
   const notesForShift = ((await admin.from("progress_notes").select("id").eq("shift_id", S.a)).data || []).length;
   await must(F.cg.c, "submit_progress_note", { _note_id: nA, _typed_signature: "ZZ Caregiver" });

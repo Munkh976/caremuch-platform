@@ -20,6 +20,7 @@ import {
   clientShort, entryData, fmtDay, fmtTime, isEditable, isoToHhmm, missingAnswers, shiftTimeToIso, STATUS_LABEL,
   type Answer, type CaregiverNote as NotePayload, type CaregiverClock,
 } from "@/lib/caregiverNotes";
+import { notBilledReason, unitsToBill } from "@/lib/units";
 
 type EntryState = Record<string, { notes: string; answers: Record<string, Answer> }>;
 type SaveState = { kind: "idle" | "saving" | "saved" } | { kind: "error"; message: string };
@@ -42,7 +43,8 @@ function useKeyboardInset() {
  * /caregiver/notes/:shiftId (S7): the assigned caregiver writes the visit's progress note.
  * Only the shift id is in the URL. The note is held in memory only — never local/session storage — and
  * goes to the server through save_progress_note_draft (Save + debounced autosave) and
- * submit_progress_note. Units and billing are never shown; a late arrival shows "Late arrival recorded".
+ * submit_progress_note. A late arrival shows "Late arrival recorded"; S12: "Units to bill: N of M" (full 15-minute blocks
+ * between arrival and end) with the reason when units are lost; an end time is required to submit.
  */
 export default function CaregiverNote() {
   const { shiftId = "" } = useParams();
@@ -193,6 +195,17 @@ export default function CaregiverNote() {
             <Label htmlFor="end" className="text-base">End time</Label>
             <Input id="end" type="time" className="h-11 text-base" disabled={!editable} value={end} onChange={(e) => { setEnd(e.target.value); touch(); }} />
           </div>
+          {tz && (() => {
+            const u = unitsToBill({ scheduledStart: n.scheduled_start, scheduledEnd: n.scheduled_end,
+              arrival: arrival ? shiftTimeToIso(n.service_date, arrival, tz, n.scheduled_start, 60) : null,
+              end: end ? shiftTimeToIso(n.service_date, end, tz, n.scheduled_start, 0) : null });
+            return (
+              <p className="text-sm sm:col-span-2" data-testid="units-to-bill" data-units={u.units} data-scheduled={u.scheduled}>
+                <span className="font-medium">Units to bill: {u.units} of {u.scheduled}</span>
+                {u.units < u.scheduled && <span className="text-muted-foreground"> ({notBilledReason(u.late, u.early)}: only full 15-minute blocks are billed)</span>}
+              </p>
+            );
+          })()}
           <div className="space-y-2">
             <Label htmlFor="location" className="text-base">Location</Label>
             <Input id="location" className="h-11 text-base" maxLength={200} disabled={!editable} value={location} onChange={(e) => { setLocation(e.target.value); touch(); }} />
@@ -259,7 +272,7 @@ export default function CaregiverNote() {
         </div>
       )}
 
-      <SubmitSheet open={sheet} onOpenChange={setSheet} note={note} entries={entries} arrival={arrival} narrative={narrative} clock={clock.data}
+      <SubmitSheet open={sheet} onOpenChange={setSheet} note={note} entries={entries} arrival={arrival} end={end} narrative={narrative} clock={clock.data}
         onRefreshClock={() => clock.refetch()} flush={saveNow}
         onSubmitted={async () => {
           const r = await supabase.rpc("get_progress_note_for_caregiver", { _note_id: noteId as string });
@@ -275,8 +288,8 @@ function BackLink() {
   return <Link to="/caregiver/notes" className="flex min-h-11 w-fit items-center gap-1 text-base text-muted-foreground hover:text-foreground"><ArrowLeft className="h-4 w-4" />Notes</Link>;
 }
 
-function SubmitSheet({ open, onOpenChange, note, entries, arrival, narrative, clock, onRefreshClock, flush, onSubmitted }: {
-  open: boolean; onOpenChange: (o: boolean) => void; note: NotePayload; entries: EntryState; arrival: string; narrative: string;
+function SubmitSheet({ open, onOpenChange, note, entries, arrival, end, narrative, clock, onRefreshClock, flush, onSubmitted }: {
+  open: boolean; onOpenChange: (o: boolean) => void; note: NotePayload; entries: EntryState; arrival: string; end: string; narrative: string;
   clock: CaregiverClock | undefined; onRefreshClock: () => void; flush: () => Promise<boolean>; onSubmitted: () => Promise<void>;
 }) {
   const [name, setName] = useState(""); const [error, setError] = useState<string | null>(null); const [busy, setBusy] = useState(false);
@@ -284,6 +297,7 @@ function SubmitSheet({ open, onOpenChange, note, entries, arrival, narrative, cl
   const n = note.note;
   const missing: string[] = [];
   if (!arrival) missing.push("the client's arrival time");
+  if (!end) missing.push("the client's end time");
   if (n.note_kind === "respite" && !narrative.trim()) missing.push("the session narrative");
   if (n.note_kind === "cls") for (const e of note.entries) {
     const left = missingAnswers(e.measures, entries[e.entry_id]?.answers ?? {});

@@ -28,7 +28,7 @@ async function ids() {
     const cg = Object.fromEntries((await q(`SELECT lower(first_name) k, id FROM public.caregivers WHERE virtual_office_id = $1`, [off.id])).map((r) => [r.k, r.id]));
     const users = Object.fromEntries((await q(`SELECT email, id FROM public.profiles WHERE email LIKE $1`, [`%${D.EMAIL_TAG}`])).map((r) => [r.email, r.id]));
     const note = async (status, kind) => (await q(`SELECT n.id, n.shift_id FROM public.progress_notes n JOIN public.clients c ON c.id = n.client_id WHERE c.virtual_office_id = $1 AND n.status = $2 AND n.note_kind = $3 ORDER BY n.service_date LIMIT 1`, [off.id, status, kind]))[0];
-    const clock = (await q(`SELECT (d - (extract(isodow FROM d)::int - 1))::text w0 FROM (SELECT (now() AT TIME ZONE 'America/New_York')::date d) x`))[0];
+    const clock = (await q(`SELECT (d - ((extract(isodow FROM d)::int - (SELECT billing_week_start FROM public.virtual_office WHERE id = $1) + 7) % 7))::text w0 FROM (SELECT (now() AT TIME ZONE 'America/New_York')::date d) x`, [off.id]))[0];
     const wk = (await q(`SELECT ($1::date - 7)::text a, ($1::date - 14)::text b`, [clock.w0]))[0];
     return { off: off.id, cl, cg, users, submitted: await note("submitted", "cls"), reviewedCls: await note("reviewed", "cls"), billedResp: await note("billed", "respite"),
       draft: await note("draft", "cls"), lastWeek: wk.a, weekBefore: wk.b };
@@ -99,7 +99,10 @@ async function staff(base, I, browser, w) {
   const btn = row.getByRole("button", { name: /^Assign$/ }); if (w < 500) await btn.dispatchEvent("click"); else await btn.click();
   const dlg = page.locator('[role="dialog"]').last(); await dlg.waitFor(); await page.waitForTimeout(2500);
   await dlg.getByPlaceholder("Search caregivers...").fill("Mia"); await dlg.locator('button[role="combobox"]').first().click();
-  await page.getByRole("option", { name: /Mia Lopez/ }).first().click(); await page.waitForTimeout(1000);
+  // at 390 the existing Schedule page is wider than the screen and the dialog sits partly off-screen: pick with the keyboard
+  if (w < 500) { await page.getByRole("option", { name: /Mia Lopez/ }).first().waitFor(); await page.keyboard.press("Enter"); }
+  else await page.getByRole("option", { name: /Mia Lopez/ }).first().click();
+  await page.waitForTimeout(1000);
   await dlg.locator('[data-testid="elig-compliance"]').scrollIntoViewIfNeeded().catch(() => {}); await shot(page, "assign-mia-advisory", w, false);
   for (let i = 0; i < 4 && (await page.locator('[role="dialog"], [role="listbox"]').count()) > 0; i++) { await page.keyboard.press("Escape"); await page.waitForTimeout(400); }
   await ctx.close();

@@ -34,9 +34,9 @@ export function fixLinkFor(code: string, ctx: { caregiverId?: string | null; cli
 }
 
 /** The care-plan lines of a result: blocked (hard, enforcement on) first, then advisory (enforcement off). */
-export function complianceLines(r: EligibilityResult, ctx: { caregiverId?: string | null; clientId?: string | null }): ComplianceLine[] {
+export function complianceLines(r: EligibilityResult, ctx: { caregiverId?: string | null; clientId?: string | null; extra?: EligibilityIssue[] }): ComplianceLine[] {
   const hard = r.blockers.filter((b) => !b.overridable && isComplianceCode(b.code));
-  const adv = r.flags.filter((f) => isComplianceCode(f.code));
+  const adv = r.flags.filter((f) => isComplianceCode(f.code)).concat(ctx.extra ?? []);   // extra: UI-computed advisories (S12 group ratio)
   return [...hard.map((issue) => ({ issue, blocked: true })), ...adv.map((issue) => ({ issue, blocked: false }))]
     .map((l) => ({ ...l, label: complianceLabel(l.issue), fix: fixLinkFor(l.issue.code, ctx) }));
 }

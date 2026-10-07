@@ -19,10 +19,10 @@ const rows = []; const rec = (id, ok, d) => { rows.push({ id, ok }); console.log
         office: (await c.query(`SELECT name, care_plan_module_enabled m, compliance_enforcement_enabled e FROM public.virtual_office WHERE id = $1`, [off.id])).rows[0],
         clients: (await c.query(`SELECT id, first_name || ' ' || last_name n, case_number FROM public.clients WHERE virtual_office_id = $1 ORDER BY 2`, [off.id])).rows,
       };
+      const clock = (await c.query(`SELECT d::text today, (d - ((extract(isodow FROM d)::int - (SELECT billing_week_start FROM public.virtual_office WHERE id = $1) + 7) % 7))::text w0, (SELECT billing_week_start FROM public.virtual_office WHERE id = $1) wks FROM (SELECT (now() AT TIME ZONE 'America/New_York')::date d) x`, [off.id])).rows[0];
+      const lastW = (await c.query(`SELECT ($1::date - 7)::text a, ($1::date - 14)::text b`, [clock.w0])).rows[0];
       await c.query("SET LOCAL ROLE authenticated");
       const as = async (uid, sql, p = []) => { await c.query("SELECT set_config('request.jwt.claim.sub', $1, true)", [uid]); return (await c.query(sql, p)).rows[0].v; };
-      const clock = (await c.query(`SELECT d::text today, (d - (extract(isodow FROM d)::int - 1))::text w0 FROM (SELECT (now() AT TIME ZONE 'America/New_York')::date d) x`)).rows[0];
-      const lastW = (await c.query(`SELECT ($1::date - 7)::text a, ($1::date - 14)::text b`, [clock.w0])).rows[0];
       const out = {
         clock, ...pre,
         onboarding: await as(pat, `SELECT list_clients_onboarding($1) v`, [off.id]),
@@ -36,6 +36,9 @@ const rows = []; const rec = (id, ok, d) => { rows.push({ id, ok }); console.log
         status: await as(sam, `SELECT list_billing_week_status() v`),
       };
       await c.query("RESET ROLE");
+      out.units = (await c.query(`SELECT to_char(n.scheduled_start AT TIME ZONE 'America/New_York', 'Dy') dy, n.units_used::int u, n.units_scheduled::int s, n.arrived_late late,
+          date_trunc('minute', n.actual_end) < n.scheduled_end early FROM public.progress_notes n JOIN public.clients cl ON cl.id = n.client_id
+          WHERE cl.virtual_office_id = $1 AND cl.first_name = 'Zoe' AND n.service_date BETWEEN $2::date AND $2::date + 6 AND n.status IN ('reviewed','submitted','returned') ORDER BY n.scheduled_start`, [off.id, lastW.a])).rows;
       out.kinds = (await c.query(`SELECT count(DISTINCT mt.kind)::int n, string_agg(DISTINCT mt.kind::text, ',') k FROM public.objective_measures om
         JOIN public.measure_types mt ON mt.id = om.measure_type_id JOIN public.care_plan_objectives o ON o.id = om.objective_id JOIN public.care_plan_goals g ON g.id = o.goal_id
         JOIN public.care_plans p ON p.id = g.care_plan_id WHERE p.virtual_office_id = $1 AND p.status = 'active'`, [off.id])).rows[0];
@@ -70,6 +73,10 @@ const rows = []; const rec = (id, ok, d) => { rows.push({ id, ok }); console.log
   rec("F5 last week: NOT built (next action 'build'); preview exclusions: submitted, returned, overdue/no note; reviewed notes waiting to be built incl. a late arrival",
     lw.batches.length === 0 && lw.next_action === "build" && reasons.includes("not_reviewed") && reasons.includes("returned") && reasons.includes("no_note") && reasons.filter((x) => x === "not_in_bill_yet").length === 4,
     `${lw.week_start}: ${lw.next_action}; reasons ${reasons.join(",")}; pending ${lw.pending_review}`);
+  rec("W billing week Sunday–Saturday (the office's billing_week_start = 7): last week starts on a Sunday", r.clock.wks === 7 && lw.week_start === r.lastWeek.week_start && new Date(`${lw.week_start}T12:00:00Z`).getUTCDay() === 0, `${lw.week_start}..${lw.week_end}`);
+  const u = r.units.map((x) => `${x.dy} ${x.u}/${x.s}${x.late ? " late" : ""}${x.early ? " early" : ""}`);
+  rec("F4 units: only full 15-minute blocks — last week a 09:20 arrival bills 2 of 4 and a 09:50 departure bills 3 of 4",
+    r.units.some((x) => x.late && x.u === 2 && x.s === 4) && r.units.some((x) => x.early && !x.late && x.u === 3 && x.s === 4), u.join(", "));
   const wb = r.weekBefore.batches[0];
   rec("F5 the week before last: main bill billed (locked)", !!wb && wb.status === "billed" && wb.supplement === 0, wb ? `${wb.status}, ${wb.totals.notes} notes, ${wb.totals.units_billed} units` : "none");
   const st = (r.status || []).find((x) => x.office_id === off.id);

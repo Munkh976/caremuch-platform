@@ -33,6 +33,8 @@ import {
 import { evaluateEligibilityBulk, type EligibilityResult } from "@/lib/shiftEligibility";
 import { ComplianceLines, EligibilityReport } from "@/components/schedule/EligibilityReport";
 import { complianceLines } from "@/lib/eligibilityCompliance";
+import { fetchGroupShifts, groupClients, groupRatioIssue } from "@/lib/groupRatio";
+import { useQuery } from "@tanstack/react-query";
 import { useComplianceOffices } from "@/hooks/useComplianceOffices";
 
 interface AssignShiftDialogProps {
@@ -188,10 +190,16 @@ export const AssignShiftDialog = ({
   // (advisory while enforcement is off). Display only; check_assignment_eligibility decides.
   const { offices: complianceOffices } = useComplianceOffices();
   const rippleOffice = complianceOffices.find((o) => o.id === shift?.virtual_office_id);
+  const ripple = !!rippleOffice && (rippleOffice.moduleEnabled || rippleOffice.enforcementEnabled);
+  // S12: group session above 1:2 = advisory "Above Ripple's preferred ratio (1:2)" (computed here; never blocks)
+  const groupShifts = useQuery({ queryKey: ["group-shifts", shift?.group_session_id], enabled: ripple && !!shift?.group_session_id, staleTime: 30_000,
+    queryFn: () => fetchGroupShifts(shift.group_session_id) });
+  const groupIssue = caregiverId && groupShifts.data ? groupRatioIssue(groupClients(groupShifts.data, caregiverId, { shiftId: shift.id, clientId: shift.client_id ?? null })) : null;
   const eligContext = {
-    ripple: !!rippleOffice && (rippleOffice.moduleEnabled || rippleOffice.enforcementEnabled),
+    ripple,
     caregiverId,
     clientId: shift?.client_id ?? null,
+    extra: groupIssue ? [groupIssue] : [],
   };
   const advisoryLines = eligContext.ripple && selectedResult && selectedResult.eligible
     ? complianceLines(selectedResult, eligContext).filter((l) => !l.blocked)

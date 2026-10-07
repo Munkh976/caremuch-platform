@@ -173,8 +173,8 @@ async function managerFlows(base, F, browser) {
   const confirmText = await page.locator('[data-testid="confirm-totals"]').innerText();
   await shot(page, "approve-confirm-1440");
   await page.locator('[data-testid="confirm-approve"]').click(); await page.locator('[data-testid="batch-0-approved-banner"]').waitFor({ timeout: 20000 }); await page.waitForTimeout(5000);
-  rec("A1 Approve week: one action with a confirm showing the totals (4 notes, 16 scheduled, 15 billed, 1 lost); afterwards 'Approved … by Bren Miller'",
-    /Notes\s*4/.test(confirmText) && /Units billed\s*15/.test(confirmText) && /Units lost to late arrival\s*1/.test(confirmText) && /Bren Miller/.test(await page.locator('[data-testid="batch-0-approved-banner"]').innerText()),
+  rec("A1 Approve week: one action with a confirm showing the totals (4 notes, 16 scheduled, 15 billed, 1 not billed (late / early), S12 label); afterwards 'Approved … by Bren Miller'",
+    /Notes\s*4/.test(confirmText) && /Units billed\s*15/.test(confirmText) && /Units not billed \(late \/ early\)\s*1/.test(confirmText) && /Bren Miller/.test(await page.locator('[data-testid="batch-0-approved-banner"]').innerText()),
     confirmText.replace(/\s+/g, " "));
   // S9b (a): a note reviewed after approval -> Build week again reopens -> approve again
   await must(F.cgA.c, "submit_progress_note", { _note_id: F.N.n5, _typed_signature: "Ana Rivera" }); await review(F.N.n5);
@@ -208,7 +208,7 @@ async function managerFlows(base, F, browser) {
   // S9b (b): a note reviewed after billing -> Build supplement 1 -> approve -> billed -> CSV -s1
   const n6 = await must(F.cgA.c, "create_progress_note_for_shift", { _shift_id: F.S.s6 });
   const st6 = (await admin.from("progress_notes").select("scheduled_start").eq("id", n6).single()).data.scheduled_start;
-  await must(F.cgA.c, "save_progress_note_draft", { _note_id: n6, _header: { client_arrived_at: st6 }, _entries: [], _narrative_text: null });
+  await must(F.cgA.c, "save_progress_note_draft", { _note_id: n6, _header: { client_arrived_at: st6, actual_end: (await admin.from("progress_notes").select("scheduled_end").eq("id", n6).single()).data.scheduled_end }, _entries: [], _narrative_text: null });
   await must(F.cgA.c, "submit_progress_note", { _note_id: n6, _typed_signature: "Ana Rivera" }); await review(n6);
   await openBilling(page, base, `?week=${F.ws}`);
   const rSup = await reasonOf(page, n6), supLabel = await page.locator('[data-testid="build-supplement"]').innerText();
@@ -268,7 +268,7 @@ async function approveMobile(base, F, browser) {
   await must(F.mgr.c, "assign_caregiver_to_shift", { _shift_id: id, _caregiver_id: F.G1, _method: "manual", _notes: "round7 fixture", _override_reason: "round7 fixture (disposable)" });
   const note = await must(F.cgA.c, "create_progress_note_for_shift", { _shift_id: id });
   const st = (await admin.from("progress_notes").select("scheduled_start").eq("id", note).single()).data.scheduled_start;
-  await must(F.cgA.c, "save_progress_note_draft", { _note_id: note, _header: { client_arrived_at: st }, _entries: [], _narrative_text: "Park visit." });
+  await must(F.cgA.c, "save_progress_note_draft", { _note_id: note, _header: { client_arrived_at: st, actual_end: (await admin.from("progress_notes").select("scheduled_end").eq("id", note).single()).data.scheduled_end }, _entries: [], _narrative_text: "Park visit." });
   await must(F.cgA.c, "submit_progress_note", { _note_id: note, _typed_signature: "Ana Rivera" });
   await must(F.mgr.c, "review_progress_note", { _note_id: note, _billable: true, _non_billable_reason: null });
   const c = await ctxFor(browser, 390); const p = await c.newPage(); await login(p, base, F.mgr);
@@ -292,13 +292,32 @@ async function access(base, F, browser) {
   await c.close();
 }
 
+// S12 (B): Ripple's billing week is Sunday–Saturday (Q11) — the existing per-office setting (billing_week_start = 7). With it set,
+// the picker's default "last complete week" is Sun–Sat, prev / next step a week, and the dashboard line follows it.
+async function sundayWeek(base, F, browser) {
+  const { error } = await admin.from("virtual_office").update({ billing_week_start: 7 }).eq("id", F.RX);
+  if (error) throw new Error(`week start: ${error.message}`);
+  const c = await ctxFor(browser, 1440); const p = await c.newPage(); await login(p, base, F.mgr); await openBilling(p, base);
+  const label = await p.locator('[data-testid="week-label"]').innerText(); const def = new URL(p.url());
+  await shot(p, "week-picker-sunday-1440");
+  const w = await must(F.mgr.c, "get_billing_week", { _office_id: F.RX });
+  await p.locator('[data-testid="week-prev"], button[aria-label*="revious"]').first().click(); await p.waitForTimeout(2000);
+  const prev = await p.locator('[data-testid="week-label"]').innerText();
+  const st = (await must(F.mgr.c, "list_billing_week_status", {})).find((x) => x.office_id === F.RX);
+  const dow = (d) => new Date(`${d}T12:00:00Z`).getUTCDay();
+  rec("B1 Sunday-start office (Ripple Sun–Sat): the default week reads 'Sun … – Sat …' (server week Sun–Sat), the previous week too; the dashboard line uses the same week",
+    /^Sun, .* – Sat, /.test(label) && /^Sun, .* – Sat, /.test(prev) && prev !== label && dow(w.week_start) === 0 && dow(w.week_end) === 6 && st.week_start === w.week_start,
+    `"${label}" → prev "${prev}"; server ${w.week_start}..${w.week_end}; dashboard ${st.week_start}; url ${def.search || "(default)"}`);
+  await c.close();
+}
+
 async function run(base) {
   let F;
   try {
     F = await setup();
     log(`fixtures [${RUN}]: Portage (code RE-PORTAGE, module on) + Kalamazoo; Bren Miller (manager), Kim Young (other office), HR, scheduler, Ana Rivera, client user; Zoe N. (ISK-2026-0410 8 units, ISK-2026-0417 40 units cap 16/week), Max O. (respite ISK-2026-0502); last complete week ${F.ws}: 09:00, 09:01 (late), submitted, respite, returned, visit without note`);
     const browser = await chromium.launch();
-    try { await managerFlows(base, F, browser); await mobile(base, F, browser); await approveMobile(base, F, browser); await access(base, F, browser); } finally { await browser.close(); }
+    try { await managerFlows(base, F, browser); await mobile(base, F, browser); await approveMobile(base, F, browser); await access(base, F, browser); await sundayWeek(base, F, browser); } finally { await browser.close(); }
   } finally { await teardown(F); await closeDb(); }
 }
 

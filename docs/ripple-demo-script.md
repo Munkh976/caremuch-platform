@@ -63,8 +63,8 @@ The demo follows the five flows of *Ripple Care Plan Workflow & Requirements v1.
 1. **Today.** *(caregiver-ana-today)* Today's visit and notes due.
 2. **Notes.** *(caregiver-ana-notes)* To do (one overdue) and history.
 3. **Open today's CLS note.** *(caregiver-ana-cls-note)* One block per objective with Zoe's instructions and
-   questions. **Say:** "The arrival time decides the units. For now any late arrival loses the first 15-minute unit;
-   we've asked you to confirm the exact rule (open question 4)."
+   questions. Below the times: **"Units to bill: N of M"**. **Say:** "Only full 15-minute blocks the client attends are
+   billed; arriving at 9:20 bills from 9:30." (Type 09:20 to show "2 of 4 (late arrival)", then put it back.)
 4. **Submit** → the sign sheet *(caregiver-ana-sign-sheet)* → **cancel**.
 ## 5. Review and weekly billing — Flow 3 review + Flow 4 (5 min) — Pat Morgan
 1. **Notes to Review.** *(notes-to-review)* One note waiting: Mia's Wednesday visit.
@@ -72,8 +72,10 @@ The demo follows the five flows of *Ripple Care Plan Workflow & Requirements v1.
    Then **Mark reviewed**. *(Important: last week can only be approved when no note is waiting for review.)*
 3. **Print** a respite note *(print-respite)*: Ripple's paper layout with the billing footer and signature lines.
 4. **Weekly Billing → last week.** *(billing-last-week)* Not built; everything left out is listed with its reason.
-   - **Build week**: the bill groups by client and authorization (A before B), shows the late arrival's lost unit and
-     the weekly cap left. The returned note and the visit with no note stay listed as left out.
+   - **Build week**: the bill groups by client and authorization (A before B) and shows **Units not billed (late /
+     early)**: Tuesday's 09:20 arrival bills 2 of 4 and Thursday's 09:50 departure 3 of 4 (the note links say
+     "(late)" / "(left early)"), plus the weekly cap left. The returned note and the visit with no note stay listed as
+     left out. The billing week is Sunday to Saturday.
    - **Approve week** (confirm with totals) → **Mark billed** → **Export CSV** (units only, no client names in the file
      name).
 5. **The week before** *(billing-week-before)*: billed and locked. **Say:** "A note reviewed after billing goes into a

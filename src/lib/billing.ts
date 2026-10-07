@@ -5,7 +5,7 @@
  */
 import { clientShort, fmtDay, SERVICE_LABEL } from "./caregiverNotes";
 
-export interface BillNote { note_id: string; service_date: string; scheduled_start: string; caregiver_name: string | null; units_scheduled: number; units_billed: number; arrived_late: boolean; approved: boolean }
+export interface BillNote { note_id: string; service_date: string; scheduled_start: string; caregiver_name: string | null; units_scheduled: number; units_billed: number; arrived_late: boolean; left_early?: boolean; approved: boolean }
 export interface BillLine {
   client_id: string; client_first_name: string | null; client_last_initial: string | null; case_number: string | null;
   authorization: { id: string; auth_number: string; service_type: string; service_code: string | null; effective_date: string; expiration_date: string;
@@ -83,7 +83,7 @@ export function byClient(lines: BillLine[]) {
 const cell = (v: unknown) => { const s = v == null ? "" : String(v); return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
 /** The claim CSV of one bill (main or supplement): one row per client x authorization, a total row; units only. */
 export function billingCsv(w: BillingWeek, b: BillBatch): string {
-  const head = ["Week start", "Week end", "Office", "Bill", "Client", "Case number", "Authorization #", "Service", "Service code", "Notes", "Units scheduled", "Units billed", "Units lost to late arrival"];
+  const head = ["Week start", "Week end", "Office", "Bill", "Client", "Case number", "Authorization #", "Service", "Service code", "Notes", "Units scheduled", "Units billed", "Units not billed (late / early)"];
   const bill = b.supplement === 0 ? "main" : `supplement ${b.supplement}`;
   const rows = b.lines.map((l) => [w.week_start, w.week_end, w.office.name, bill, clientShort(l.client_first_name, l.client_last_initial), l.case_number ?? "",
     l.authorization.auth_number, SERVICE_LABEL[l.authorization.service_type] ?? l.authorization.service_type, l.authorization.service_code ?? "",

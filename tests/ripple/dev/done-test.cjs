@@ -141,7 +141,7 @@ async function scenario(F) {
   const fill = async (k, lateSec) => { const n = await row(N[k]);
     const { data: es } = await admin.from("progress_note_entries").select("id").eq("progress_note_id", N[k]);
     const ms = (await admin.from("objective_measures").select("id").eq("objective_id", S.objA).eq("is_active", true)).data.map((m) => m.id);
-    await must(F.cg.c, "save_progress_note_draft", { _note_id: N[k], _header: { client_arrived_at: plus(n, lateSec) },
+    await must(F.cg.c, "save_progress_note_draft", { _note_id: N[k], _header: { client_arrived_at: plus(n, lateSec), actual_end: (await admin.from("progress_notes").select("scheduled_end").eq("id", N[k]).single()).data.scheduled_end },
       _entries: es.map((e) => ({ entry_id: e.id, data: Object.fromEntries(ms.map((m) => [m, { value: "Yes" }])) })), _narrative_text: n.note_kind === "respite" ? "Fixture respite session." : null });
     await must(F.cg.c, "submit_progress_note", { _note_id: N[k], _typed_signature: "ZZ G" }); };
   await fill("n1", 0); await fill("n2", 301); await fill("n3", 59); await fill("n4", 0); await fill("r1", 0);   // n3 +0:59: on time at minute precision (no grace period, Oct 6)
@@ -246,12 +246,13 @@ async function scenario(F) {
     pass(reads["office-Y manager"] === 0 && reads["agency-B admin"] === 0 && writes.length === 0), `rows seen ${JSON.stringify(reads)}; ${writes.length ? writes.join("; ") : "20 RPC calls + 2 direct updates refused"}`);
 
   // ================= 9. rollout regression (real data, read-only) =================
+  // (the owner-approved persistent demo office, code RPLDEMO in its own demo agency, is not real data)
   const rr = await pgRead(async (c) => {
-    const flagged = (await c.query(`SELECT count(*)::int n FROM public.virtual_office WHERE (compliance_enforcement_enabled OR care_plan_module_enabled) AND name NOT LIKE 'ZZ %'`)).rows[0].n;
-    const grouped = (await c.query(`SELECT count(*)::int n FROM public.shifts s JOIN public.virtual_office vo ON vo.id = s.virtual_office_id WHERE s.group_session_id IS NOT NULL AND vo.name NOT LIKE 'ZZ %'`)).rows[0].n;
+    const flagged = (await c.query(`SELECT count(*)::int n FROM public.virtual_office WHERE (compliance_enforcement_enabled OR care_plan_module_enabled) AND name NOT LIKE 'ZZ %' AND code IS DISTINCT FROM 'RPLDEMO'`)).rows[0].n;
+    const grouped = (await c.query(`SELECT count(*)::int n FROM public.shifts s JOIN public.virtual_office vo ON vo.id = s.virtual_office_id WHERE s.group_session_id IS NOT NULL AND vo.name NOT LIKE 'ZZ %' AND vo.code IS DISTINCT FROM 'RPLDEMO'`)).rows[0].n;
     const pairs = (await c.query(`
       WITH sh AS (SELECT s.id, s.virtual_office_id FROM public.shifts s JOIN public.virtual_office vo ON vo.id = s.virtual_office_id
-                   WHERE vo.name NOT LIKE 'ZZ %' AND s.shift_date >= (now() AT TIME ZONE vo.timezone)::date AND s.status IS DISTINCT FROM 'cancelled'
+                   WHERE vo.name NOT LIKE 'ZZ %' AND vo.code IS DISTINCT FROM 'RPLDEMO' AND s.shift_date >= (now() AT TIME ZONE vo.timezone)::date AND s.status IS DISTINCT FROM 'cancelled'
                    ORDER BY s.shift_date, s.start_time, s.id LIMIT 30),
            pr AS (SELECT sh.id sid, cg.id cid FROM sh CROSS JOIN LATERAL (SELECT id FROM public.caregivers g WHERE g.virtual_office_id = sh.virtual_office_id ORDER BY g.id LIMIT 8) cg)
       SELECT sid, cid, public.check_assignment_eligibility(sid, cid) AS live, public.cp_eligibility_core(sid, cid, '{"rules": false}'::jsonb) AS off FROM pr`)).rows;

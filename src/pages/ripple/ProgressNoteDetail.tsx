@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { clientShort, fmtDay, fmtTime, SERVICE_LABEL } from "@/lib/caregiverNotes";
 import { answerText, byGoal, historyLabel, type StaffNote } from "@/lib/staffNotes";
+import { leftEarly, notBilledReason } from "@/lib/units";
+import { GroupRatioAdvisory } from "@/components/compliance/notes/GroupRatioAdvisory";
 
 const Field = ({ label, children, testid }: { label: string; children: React.ReactNode; testid?: string }) => (
   <div data-testid={testid}><dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</dt><dd className="text-base">{children}</dd></div>
@@ -28,7 +30,7 @@ export function NoteHeaderFields({ d }: { d: StaffNote }) {
       <Field label="Arrival" testid="arrival">{n.client_arrived_at ? fmtTime(n.client_arrived_at, tz) : "—"}{n.arrived_late && <Badge variant="outline" className="ml-2">Late arrival</Badge>}</Field>
       <Field label="End time">{n.actual_end ? fmtTime(n.actual_end, tz) : "—"}</Field>
       <Field label="Location">{n.location ?? "—"}</Field>
-      <Field label="Staff : client ratio" testid="ratio">{n.staff_client_ratio ?? d.group_session?.staff_client_ratio ?? "—"}{d.group_session?.staff_client_ratio ? <span className="text-sm text-muted-foreground"> (group {d.group_session.staff_client_ratio})</span> : null}</Field>
+      <Field label="Staff : client ratio" testid="ratio">{n.staff_client_ratio ?? d.group_session?.staff_client_ratio ?? "—"}{d.group_session?.staff_client_ratio ? <span className="text-sm text-muted-foreground"> (group {d.group_session.staff_client_ratio})</span> : null}{d.group_session ? <GroupRatioAdvisory groupSessionId={d.group_session.id} shiftId={n.shift_id} /> : null}</Field>
       <Field label="Case number">{d.client.case_number ?? "—"}</Field>
     </dl>
   );
@@ -64,7 +66,8 @@ export default function ProgressNoteDetail() {
                 <NoteHeaderFields d={d} />
                 <div className="grid grid-cols-1 gap-3 rounded-md border p-3 sm:grid-cols-3" data-testid="note-units">
                   <Field label="Units scheduled">{d.note.units_scheduled ?? "—"}</Field>
-                  <Field label="Units to bill">{d.note.units_to_bill}{d.note.arrived_late ? <span className="text-sm text-muted-foreground"> (first unit lost: late arrival)</span> : null}</Field>
+                  <Field label="Units to bill" testid="units-to-bill">{d.note.units_to_bill} of {d.note.units_scheduled ?? "—"}{Number(d.note.units_to_bill) < Number(d.note.units_scheduled ?? 0) && notBilledReason(d.note.arrived_late, leftEarly(d.note.actual_end, d.note.scheduled_end))
+                    ? <span className="text-sm text-muted-foreground"> ({notBilledReason(d.note.arrived_late, leftEarly(d.note.actual_end, d.note.scheduled_end))})</span> : null}</Field>
                   <Field label={d.authorization?.preview ? "Authorization (FIFO, at review)" : "Authorization"} testid="note-auth">
                     {d.authorization ? d.authorization.auth_number : d.note.billable === false ? `Not billable: ${d.note.non_billable_reason ?? ""}` : d.note.status === "submitted" ? "No authorization fits yet" : "—"}</Field>
                 </div>

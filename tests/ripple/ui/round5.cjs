@@ -229,10 +229,10 @@ async function caregiverFlows(base, F, browser) {
   const ent = (await admin.from("progress_note_entries").select("data, notes_text, objective_id").eq("progress_note_id", n1[0].id)).data.find((e) => e.objective_id === F.objA);
   const late = await page.locator('[data-testid="late-arrival"]').isVisible().catch(() => false);
   const bodyNow = await page.locator("body").innerText();
-  rec("N2 explicit Save stores header + every answer shape the server accepts (yes/no, prompt level, steps, tally 3, trials, short, narrative; staff note not answerable); arrival 09:06 is late: 'Late arrival recorded' shows, units are never shown",
+  rec("N2 explicit Save stores header + every answer shape the server accepts (yes/no, prompt level, steps, tally 3, trials, short, narrative; staff note not answerable); arrival 09:06 is late: 'Late arrival recorded' shows, and (S12) 'Units to bill: N of M (late arrival ...)' equals the stored units",
     n1.length === 1 && ent.data[M["Did Zoe take part?"]]?.value === "Yes" && ent.data[M["Highest prompt level used"]]?.value === "Verbal" && JSON.stringify(ent.data[M["Steps completed"]]?.steps) === "[0,2]"
       && ent.data[M["Times Zoe asked for help"]]?.count === 3 && ent.data[M["Cut the vegetables"]]?.trials?.length === 3 && ent.data[M["What did Zoe cook?"]]?.value === "Pasta"
-      && !(M["Remember: Zoe prefers quiet music while cooking."] in ent.data) && n1[0].arrived_late && late && !/\bunits?\b/i.test(bodyNow),
+      && !(M["Remember: Zoe prefers quiet music while cooking."] in ent.data) && n1[0].arrived_late && late && new RegExp(`Units to bill: ${n1[0].units_used} of ${n1[0].units_scheduled} \\(late arrival`).test(bodyNow),
     `notes ${n1.length}; answers ${Object.keys(ent.data).length}; late ${n1[0].arrived_late} (UI ${late}); units ${n1[0].units_scheduled} -> ${n1[0].units_used}; "unit" on page ${/\bunits?\b/i.test(bodyNow)}`);
   // autosave
   await page.fill("#location", "Zoe's kitchen (autosaved)"); await page.waitForTimeout(4500);
@@ -297,8 +297,8 @@ async function caregiverFlows(base, F, browser) {
   const s4on = (await noteRow(F.S4))[0]; const s4onLate = await page.locator('[data-testid="late-arrival"]').count();
   await page.fill("#arrival", "09:01"); await page.getByRole("button", { name: "Save", exact: true }).click(); await page.waitForTimeout(2500);
   const s4n = (await noteRow(F.S4))[0]; const s4late = await page.locator('[data-testid="late-arrival"]').isVisible(); const s4text = await page.locator("body").innerText();
-  rec("N8 no grace period: arrival 09:00 bills in full with no late notice; 09:01 (typed in the time field) gives units_used = scheduled - 1 in the DB and the UI shows only 'Late arrival recorded'",
-    !s4on.arrived_late && s4on.units_used === s4on.units_scheduled && s4onLate === 0 && s4n.arrived_late && s4n.units_used === s4n.units_scheduled - 1 && s4late && !/\bunits?\b/i.test(s4text),
+  rec("N8 no grace period: arrival 09:00 bills in full with no late notice; 09:01 (typed in the time field) gives units_used = scheduled - 1 in the DB; the UI shows 'Late arrival recorded' and (S12) 'Units to bill: N-1 of N (late arrival ...)'",
+    !s4on.arrived_late && s4on.units_used === s4on.units_scheduled && s4onLate === 0 && s4n.arrived_late && s4n.units_used === s4n.units_scheduled - 1 && s4late && new RegExp(`Units to bill: ${s4n.units_used} of ${s4n.units_scheduled} \\(late arrival`).test(s4text),
     `09:00 ${s4on.units_scheduled} -> ${s4on.units_used}; 09:01 ${s4n.units_scheduled} -> ${s4n.units_used}; UI late ${s4late}`);
 
   // ---- another caregiver's shift ----

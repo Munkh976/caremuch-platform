@@ -93,7 +93,7 @@ async function afterB2(F) {
   const data = () => ({ [ms[0]]: { value: "N/A" }, [ms[1]]: { count: 3 } });
   const fill = async (key, sec) => { const id = (await rpc(F.cg.c, "create_progress_note_for_shift", { _shift_id: F.b2[key] })).v; const n = await note(id);
     const { data: es } = await admin.from("progress_note_entries").select("id").eq("progress_note_id", id);
-    const s = await rpc(F.cg.c, "save_progress_note_draft", { _note_id: id, _header: { client_arrived_at: plus(n, sec) }, _entries: es.map((e) => ({ entry_id: e.id, data: data() })) });
+    const s = await rpc(F.cg.c, "save_progress_note_draft", { _note_id: id, _header: { client_arrived_at: plus(n, sec), actual_end: (await admin.from("progress_notes").select("scheduled_end").eq("id", id).single()).data.scheduled_end }, _entries: es.map((e) => ({ entry_id: e.id, data: data() })) });
     if (s.err) log("fill", key, s.err); return id; };
   // happy path
   const c1 = await audited("create", F.cg.c, "create_progress_note_for_shift", { _shift_id: F.b2.S1 }, "progress_note_created");
@@ -106,7 +106,7 @@ async function afterB2(F) {
   rec("N1/N2 create (idempotent, CM objective excluded) + caregiver payload exact keys", pass(!c1.err && c1b.v === c1.v && keysOk && view.entries.length === 1),
     `${c1.err || "ok"}; same id ${c1b.v === c1.v}; entries ${view && view.entries.length}; keys exact ${keysOk}`);
   const n1 = await note(c1.v); const { data: e1 } = await admin.from("progress_note_entries").select("id").eq("progress_note_id", c1.v);
-  await rpc(F.cg.c, "save_progress_note_draft", { _note_id: c1.v, _header: { client_arrived_at: plus(n1, 0) }, _entries: [{ entry_id: e1[0].id, data: data() }] });
+  await rpc(F.cg.c, "save_progress_note_draft", { _note_id: c1.v, _header: { client_arrived_at: plus(n1, 0), actual_end: (await admin.from("progress_notes").select("scheduled_end").eq("id", c1.v).single()).data.scheduled_end }, _entries: [{ entry_id: e1[0].id, data: data() }] });
   const sub = await audited("submit", F.cg.c, "submit_progress_note", { _note_id: c1.v, _typed_signature: "Fixture Caregiver" }, "progress_note_submitted");
   const rv = await audited("review", F.mgrX.c, "review_progress_note", { _note_id: c1.v, _billable: true }, "progress_note_reviewed", () => c1.v);
   rec("N4 submit + review FIFO (earliest-expiring authorization)", pass(!sub.err && !rv.err && (await note(c1.v)).authorization_id === F.early && (await avail(F.early)) === 4),

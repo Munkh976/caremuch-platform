@@ -49,16 +49,17 @@ async function seed() {
   await D.closeDb();   // fresh read connection
   const must = async (c, fn, args) => { const { data, error } = await c.rpc(fn, args); if (error) throw new Error(`${fn}: ${error.message}`); return data; };
   const one = async (t, row) => { const { data, error } = await admin.from(t).insert(row).select("id").single(); if (error) throw new Error(`${t}: ${error.message}`); return data.id; };
-  const clock = await pgRead(async (c) => (await c.query(`SELECT d::text today, (d - (extract(isodow FROM d)::int - 1))::text w0, now() AS now,
+  const clock = await pgRead(async (c) => (await c.query(`SELECT d::text today, (d - (extract(isodow FROM d)::int % 7))::text w0, now() AS now,
     extract(hour FROM now() AT TIME ZONE $1)::int AS hour FROM (SELECT (now() AT TIME ZONE $1)::date d) x`, [TZ])).rows[0]);
   const at = async (base, k) => pgRead(async (c) => (await c.query(`SELECT ($1::date + $2::int)::text d`, [base, k])).rows[0].d);
   const W0 = clock.w0, TODAY = clock.today;
-  const day = (k) => at(W0, k);                 // k days after this Monday (negative = earlier weeks)
-  log(`clock: today ${TODAY}, this week from ${W0} (office time zone ${TZ})`);
+  const day = (k) => at(W0, k);                 // k days after this week's Sunday (billing week Sun–Sat; Monday = 1)
+  log(`clock: today ${TODAY}, this billing week (Sun–Sat) from ${W0} (office time zone ${TZ})`);
 
   // ---- the demo agency (no RPC creates an agency; the test fixtures insert it the same way) + office + users ----
   const A = await one("agency", { agency_name: D.AGENCY_NAME, city: "Portage", state: "MI", is_active: true });
-  const OFF = await one("virtual_office", { agency_id: A, name: D.OFFICE_NAME, code: D.OFFICE_CODE, timezone: TZ, city: "Portage", state: "MI", is_demo: true });
+  // Ripple's billing week is Sunday–Saturday (Q11): the existing per-office setting, ISO day 7 = Sunday
+  const OFF = await one("virtual_office", { agency_id: A, name: D.OFFICE_NAME, code: D.OFFICE_CODE, timezone: TZ, city: "Portage", state: "MI", billing_week_start: 7, is_demo: true });
   const U = {};
   for (const u of D.USERS) {
     const mail = D.email(D.slug(u));
@@ -187,7 +188,7 @@ async function seed() {
   const answer = (m) => ({ yes_no_na: { value: "Yes" }, prompt_level: { value: (m.options || [])[1] ?? (m.options || [])[0] }, graded_steps: { steps: [1, 2, 3] }, tally: { count: 1 },
     trials: { trials: Array.from({ length: m.trial_count || 0 }, (_, i) => ({ value: i === 1 ? "No" : "Yes" })) }, short_answer: { value: "Public library" },
     narrative: { value: "Zoe compared the two options and picked the library to return her book." } }[m.kind]);
-  const note = async (s, who, { lateMin = 0, submit = true } = {}) => {
+  const note = async (s, who, { lateMin = 0, earlyMin = 0, submit = true } = {}) => {
     const c = U[who].c;
     const n = await must(c, "create_progress_note_for_shift", { _shift_id: s });
     const v = await must(c, "get_progress_note_for_caregiver", { _note_id: n });
@@ -195,17 +196,17 @@ async function seed() {
     const entries = (v.entries || []).filter((e) => (e.measures || []).length).map((e) => ({ entry_id: e.entry_id,
       data: Object.fromEntries(e.measures.filter((m) => m.kind !== "staff_note").map((m) => [m.measure_id, answer(m)])) }));
     await must(c, "save_progress_note_draft", { _note_id: n, _header: { client_arrived_at: new Date(Date.parse(row.scheduled_start) + lateMin * 60000).toISOString(),
-      actual_end: row.scheduled_end, location: row.note_kind === "respite" ? "Family home" : "Community", staff_client_ratio: "1:1" }, _entries: entries,
+      actual_end: new Date(Date.parse(row.scheduled_end) - earlyMin * 60000).toISOString(), location: row.note_kind === "respite" ? "Family home" : "Community", staff_client_ratio: "1:1" }, _entries: entries,
       _narrative_text: row.note_kind === "respite" ? "Max chose a card game, then we walked the dog around the block. He was calm and cheerful." : null });
     if (submit) await must(c, "submit_progress_note", { _note_id: n, _typed_signature: U[who].full });
     return n;
   };
   const review = (n) => must(pat.c, "review_progress_note", { _note_id: n, _billable: true, _non_billable_reason: null });
   const S = {};
-  // week before last (W0-14 .. W0-8): billed
+  // week before last (Sun W0-14 .. Sat W0-8): billed
   const wb = [];
-  for (const [k, d, who] of [["zb1", -14, "ana"], ["zb2", -12, "ben"], ["zb3", -10, "ana"]]) { S[k] = await shift(CL.zoe, await day(d), "09:00", "10:00"); await assign(S[k], CG[who]); wb.push([S[k], who]); }
-  S.mb1 = await shift(CL.max, await day(-13), "14:00", "16:00", "RESP0001"); await assign(S.mb1, CG.mia); wb.push([S.mb1, "mia"]);
+  for (const [k, d, who] of [["zb1", -13, "ana"], ["zb2", -11, "ben"], ["zb3", -9, "ana"]]) { S[k] = await shift(CL.zoe, await day(d), "09:00", "10:00"); await assign(S[k], CG[who]); wb.push([S[k], who]); }
+  S.mb1 = await shift(CL.max, await day(-12), "14:00", "16:00", "RESP0001"); await assign(S.mb1, CG.mia); wb.push([S.mb1, "mia"]);
   const nb = []; for (const [s, who] of wb) nb.push(await note(s, who));
   for (const n of nb) await review(n);
   const wsB = await day(-14);
@@ -214,32 +215,36 @@ async function seed() {
   const bB = wkB.batches[0];
   await must(pat.c, "approve_batch_notes", { _batch_id: bB.id, _note_ids: bB.lines.flatMap((l) => l.notes.map((x) => x.note_id)) });
   await must(pat.c, "mark_batch_billed", { _batch_id: bB.id });
-  // last week (W0-7 .. W0-1): reviewed except one Submitted, one Returned, one overdue (no note); one late arrival
-  S.z1 = await shift(CL.zoe, await day(-7), "09:00", "10:00"); await assign(S.z1, CG.ana);
-  S.z2 = await shift(CL.zoe, await day(-6), "09:00", "10:00"); await assign(S.z2, CG.ben);
-  S.z3 = await shift(CL.zoe, await day(-5), "09:00", "10:00"); await assign(S.z3, CG.mia);
-  S.z4 = await shift(CL.zoe, await day(-4), "09:00", "10:00"); await assign(S.z4, CG.ana);
-  S.z5 = await shift(CL.zoe, await day(-3), "09:00", "10:00"); await assign(S.z5, CG.ben);
-  S.m1 = await shift(CL.max, await day(-6), "14:00", "16:00", "RESP0001"); await assign(S.m1, CG.mia);
-  S.m2 = await shift(CL.max, await day(-4), "14:00", "16:00", "RESP0001"); await assign(S.m2, CG.ana);   // overdue: no note
-  const n1 = await note(S.z1, "ana"), n2 = await note(S.z2, "ben", { lateMin: 7 }), n3 = await note(S.z3, "mia"), n4 = await note(S.z4, "ana"), n5 = await note(S.z5, "ben"), nm1 = await note(S.m1, "mia");
+  // last week (Sun W0-7 .. Sat W0-1): reviewed except one Submitted, one Returned, one overdue (no note); S12 units: Tuesday arrives 09:20 (2 of 4), Thursday ends 09:50 (3 of 4)
+  S.z1 = await shift(CL.zoe, await day(-6), "09:00", "10:00"); await assign(S.z1, CG.ana);
+  S.z2 = await shift(CL.zoe, await day(-5), "09:00", "10:00"); await assign(S.z2, CG.ben);
+  S.z3 = await shift(CL.zoe, await day(-4), "09:00", "10:00"); await assign(S.z3, CG.mia);
+  S.z4 = await shift(CL.zoe, await day(-3), "09:00", "10:00"); await assign(S.z4, CG.ana);
+  S.z5 = await shift(CL.zoe, await day(-2), "09:00", "10:00"); await assign(S.z5, CG.ben);
+  S.m1 = await shift(CL.max, await day(-5), "14:00", "16:00", "RESP0001"); await assign(S.m1, CG.mia);
+  S.m2 = await shift(CL.max, await day(-3), "14:00", "16:00", "RESP0001"); await assign(S.m2, CG.ana);   // overdue: no note
+  const n1 = await note(S.z1, "ana"), n2 = await note(S.z2, "ben", { lateMin: 20 }), n3 = await note(S.z3, "mia"), n4 = await note(S.z4, "ana", { earlyMin: 10 }), n5 = await note(S.z5, "ben"), nm1 = await note(S.m1, "mia");
   for (const n of [n1, n2, nm1, n4]) await review(n);   // date order -> FIFO: authorization A first, then B
   await must(pat.c, "return_progress_note", { _note_id: n5, _reason: "Please add how Zoe counted the change at the store." });
   // this week + the next two weeks
   const upcoming = [];
-  if (clock.hour >= 7) { S.today = await shift(CL.zoe, TODAY, "06:00", "07:00"); await assign(S.today, CG.ana); await note(S.today, "ana", { submit: false }); }   // a draft
-  else log("before 07:00 office time: today's draft visit is skipped");
+  // a draft this week: today 06:00 once that visit has started; before 07:00, yesterday 16:00 if yesterday is in this week
+  // (not overdue until the end of today); on a Sunday before 07:00 there is no earlier day this week, so it is skipped
+  const yday = await at(TODAY, -1);
+  const draftAt = clock.hour >= 7 ? [TODAY, "06:00", "07:00"] : yday >= W0 ? [yday, "16:00", "17:00"] : null;
+  if (draftAt) { S.today = await shift(CL.zoe, draftAt[0], draftAt[1], draftAt[2]); await assign(S.today, CG.ana); await note(S.today, "ana", { submit: false }); }
+  else log("Sunday before 07:00 office time: this week's draft visit is skipped");
   for (let k = 0; k <= 20; k++) {
     const d = await day(k); if (d <= TODAY) continue;
-    const dow = k % 7;   // 0 = Monday
-    if (dow === 0 || dow === 2 || dow === 4) upcoming.push(["zoe", d, "09:00", "10:00", "CLS0001", dow === 2 && k >= 7 && k < 14 ? "mia" : dow === 2 ? "ben" : "ana"]);
-    if (dow === 3 && k >= 7 && k < 14) upcoming.push(["zoe", d, "09:00", "10:00", "CLS0001", null]);          // left unassigned for the live assign
-    if (dow === 1) upcoming.push(["max", d, "14:00", "16:00", "RESP0001", "ana"]);
-    if (dow === 3) upcoming.push(["max", d, "14:00", "16:00", "RESP0001", "mia"]);
+    const dow = k % 7;   // 0 = Sunday
+    if (dow === 1 || dow === 3 || dow === 5) upcoming.push(["zoe", d, "09:00", "10:00", "CLS0001", dow === 3 && k >= 7 && k < 14 ? "mia" : dow === 3 ? "ben" : "ana"]);
+    if (dow === 4 && k >= 7 && k < 14) upcoming.push(["zoe", d, "09:00", "10:00", "CLS0001", null]);          // left unassigned for the live assign
+    if (dow === 2) upcoming.push(["max", d, "14:00", "16:00", "RESP0001", "ana"]);
+    if (dow === 4) upcoming.push(["max", d, "14:00", "16:00", "RESP0001", "mia"]);
   }
   for (const [c, d, s, e, code, who] of upcoming) { const id = await shift(CL[c], d, s, e, code); if (who) await assign(id, CG[who]); if (c === "zoe" && !who) S.open = id; }
   // a CLS group session 1:2 (Zoe + Lily) next Tuesday with Ana
-  const gd = await day(8);
+  const gd = await day(9);
   const gs = await must(pat.c, "create_group_session", { _office_id: OFF, _session_date: gd, _start_time: "10:00", _end_time: "11:00", _staff_client_ratio: "1:2", _max_clients: 2 });
   for (const c of ["zoe", "lily"]) { const id = await shift(CL[c], gd, "10:00", "11:00"); await must(pat.c, "set_shift_group_session", { _shift_id: id, _group_session_id: gs }); await assign(id, CG.ana); }
 

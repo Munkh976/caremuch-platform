@@ -4,6 +4,7 @@ import { useStaffNote } from "@/components/compliance/notes/useStaffNotes";
 import { Button } from "@/components/ui/button";
 import { clientShort, fmtDay, fmtTime, SERVICE_LABEL } from "@/lib/caregiverNotes";
 import { answerText, byGoal, type StaffNote } from "@/lib/staffNotes";
+import { leftEarly, notBilledReason } from "@/lib/units";
 
 /** A blank line to write on (wet signature, review, dates). */
 const Line = ({ w = "w-full", label }: { w?: string; label?: string }) => (
@@ -72,7 +73,9 @@ function NoteSheet({ d }: { d: StaffNote }) {
         <Cell label="Case number">{d.client.case_number ?? ""}</Cell>
         <Cell label="Units scheduled">{n.units_scheduled ?? ""}</Cell>
         <Cell label="Units billed">{n.units_to_bill}</Cell>
-        <Cell label="Late arrival">{n.arrived_late ? "Yes (first unit not billed)" : "No"}</Cell>
+        <Cell label="Units not billed">{(() => { const k = Math.max(Number(n.units_scheduled ?? 0) - Number(n.units_to_bill ?? 0), 0);
+          const why = notBilledReason(n.arrived_late, leftEarly(n.actual_end, n.scheduled_end), " / ");
+          return k > 0 ? `${k}${why ? ` (${why})` : ""}` : "0"; })()}</Cell>
         <Cell label="Authorization #">{d.authorization && !d.authorization.preview ? d.authorization.auth_number : ""}</Cell>
         <Cell label="Biller">{n.biller_name ?? ""}</Cell>
       </section>
