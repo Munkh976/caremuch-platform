@@ -47,13 +47,28 @@ async function login(page, base, email, id) {
   await page.waitForURL((url) => !/\/auth/.test(url.pathname), { timeout: 30000 });
 }
 const ctxFor = (browser, w) => browser.newContext({ viewport: { width: w, height: w < 500 ? 844 : 900 }, ...(w < 500 ? { isMobile: true, hasTouch: true } : {}) });
+// What each data screen must show (DOM text at capture time), so a screen of the wrong office / note can't pass.
+const EXPECT = {
+  dashboard: /Pat Morgan[\s\S]*Care plan compliance[\s\S]*Ripple Effects – Demo/, "care-plans": /Zoe Nguyen[\s\S]*Lily Park/, "zoe-ipos": /DEMO-1001/, "zoe-goals": /morning routine/,
+  "zoe-scheduling": /Zoe/, "zoe-onboarding": /Zoe/, "lily-onboarding": /Lily/, "credentials-ben": /Ben Carter/, "credentials-mia": /Mia Lopez/, "training-zoe": /Zoe/,
+  "notes-to-review": /Zoe N\.|Max O\./, "note-detail": /Zoe N\.[\s\S]*Mia Lopez/, "print-cls": /CLS PROGRESS NOTE[\s\S]*Ripple Effects – Demo[\s\S]*Zoe N\.[\s\S]*DEMO-1001[\s\S]*Pat Morgan/i,
+  "print-respite": /RESPITE[\s\S]*Ripple Effects – Demo[\s\S]*Max O\.[\s\S]*DEMO-1002/i, "billing-last-week": /Ripple Effects – Demo[\s\S]*Zoe N\./, "billing-week-before": /Ripple Effects – Demo[\s\S]*Billed/i,
+  "assign-mia-advisory": /Zoe Nguyen[\s\S]*Mia Lopez/, "compliance-card": /Ripple Effects – Demo/, "caregiver-ana-today": /Ana|Zoe|Max/, "caregiver-ana-cls-note": /Zoe/,
+};
 async function shot(page, name, w, full = true) {
   await page.waitForTimeout(600);
-  const text = await page.locator("body").innerText().catch(() => "");
+  const want = EXPECT[name];
+  // wait (up to 30 s) until the page shows what it should and nothing is still "Loading…"
+  let text = "";
+  for (let i = 0; i < 60; i++) {
+    text = await page.locator("body").innerText().catch(() => "");
+    if ((!want || want.test(text)) && !/Loading(…|\.\.\.)/.test(text)) break;
+    await page.waitForTimeout(500);
+  }
   const m = text.match(BAD);
   const file = `${name}-${w}.png`;
   await page.screenshot({ path: path.join(SHOTS, file), fullPage: full });
-  shots.push({ file, clean: !m, hit: m ? m[0] : "" });
+  shots.push({ file, clean: !m, hit: m ? m[0] : "", expected: !want || want.test(text) });
 }
 const go = async (page, base, url, wait) => { await page.goto(`${base}${url}`); if (wait) await page.locator(wait).first().waitFor({ timeout: 30000 }); await page.waitForTimeout(2500); };
 
@@ -121,6 +136,8 @@ async function caregiver(base, I, browser, w) {
     try { for (const w of [1440, 390]) { await staff(base, I, browser, w); await caregiver(base, I, browser, w); } } finally { await browser.close(); }
     const dirty = shots.filter((s) => !s.clean);
     rec("C1 every screenshot's text is free of test tags, 'ZZ', the demo tag and Ripple staff names", dirty.length === 0, dirty.length ? dirty.map((s) => `${s.file}: ${s.hit}`).join("; ") : `${shots.length} screenshots`);
+    const off = shots.filter((s) => !s.expected);
+    rec("C2 every data screen shows its expected demo content (office, client, note, case number) in the DOM at capture time", off.length === 0, off.length ? off.map((s) => s.file).join(", ") : `${shots.filter((s) => EXPECT[s.file.replace(/-\d+\.png$/, "")]).length} data screens checked`);
     log("screenshots: " + shots.map((s) => s.file).join(", "));
   } catch (e) { log("ERROR:", String(e.message).replace(/[[0-9;]*m/g, "").slice(0, 1500)); rows.push({ id: "ERROR", ok: false }); }
   finally {
