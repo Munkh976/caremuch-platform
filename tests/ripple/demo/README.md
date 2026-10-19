@@ -12,8 +12,10 @@ fictional and were written for this demo; nothing comes from Ripple's documents.
 |---|---|
 | `node tests/ripple/demo/seed-demo.cjs` | Dry run (read-only): the plan and what exists now. |
 | `node tests/ripple/demo/seed-demo.cjs --apply` | Creates the demo (refuses if it exists). |
-| `node tests/ripple/demo/seed-demo.cjs --reset` | Removes the demo (count-checked transaction) and seeds it again: **run after every demo**. |
-| `node tests/ripple/demo/verify-demo.cjs` | Read-only: every flow has its data (dashboard panels, Notes to Review, Weekly Billing preview). |
+| `node tests/ripple/demo/seed-demo.cjs --reset [--as-of YYYY-MM-DD]` | Removes the demo (count-checked transaction) and seeds it again for that demo day (default today): **run after every demo**. |
+| `node tests/ripple/demo/verify-demo.cjs [--as-of YYYY-MM-DD]` | Read-only: every deliberate state, exact counts (overdue = 2, to review = 1, ...). |
+| `node tests/ripple/demo/inventory-demo.cjs [--as-of YYYY-MM-DD]` | Read-only: counts and status breakdown per area. |
+| `node tests/ripple/demo/rehearse.cjs [--as-of D] [--final-as-of D2]` | Seeds, runs the playbook through the UI (screenshots in `docs/screenshots/ripple-ui/demo/playbook/`), resets to D2. |
 | `node tests/ripple/demo/login-check.cjs` | One login per role with `RIPPLE_DEMO_PASSWORD`: sign in, read one page's data, sign out; prints only "login ok". |
 | `node tests/ripple/demo/teardown-demo.cjs [--apply]` | Dry run lists only demo rows; `--apply` deletes them (the agency, its credential catalog and everything in it) in one count-checked transaction, then the demo users. |
 | `node tests/ripple/ui/demo-capture.cjs` | Read-only screenshots into `docs/screenshots/ripple-ui/demo/` (then run `--reset`). |
@@ -35,31 +37,38 @@ set, the users are created and then left with a random password nobody knows; se
 | Sam Rivera | agency admin | `sam.rivera.rpldemo@example.com` |
 | Jordan Lee | HR (hr_staff) | `jordan.lee.rpldemo@example.com` |
 | Casey Park | scheduler | `casey.park.rpldemo@example.com` |
-| Ana Brooks, Ben Carter, Mia Lopez | caregivers | `ana.brooks.rpldemo@example.com`, … |
+| Ana Brooks, Ben Carter, Mia Lopez, Leo Grant, Ivy Chen | caregivers | `ana.brooks.rpldemo@example.com`, … |
 
-## Scenario (dates relative to the DB clock; office week Monday–Sunday)
+## Scenario (Oct 19 rebuild for the Oct 20 demo; dates relative to `--as-of`, billing week Sunday–Saturday)
+
+Every state is deliberate; `verify-demo.cjs --as-of <day>` checks each one with exact counts, and
+`inventory-demo.cjs` prints the counts. Playbook: `docs/demo/playbook.md`; rehearsal: `rehearse.cjs`.
 
 - **Setup:** module on (go-live 4 weeks back), enforcement **off**; office shells: IPOS, CLS note, respite note, 7 intake
   documents; the default credential catalog.
-- **Clients:** Zoe Nguyen (DEMO-1001) onboarded, IPOS **v2** after a renewal; 3 goals, data questions with 7 of the 8
-  measure types; two CLS authorizations (A: 20 units, expires in ~3 weeks; B: 400 units, cap 16 / week) so FIFO shows.
-  Max Ortiz (DEMO-1002) onboarded, respite only. Lily Park (DEMO-1003) onboarding **5 of 8** (in-service, training and
-  note set-up missing).
-- **Caregivers:** Ana all credentials current, retrained on Zoe v2. Ben one credential ≤ 60 days (yellow) and one
-  ≤ 30 days (red), retrained. Mia one credential **★ overdue**, **not** retrained on Zoe v2 (her next Zoe visit is
-  scheduled, so she needs retraining).
-- **Week before last:** 4 notes reviewed, the main bill built, approved and **billed**.
-- **Last week:** reviewed notes (one **late arrival**, 1 unit lost) + one **Submitted**, one **Returned** with a reason,
-  one visit with **no note** (overdue); the bill is **not built** (build it live).
-- **This week / next two weeks:** a draft note today (Ana, if seeded after 07:00 office time), upcoming visits for Zoe
-  and Max, one Zoe visit left **unassigned** (next Thursday, live assign), and a **CLS group session 1:2** next Tuesday
-  with Zoe and Lily (Max is respite only, so Lily is the second CLS client).
+- **Clients:** Zoe Nguyen (DEMO-1001) onboarded, IPOS v1 superseded + **v2** active after a renewal; authorization A
+  (90 units, expires 12 days after the demo day: **units at risk**) and B (400 units, cap 16 / week, healthy). Max Ortiz
+  (DEMO-1002) respite. Lily Park (DEMO-1003) onboarding **5 of 8**, no visits. Background, fully green: Noah Kim
+  (DEMO-1004, CLS, the group sessions with Zoe) and Ella Shaw (DEMO-1005, respite).
+- **Caregivers:** Ana all green, trained on Zoe v2. Ben one red (20 days) and one yellow (45 days), trained on v2. Mia
+  one **★ overdue** and **not** retrained on v2 (her Zoe visit next Wednesday needs retraining). Background: Leo Grant,
+  Ivy Chen, all green.
+- **The week before:** every visit has a reviewed note; main bill built, approved, **billed** (locked).
+- **Last week:** reviewed notes (Tue 09:20 late arrival bills 2 of 4; Thu 09:50 departure bills 3 of 4; a CLS group
+  session 1:2 Zoe + Noah on Wednesday), plus exactly: **1 submitted** (Mia, Wednesday), **1 returned** (Ben, Friday:
+  overdue), **1 visit with no note** (Ana, Max respite Thursday: overdue). Not built.
+- **This week:** visits before the demo day have reviewed notes; on the demo day only **Ana's Zoe CLS visit 08:00–09:00,
+  no note** (written live). Overdue = exactly 2.
+- **Next two weeks:** visits assigned, except **Zoe next Thursday (unassigned)**; a CLS group session 1:2 next Tuesday
+  (Ana: Zoe + Noah).
+- **Guards:** `--as-of` can't be earlier than today; every visit that gets a note must already be over; no seeding after
+  8 pm office time.
 
-Counts after `--apply` / `--reset` (identical on two consecutive resets): events 187, shift_assignments 27,
-progress_notes 11, billing_batches 1, plan_training_records 7, plan_training_forms 3, plan_inservice_forms 3,
-client_documents 21, service_authorizations 4, care_plans 4, caregiver_certifications 60, caregiver_skills 6, shifts 28,
-group_sessions 1, form_templates 10, office_service_types 2, clients 3, caregivers 3, user_roles 7, profiles 7,
-virtual_office 1, credential_types 22, agency 1 (419 rows) + 7 auth users.
+Counts after `--reset --as-of 2026-10-20` (seeded Oct 19): events 313, shift_assignments 49, progress_notes 22,
+billing_batches 1, plan_training_records 11, plan_training_forms 5, plan_inservice_forms 5, client_documents 35,
+service_authorizations 6, care_plans 6, caregiver_certifications 100, caregiver_skills 10, shifts 50, group_sessions 2,
+form_templates 10, office_service_types 2, clients 5, caregivers 5, user_roles 9, profiles 9, virtual_office 1,
+credential_types 22, agency 1 (679 rows) + 9 auth users.
 
 ## Effects on the regular suites
 

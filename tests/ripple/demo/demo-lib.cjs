@@ -29,6 +29,9 @@ const USERS = [
   { key: "ana", full: "Ana Brooks", role: "caregiver", restricted: false, title: "caregiver" },
   { key: "ben", full: "Ben Carter", role: "caregiver", restricted: false, title: "caregiver" },
   { key: "mia", full: "Mia Lopez", role: "caregiver", restricted: false, title: "caregiver" },
+  // background caregivers (Oct 19): fully green, so the lists look like a real office; never part of a demo case
+  { key: "leo", full: "Leo Grant", role: "caregiver", restricted: false, title: "caregiver" },
+  { key: "ivy", full: "Ivy Chen", role: "caregiver", restricted: false, title: "caregiver" },
 ];
 const slug = (u) => u.full.toLowerCase().replace(/[^a-z]+/g, ".");
 const ENV_PW = process.env.RIPPLE_DEMO_PASSWORD || null;
