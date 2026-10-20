@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { CheckCircle2, Lock, Printer, Undo2 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { CheckCircle2, Lock, Printer, RotateCcw, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -11,7 +12,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { fmtTime } from "@/lib/caregiverNotes";
-import { REVIEW_ACK, type StaffNote } from "@/lib/staffNotes";
+import { REVIEW_ACK, undoReviewBlocked, type StaffNote } from "@/lib/staffNotes";
 import { ReturnNoteDialog } from "./ReturnNoteDialog";
 
 const outline = "min-h-10 gap-1 hover:bg-muted hover:text-foreground";
@@ -22,6 +23,8 @@ const outline = "min-h-10 gap-1 hover:bg-muted hover:text-foreground";
  *     [Print] [Return to caregiver] [Mark reviewed]; Mark reviewed asks "Mark this note reviewed?" first.
  *     Return works as before (ReturnNoteDialog, at least 10 characters).
  *   - Reviewed / billed: who reviewed it and when, and Print only (billed: locked).
+ *   - Reviewed: also "Undo review" (Part 2, owner decision Oct 19), disabled with the reason once the note's bill
+ *     is approved or billed.
  *   - Draft / returned: what the note waits for, and Print.
  */
 export function ReviewPanel({ d, onDone }: { d: StaffNote; onDone: () => void }) {
@@ -90,10 +93,65 @@ export function ReviewPanel({ d, onDone }: { d: StaffNote; onDone: () => void })
               {n.status === "returned" && <p className="text-sm text-muted-foreground">Returned to the caregiver. It comes back here when they submit it again.</p>}
               {n.status === "draft" && <p className="text-sm text-muted-foreground">The caregiver hasn't submitted this note yet.</p>}
             </div>
-            <div className="grid grid-cols-1 gap-2 sm:flex sm:justify-end">{print}</div>
+            <div className="grid grid-cols-1 gap-2 sm:flex sm:justify-end">{print}{n.status === "reviewed" && <UndoReview d={d} onDone={onDone} />}</div>
           </div>
         )}
       </CardContent>
     </Card>
+  );
+}
+
+/** Undo review (Part 2): a secondary button with a confirm; disabled with the reason once the week is approved / billed. */
+function UndoReview({ d, onDone }: { d: StaffNote; onDone: () => void }) {
+  const n = d.note;
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  // the note's bill (RLS: managers / agency admins of the office); ids only in the query key
+  const lock = useQuery({
+    queryKey: ["note-undo-lock", n.id],
+    retry: false,
+    queryFn: async () => {
+      const { data: pn, error: e1 } = await supabase.from("progress_notes").select("billing_batch_id, batch_approved_at").eq("id", n.id).single();
+      if (e1) throw e1;
+      if (!pn.billing_batch_id) return { batchStatus: null as string | null, approved: false };
+      const { data: b, error: e2 } = await supabase.from("billing_batches").select("status").eq("id", pn.billing_batch_id).single();
+      if (e2) throw e2;
+      return { batchStatus: b.status as string, approved: !!pn.batch_approved_at };
+    },
+  });
+  const blocked = lock.data ? undoReviewBlocked(n, lock.data.batchStatus, lock.data.approved) : null;
+  const inOpenBill = lock.data?.batchStatus === "open";
+
+  const undo = async () => {
+    setBusy(true); setError(null);
+    const { error: e } = await supabase.rpc("undo_progress_note_review", { _note_id: n.id });
+    setBusy(false);
+    if (e) { setError(e.code === "22023" ? e.message : "The review couldn't be undone."); return; }
+    toast.success("Review undone: the note is Submitted again"); onDone();
+  };
+  return (
+    <div className="flex flex-col gap-1 sm:items-end">
+      <Button variant="outline" className={outline} onClick={() => { setOpen(true); setError(null); }} disabled={busy || lock.isPending || lock.isError || !!blocked} data-testid="undo-review">
+        <RotateCcw className="h-4 w-4" />Undo review</Button>
+      {blocked && <p className="text-xs text-muted-foreground" data-testid="undo-blocked">{blocked}</p>}
+      {lock.isError && <p className="text-xs text-muted-foreground" data-testid="undo-blocked">Undo isn't available here.</p>}
+      {error && <p className="text-sm text-destructive" role="alert" data-testid="undo-error">{error}</p>}
+      <AlertDialog open={open} onOpenChange={setOpen}>
+        <AlertDialogContent data-testid="undo-confirm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Undo this review?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The note goes back to Submitted and its units go back on the authorization. You can then mark it reviewed again or return it to the caregiver.
+              {inOpenBill ? " It also leaves this week's draft bill: build the week again before approving it." : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="hover:bg-muted hover:text-foreground" data-testid="cancel-undo">Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={undo} data-testid="confirm-undo">Undo review</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
   );
 }

@@ -1423,3 +1423,17 @@ office's rows were agency-visible in the shared agency, so 5 comparisons differe
   shorter reason.
 - `progress_notes.returned_reason` holds the latest reason only (the audit payload has no reason by design: no free text in
   events). The staff history shows every return with who and when, and the reason on the latest one.
+
+## OPEN (demo UX, Oct 19): undo review — history and the client tab's inline review
+
+**Status:** Logged 2026-10-19 (`20261026120000`, `undo_progress_note_review`).
+- The staff history read (`get_progress_note_for_staff`, unchanged: changing it needs owner approval) lists review
+  events but not `progress_note_review_undone`. The note page marks a review that was later undone as
+  "Reviewed (later undone)" (inferred: a reviewed note can only be reviewed again or returned after an undo); who undid
+  it and when are in `events` only.
+- Undo is refused for a note reviewed as not billable (no UI path creates one): its units can't be restored without
+  recalculating them, and S12 recalculates only draft / returned notes.
+- Undo follows the bill the note is in (refused when that bill is approved or billed). A note reviewed after its week
+  was approved or billed is in no bill yet, so it can still be undone.
+- The client page's Progress Notes tab keeps its one-click "Mark reviewed" row action (`NoteActions`, unchanged). The
+  statement + confirm is on the note page's Review panel only.

@@ -160,7 +160,7 @@ async function managerFlows(base, F, browser) {
     await p390.locator('[data-testid="exclusions"]').scrollIntoViewIfNeeded(); await p390.waitForTimeout(400); await shot(p390, "exclusions-390"); await c390.close(); }
   // fix one in S8, then rebuild
   await page.locator(`[data-excluded="${F.N.n3}"] a`).click(); await page.locator('[data-testid="staff-note"]').waitFor({ timeout: 30000 }); await page.waitForTimeout(800);
-  await page.locator('[data-testid="mark-reviewed"]').click(); await page.waitForTimeout(2500);
+  await page.locator('[data-testid="review-ack"]').click(); await page.locator('[data-testid="mark-reviewed"]').click(); await page.locator('[data-testid="confirm-review"]').click(); await page.waitForTimeout(2500);   // demo UX: statement + confirm
   await openBilling(page, base);
   const rAfterReview = await reasonOf(page, F.N.n3), disabledBeforeRebuild = await page.locator('[data-testid="batch-0-approve"]').isDisabled();
   await page.locator('[data-testid="build-week"]').click(); await page.waitForTimeout(2500);

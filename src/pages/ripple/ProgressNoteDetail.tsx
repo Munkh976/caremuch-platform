@@ -8,7 +8,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { clientShort, fmtDay, fmtTime, SERVICE_LABEL } from "@/lib/caregiverNotes";
-import { answerText, byGoal, historyLabel, type StaffNote } from "@/lib/staffNotes";
+import { answerText, byGoal, historyLabel, undoneReviews, type StaffNote } from "@/lib/staffNotes";
 import { leftEarly, notBilledReason } from "@/lib/units";
 import { GroupRatioAdvisory } from "@/components/compliance/notes/GroupRatioAdvisory";
 
@@ -42,6 +42,7 @@ export default function ProgressNoteDetail() {
   const refresh = useRefreshStaffNotes();
   useEffect(() => { document.title = "Progress note · CareMuch"; }, []);
   const d = q.data;
+  const undone = d ? undoneReviews(d.history, d.note.status) : new Set<number>();
 
   return (
     <ModuleShell title="Progress note" description="Read only: reviewers mark a note reviewed or return it with a reason." icon={FileCheck2} slice="S8">
@@ -109,8 +110,8 @@ export default function ProgressNoteDetail() {
             <Card><CardHeader className="pb-2"><CardTitle className="text-base">History</CardTitle></CardHeader>
               <CardContent><ol className="space-y-1.5" data-testid="note-history">
                 {d.history.map((h, i) => (
-                  <li key={i} className="text-sm" data-event={h.event}>
-                    <span className="font-medium">{historyLabel(h)}</span> · {fmtTime(h.at, d.office.timezone, true)}{h.by ? ` · ${h.by}` : ""}
+                  <li key={i} className="text-sm" data-event={h.event} data-undone={undone.has(i) ? "" : undefined}>
+                    <span className="font-medium">{historyLabel(h)}{undone.has(i) ? " (later undone)" : ""}</span> · {fmtTime(h.at, d.office.timezone, true)}{h.by ? ` · ${h.by}` : ""}
                     {h.reason && <span className="block text-muted-foreground">Reason: {h.reason}</span>}
                   </li>))}
               </ol></CardContent></Card>

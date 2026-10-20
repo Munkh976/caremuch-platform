@@ -74,6 +74,34 @@ export const HISTORY_LABEL: Record<string, string> = {
 };
 export const historyLabel = (h: StaffHistory) => h.event === "progress_note_submitted" && h.resubmission ? "Resubmitted" : HISTORY_LABEL[h.event] ?? h.event;
 
+/**
+ * Undo review (owner decision, Oct 19): allowed while the note is not in an approved or billed bill (the server
+ * enforces it too). `batchStatus` is the note's bill ('open' | 'reviewed' = approved | 'billed'), null when the note
+ * is in no bill. Returns why Undo is not available, or null.
+ */
+export function undoReviewBlocked(note: { status: string; billable: boolean | null }, batchStatus: string | null, approvedInBatch: boolean): string | null {
+  if (note.status === "billed" || batchStatus === "billed") return "This note is billed, so its review can't be undone.";
+  if (note.status !== "reviewed") return "Only a reviewed note can have its review undone.";
+  if (batchStatus === "reviewed" || approvedInBatch) return "This note's week is approved, so its review can't be undone.";
+  if (note.billable === false) return "A note reviewed as not billable can't have its review undone.";
+  return null;
+}
+
+/**
+ * The history read lists review events but not undo events (that reader is unchanged). A review was undone when a
+ * later review or return follows it, or when it is the last one and the note is no longer reviewed or billed: a
+ * reviewed note can't be returned or reviewed again without an undo.
+ */
+export function undoneReviews(history: StaffHistory[], status: string): Set<number> {
+  const out = new Set<number>();
+  history.forEach((h, i) => {
+    if (h.event !== "progress_note_reviewed") return;
+    const later = history.slice(i + 1).some((x) => x.event === "progress_note_reviewed" || x.event === "progress_note_returned");
+    if (later || !["reviewed", "billed"].includes(status)) out.add(i);
+  });
+  return out;
+}
+
 /** One answer as plain text (screen and print). */
 export function answerText(m: NoteMeasure, a: Answer | undefined | null): string {
   if (m.kind === "staff_note") return "";

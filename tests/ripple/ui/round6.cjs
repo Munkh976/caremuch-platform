@@ -214,7 +214,7 @@ async function managerFlows(base, F, browser) {
   p2.on("framenavigated", (f) => { if (f === p2.mainFrame()) urls.push(f.url()); });
   await login(p2, base, F.mgr); await openDetail(p2, base, F.N1);
   const hist = await p2.locator('[data-testid="note-history"]').innerText();
-  await p2.locator('[data-testid="mark-reviewed"]').click(); await p2.waitForTimeout(2500);
+  await p2.locator('[data-testid="review-ack"]').click(); await p2.locator('[data-testid="mark-reviewed"]').click(); await p2.locator('[data-testid="confirm-review"]').click(); await p2.waitForTimeout(2500);   // demo UX: statement + confirm
   const afterRev = await p2.locator('[data-testid="staff-note"]').innerText(), actionsLeft = await p2.locator('[data-testid="note-actions"]').count();
   await shot(p2, "reviewed-1440", true);
   rec("R1 history: Started, Submitted, Returned (reason, Bren Miller), Resubmitted; Mark reviewed → Reviewed, the authorization is now the one drawn from, and no actions remain (a Reviewed note is never returned)",

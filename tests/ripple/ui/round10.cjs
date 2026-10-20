@@ -131,7 +131,7 @@ async function login(page, base, u) {
 }
 const shot = (page, name, full = false) => page.screenshot({ path: path.join(SHOTS, `${name}.png`), fullPage: full });
 const noHScroll = (page) => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1);
-const ctxFor = (browser, w) => browser.newContext({ viewport: { width: w, height: w < 500 ? 844 : 900 }, ...(w < 500 ? { isMobile: true, hasTouch: true } : {}) });
+const ctxFor = async (browser, w) => { const c = await browser.newContext({ viewport: { width: w, height: w < 500 ? 844 : 900 }, ...(w < 500 ? { isMobile: true, hasTouch: true } : {}) }); c.setDefaultNavigationTimeout(60000); return c; };
 const status = async (n) => (await admin.from("progress_notes").select("status").eq("id", n).single()).data.status;
 const pathOf = (page) => new URL(page.url()).pathname;
 const settle = (page, ms = 900) => page.waitForTimeout(ms);
@@ -226,7 +226,7 @@ async function part1(base, F, browser) {
       && Math.abs(btns[2].r - panelRight) < 2 && disabled0 && returnEnabled, `order ${order.ok}; top buttons ${order.topButtons}; ${btns.map((b) => b.t).join("|")}; disabled ${disabled0}`);
   await page.locator('[data-testid="review-ack"]').click(); await settle(page, 300);
   const enabled1 = !(await page.locator('[data-testid="mark-reviewed"]').isDisabled());
-  await page.locator('[data-testid="mark-reviewed"]').click(); await page.locator('[data-testid="review-confirm"]').waitFor();
+  await page.locator('[data-testid="mark-reviewed"]').click(); await page.locator('[data-testid="review-confirm"]').waitFor(); await settle(page, 500);
   const dlg = await page.locator('[data-testid="review-confirm"]').innerText();
   await shot(page, "review-confirm-1440");
   await page.locator('[data-testid="cancel-review"]').click(); await settle(page, 600);
@@ -236,15 +236,15 @@ async function part1(base, F, browser) {
   const by = await page.locator('[data-testid="reviewed-by"]').innerText();
   const left = await page.locator('[data-testid="review-panel"] a, [data-testid="review-panel"] button').evaluateAll((els) => els.map((e) => e.textContent.trim()));
   await page.locator('[data-testid="review-panel"]').scrollIntoViewIfNeeded(); await shot(page, "review-panel-reviewed-1440");
-  rec("P2 tick → Mark reviewed enabled → 'Mark this note reviewed?' with Cancel / Mark reviewed; Cancel keeps it Submitted; confirm → Reviewed (DB); the panel shows 'Reviewed by Bren Miller · <date/time>' and Print only",
+  rec("P2 tick → Mark reviewed enabled → 'Mark this note reviewed?' with Cancel / Mark reviewed; Cancel keeps it Submitted; confirm → Reviewed (DB); the panel shows 'Reviewed by Bren Miller · <date/time>' and Print (+ Undo review, Part 2)",
     enabled1 && /Mark this note reviewed\?/.test(dlg) && /Cancel/.test(dlg) && afterCancel === "submitted" && (await status(F.N1)) === "reviewed"
-      && /^Reviewed by Bren Miller · \w{3}, \w{3} \d{1,2}, \d{1,2}:\d{2}\s?[AP]M$/.test(by.trim()) && left.join("|") === (UNDO ? "Print|Undo review" : "Print"), `"${by}"; buttons ${left.join("|")}`);
+      && /^Reviewed by Bren Miller · \w{3}, \w{3} \d{1,2}, \d{1,2}:\d{2}\s?[AP]M$/.test(by.trim()) && left.join("|") === "Print|Undo review", `"${by}"; buttons ${left.join("|")}`);
 
   await openDetail(page, base, F.N2);
   await page.locator('[data-testid="open-return"]').click(); await page.locator('[data-testid="return-dialog"]').waitFor();
   await page.fill("#return-reason", "Too short"); await settle(page, 200);
   const shortDisabled = await page.locator('[data-testid="confirm-return"]').isDisabled();
-  await page.fill("#return-reason", REASON); await settle(page, 200); await shot(page, "review-panel-return-dialog-1440");
+  await page.fill("#return-reason", REASON); await settle(page, 500); await shot(page, "review-panel-return-dialog-1440");
   await page.locator('[data-testid="confirm-return"]').click(); await page.locator('[data-testid="detail-returned"]').waitFor({ timeout: 20000 }); await settle(page);
   const retPanel = await page.locator('[data-testid="review-panel"]').innerText();
   rec("P3 Return to caregiver from the panel works as before without the box (reason of 10+ characters; 9 characters disabled) → Returned (DB); the panel then shows Print only",
@@ -276,6 +276,8 @@ async function run(base) {
     F = await setup();
     log(`fixtures [${RUN}]: office Portage (module on, go-live -20 d, week ${F.week}); Bren Miller (manager), Pat Admin (agency admin), Ana Rivera (caregiver); Zoe N. (plan, ISK-2026-0417, 400 units) and Ben A.; 4 submitted CLS notes, one reviewed by the API`);
     const browser = await chromium.launch();
+    // warm up the dev server (the first cold load can take tens of seconds)
+    { const w = await browser.newPage(); for (const p of ["/auth", "/care-plans", "/progress-notes"]) await w.goto(`${base}${p}`, { timeout: 120000 }).catch(() => {}); await w.close(); }
     try { await part1(base, F, browser); if (UNDO) await require("./round10-undo.cjs")({ base, F, browser, rec, log, admin, must, shot, status, openDetail, settle, ctxFor, login, noHScroll }); } finally { await browser.close(); }
   } finally { await teardown(); await closeDb(); }
 }

@@ -5904,6 +5904,7 @@ export type Database = {
         Args: { _note_id: string; _typed_signature: string }
         Returns: Json
       }
+      undo_progress_note_review: { Args: { _note_id: string }; Returns: Json }
       update_care_plan_fields: {
         Args: { _care_plan_id: string; _field_values?: Json; _header?: Json }
         Returns: undefined
