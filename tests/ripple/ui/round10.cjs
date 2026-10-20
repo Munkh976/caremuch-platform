@@ -182,16 +182,14 @@ async function part1(base, F, browser) {
     qcur === "pointer" && qOpen === "Open ›" && qCell === `/progress-notes/${F.N3}` && qPrint === `/progress-notes/${F.N3}/print` && qEnter === `/progress-notes/${F.N3}`, `cursor ${qcur}; ${qCell} | ${qPrint} | ${qEnter}`);
   await openQueue(page, base); await shot(page, "notes-to-review-1440");
 
-  // L3 the client's Progress Notes tab: row actions do only their job; a click inside the Return dialog (a portal) doesn't open the row
+  // L3 the client's Progress Notes tab (Oct 20): rows have Print and Open › only; a row click opens the note, Print only prints
   await page.goto(`${base}/care-plans/${F.CX}?tab=notes`); await page.locator(`[data-testid="notes-queue"] [data-queue-row="${F.N3}"]`).waitFor({ timeout: 30000 }); await settle(page, 1200);
-  await page.locator(`[data-testid="notes-queue"] [data-queue-row="${F.N3}"] [data-testid="open-return"]`).click(); await page.locator('[data-testid="return-dialog"]').waitFor();
-  await page.locator('[data-testid="return-dialog"] h2').click(); await page.fill("#return-reason", "typing here"); await settle(page, 400);
-  const stillTab = pathOf(page) === `/care-plans/${F.CX}`;
-  await page.getByRole("button", { name: "Cancel" }).click(); await settle(page, 400);
-  const tabRowCursor = await cursorOf(page.locator(`[data-testid="notes-queue"] [data-queue-row="${F.N3}"]`));
-  rec("L3 client Progress Notes tab: 'Return to caregiver' opens its dialog without opening the row; clicks and typing in the dialog stay on the page; the note is unchanged",
-    stillTab && (await status(F.N3)) === "submitted" && tabRowCursor === "pointer", `on tab ${stillTab}; status ${await status(F.N3)}`);
-
+  const tabActions = await page.locator('[data-testid="client-notes-tab"] [data-testid="mark-reviewed"], [data-testid="client-notes-tab"] [data-testid="open-return"]').count();
+  await page.locator(`[data-testid="notes-queue"] [data-queue-row="${F.N3}"] a[aria-label="Print note"]`).click(); await page.waitForURL(`**/progress-notes/${F.N3}/print`, { timeout: 15000 }); const tPrint = pathOf(page);
+  await page.goto(`${base}/care-plans/${F.CX}?tab=notes`); await page.locator(`[data-testid="notes-queue"] [data-queue-row="${F.N3}"]`).waitFor({ timeout: 30000 }); await settle(page, 800);
+  await page.locator(`[data-testid="notes-queue"] [data-queue-row="${F.N3}"] td`).nth(1).click(); await page.waitForURL(`**/progress-notes/${F.N3}`, { timeout: 15000 }); const tRow = pathOf(page);
+  rec("L3 client Progress Notes tab: no Mark reviewed / Return in the rows (reviewing only on the note page); the row opens the note; the printer icon only prints; the note is unchanged",
+    tabActions === 0 && tPrint === `/progress-notes/${F.N3}/print` && tRow === `/progress-notes/${F.N3}` && (await status(F.N3)) === "submitted", `row actions ${tabActions}; ${tPrint} | ${tRow}`);
   // L4 Virtual Offices (agency admin)
   const c2 = await ctxFor(browser, 1440); const p2 = await c2.newPage(); await login(p2, base, F.aa);
   const openVO = async () => { await p2.goto(`${base}/virtual-offices`); await p2.locator(`[data-office-card="${F.RX}"]`).waitFor({ timeout: 30000 }); await settle(p2); };

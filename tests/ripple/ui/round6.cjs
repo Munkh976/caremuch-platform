@@ -249,9 +249,11 @@ async function managerFlows(base, F, browser) {
   await p2.goto(`${base}/care-plans/${F.CX}?tab=notes`); await p2.locator('[data-testid="client-notes-tab"]').waitFor({ timeout: 30000 }); await p2.waitForTimeout(1500);
   const tabRows = await p2.locator('[data-testid="client-notes-tab"] [data-testid="notes-queue"] [data-queue-row]').evaluateAll((els) => els.map((e) => e.getAttribute("data-queue-row")));
   await shot(p2, "client-progress-notes-tab-1440");
-  await p2.locator(`[data-testid="client-notes-tab"] [data-testid="notes-queue"] [data-queue-row="${F.N3}"] [data-testid="mark-reviewed"]`).click(); await p2.waitForTimeout(2500);
-  rec("T1 client care plan → Progress Notes tab lists Zoe's notes and visits (not Max's) with the same actions: Mark reviewed works from the tab",
-    tabRows.includes(F.N1) && tabRows.includes(F.N3) && tabRows.includes(`shift:${F.S4}`) && !tabRows.includes(F.N2) && (await status(F.N3)) === "reviewed", `rows ${tabRows.length}`);
+  const tabActions = await p2.locator('[data-testid="client-notes-tab"] [data-testid="mark-reviewed"], [data-testid="client-notes-tab"] [data-testid="open-return"]').count();
+  const tabOpen = await p2.locator(`[data-testid="client-notes-tab"] [data-testid="notes-queue"] [data-queue-row="${F.N3}"] [data-testid="row-open"]`).count();
+  await must(F.mgr.c, "review_progress_note", { _note_id: F.N3, _billable: true, _non_billable_reason: null });   // reviewed for the billing step below
+  rec("T1 client care plan → Progress Notes tab lists Zoe's notes and visits (not Max's) with Print and Open › only (demo UX, Oct 20: no Mark reviewed / Return in the rows)",
+    tabRows.includes(F.N1) && tabRows.includes(F.N3) && tabRows.includes(`shift:${F.S4}`) && !tabRows.includes(F.N2) && tabActions === 0 && tabOpen === 1, `rows ${tabRows.length}; row actions ${tabActions}`);
   // billed: locked in the UI
   const wk = await pgRead(async (c) => (await c.query(`SELECT date_trunc('week', $1::date)::date::text w`, [await dbDay(-1)])).rows[0].w);
   const bb = await must(F.mgr.c, "build_billing_batch", { _office_id: F.RX, _week_start: wk });

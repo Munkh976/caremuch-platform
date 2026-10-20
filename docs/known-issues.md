@@ -1435,5 +1435,5 @@ office's rows were agency-visible in the shared agency, so 5 comparisons differe
   recalculating them, and S12 recalculates only draft / returned notes.
 - Undo follows the bill the note is in (refused when that bill is approved or billed). A note reviewed after its week
   was approved or billed is in no bill yet, so it can still be undone.
-- The client page's Progress Notes tab keeps its one-click "Mark reviewed" row action (`NoteActions`, unchanged). The
-  statement + confirm is on the note page's Review panel only.
+- (Closed Oct 20) The client page's Progress Notes tab no longer has row actions (Mark reviewed / Return removed,
+  `NoteActions` deleted): rows have Print and Open › only; reviewing happens only in the note page's Review panel.

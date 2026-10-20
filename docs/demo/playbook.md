@@ -42,8 +42,8 @@ this module.
 | 1.1 | Sidebar **Form Templates** *(02)* | Tab **Shells**: IPOS, CLS Progress Note, Respite Progress Note, 7 intake shells | "Your paper forms become versioned shells." | — |
 | 1.2 | Tab **Measure library** *(03)* | The 8 kinds of data questions | "The 8 kinds of questions on your progress notes." | — |
 | 1.3 | Sidebar **Client Care Plans (IPOS)** *(04)* | List: Ella, Lily (**5 of 8**), Max, Noah, Zoe (**Onboarded**) | "Onboarding status per client." | — |
-| 1.4 | Click the client name **Lily Park** (it's a link), then tab **Onboarding & Documents** *(05)* | Badge **Onboarding 5 of 8**; missing: In-service signed, Caregiver training, Progress note set up (measures). Each row has an arrow "Go to …" | "Until all 8 are done, Lily isn't ready to schedule." | — |
-| 1.5 | Link **All clients** (top left), then the name **Zoe Nguyen**, then tab **Onboarding & Documents** *(06)* | Badge **Onboarded**, 8 of 8 complete | — | — |
+| 1.4 | Row **Lily Park** → button **Open ›** (last column; clicking anywhere on the row does the same), then tab **Onboarding & Documents** *(05)* | Badge **Onboarding 5 of 8**; missing: In-service signed, Caregiver training, Progress note set up (measures). Each row has an arrow "Go to …" | "Until all 8 are done, Lily isn't ready to schedule." | — |
+| 1.5 | Link **All clients** (top left), then row **Zoe Nguyen** → **Open ›**, then tab **Onboarding & Documents** *(06)* | Badge **Onboarded**, 8 of 8 complete | — | — |
 
 ## Part 2 — IPOS, renewal and retraining (4 min) · Window P, Pat · on Zoe's page
 
@@ -85,17 +85,18 @@ this module.
 | # | Click (exact) | What appears | Say | Undo |
 |---|---|---|---|---|
 | 5.1 | Sidebar **Notes to Review** *(27)* | Chip **Submitted (2)**: Mia Lopez (Zoe, Wed Oct 14) and Ana Brooks (Zoe, today, just sent) | "Ana's note just arrived." | — |
-| 5.2 | Row with **Mia Lopez** → link **Open** *(28)* | Read-only note; buttons **Mark reviewed** and **Return to caregiver** | "The reviewer reads; only the caregiver edits." | — |
-| 5.3 | **Return to caregiver** *(29a/29)* | Dialog **Return to caregiver**: Reason, "At least 10 characters (0/10)", **Return note** disabled. Click **Cancel** | "A reason is required, and it goes back to the caregiver." | (Cancel) |
-| 5.4 | **Mark reviewed** *(30)* | Toast "Note marked reviewed"; the buttons disappear | "Reviewed one at a time. Last week can only be approved once nothing is waiting for review." | reset |
-| 5.5 | Sidebar **Notes to Review** → chip **Reviewed** → row **Max O.** (respite) → printer icon **Print note** *(31)* | Ripple's paper layout: RESPITE, narrative, billing footer, signature lines | "The same paper form, filled from the note." | Link **Back to the note** (the print page has no sidebar) |
-| 5.6 | **Back to the note** → sidebar **Weekly Billing** *(32)* | **Sun, Oct 11 – Sat, Oct 17**, "Last complete week", **Not built** | — | — |
-| 5.7 | **Build week** *(33)* | Main bill by client and authorization: Ella, Max, Noah, Zoe (#DEMO-AUTH-1001-A: Tue Oct 13 **(late)**, Thu Oct 15 **(left early)**, units not billed 3). **Not in this week's bills (2)**: Max O. "Visit with no note", Zoe N. Fri Oct 16 "Returned — waiting for the caregiver" | "Late and early visits lose only the partial blocks; the returned note and the missing note stay out." | **Build week again** rebuilds |
-| 5.8 | **Approve week** *(34)* | Dialog **Approve this week?**: 4 clients, 11 notes, 56 scheduled, 53 billed, 3 not billed | — | **Cancel** |
-| 5.9 | **Approve** *(35)* | Approved banner; **Mark billed** and **Export CSV** appear | — | reset |
-| 5.10 | **Mark billed** → dialog **Mark main bill billed?** ("Billing locks this bill and its notes for good.") *(36)* → **Mark billed** | Billed banner: the bill is locked | "Billed means locked." | reset only |
-| 5.11 | **Export CSV** *(37)* | Downloads `ripple-billing-rpldemo-2026-10-11.csv` (units only; no client names in the file name) | "Units only, ready for the billing system." | delete the file |
-| 5.12 | Arrow button **Previous week** (‹) *(38)* | Oct 4–10: **Billed**, locked, no Build button | "A note reviewed after billing goes into a supplementary bill for the same week: never into two bills." | — |
+| 5.2 | Row with **Mia Lopez** → button **Open ›** *(28)* | Read-only note. Scroll to the end: the **Review** panel after the goals, signature and history, with the statement "I have read this note and it matches the client's plan" and **[Print] [Return to caregiver] [Mark reviewed]**; Mark reviewed is greyed out until the box is ticked | "The reviewer reads; only the caregiver edits." | — |
+| 5.3 | In the Review panel: **Return to caregiver** (no tick needed) *(29a/29)* | Dialog **Return to caregiver**: Reason, "At least 10 characters (0/10)", **Return note** disabled. Click **Cancel** | "A reason is required, and it goes back to the caregiver." | (Cancel) |
+| 5.4 | Tick **I have read this note and it matches the client's plan** → **Mark reviewed** → dialog **Mark this note reviewed?** → **Mark reviewed** *(30a/30)* | Toast "Note marked reviewed"; the panel shows **Reviewed by Pat Morgan · Tue, Oct 20, <time>** with **Print** and **Undo review** | "The reviewer confirms they read it. Reviewed one at a time; last week can only be approved once nothing is waiting for review." | **Undo review** (5.4b) |
+| 5.4b | *Optional:* **Undo review** → dialog **Undo this review?** → **Undo review**; then tick the box → **Mark reviewed** → confirm again *(31a/31b/31)* | Note back to **Submitted** (the units go back on the authorization), then Reviewed again | "A mistake can be undone until the week is approved; after that, Undo is greyed out with the reason." | — (ends reviewed) |
+| 5.5 | Sidebar **Notes to Review** → chip **Reviewed** → row **Max O.** (respite) → printer icon **Print note** *(32)* | Ripple's paper layout: RESPITE, narrative, billing footer, signature lines | "The same paper form, filled from the note." | Link **Back to the note** (the print page has no sidebar) |
+| 5.6 | **Back to the note** → sidebar **Weekly Billing** *(33)* | **Sun, Oct 11 – Sat, Oct 17**, "Last complete week", **Not built** | — | — |
+| 5.7 | **Build week** *(34)* | Main bill by client and authorization: Ella, Max, Noah, Zoe (#DEMO-AUTH-1001-A: Tue Oct 13 **(late)**, Thu Oct 15 **(left early)**, units not billed 3). **Not in this week's bills (2)**: Max O. "Visit with no note", Zoe N. Fri Oct 16 "Returned — waiting for the caregiver" | "Late and early visits lose only the partial blocks; the returned note and the missing note stay out." | **Build week again** rebuilds |
+| 5.8 | **Approve week** *(35)* | Dialog **Approve this week?**: 4 clients, 11 notes, 56 scheduled, 53 billed, 3 not billed | — | **Cancel** |
+| 5.9 | **Approve** *(36)* | Approved banner; **Mark billed** and **Export CSV** appear | — | reset |
+| 5.10 | **Mark billed** → dialog **Mark main bill billed?** ("Billing locks this bill and its notes for good.") *(37)* → **Mark billed** | Billed banner: the bill is locked | "Billed means locked." | reset only |
+| 5.11 | **Export CSV** *(38)* | Downloads `ripple-billing-rpldemo-2026-10-11.csv` (units only; no client names in the file name) | "Units only, ready for the billing system." | delete the file |
+| 5.12 | Arrow button **Previous week** (‹) *(39)* | Oct 4–10: **Billed**, locked, no Build button | "A note reviewed after billing goes into a supplementary bill for the same week: never into two bills." | — |
 
 ---
 
@@ -130,7 +131,7 @@ this module.
 - **Form Templates → a shell → Edit (new draft):** it doesn't edit in place; it opens a new draft version ("Save draft vN" →
   "Publish vN"). Close it.
 - **A submitted note as Pat:** the reviewer can't edit it; only Mark reviewed / Return.
-- **Return note** (for real) or **Mark reviewed** on the wrong note: there is no un-review or un-return; reset afterwards.
+- **Return note** (for real) on the wrong note: there is no un-return; reset afterwards. **Mark reviewed** on the wrong note can be undone with **Undo review** while its week isn't approved.
   A reviewed note can't be returned.
 - **Mark billed:** locks the bill and its notes for good. Oct 4–10 is already locked: no Build button, notes show
   "Billed — locked".
