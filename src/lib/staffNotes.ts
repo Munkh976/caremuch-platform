@@ -65,6 +65,8 @@ export interface StaffNote {
   history: StaffHistory[];
 }
 export const RETURN_MIN = 10;
+/** The reviewer's statement in the Review panel; Mark reviewed stays disabled until it is ticked (demo UX, Oct 19). */
+export const REVIEW_ACK = "I have read this note and it matches the client's plan";
 /** Owner decision (Oct 5): the 10-character minimum is enforced here only; the server requires non-empty. */
 export const returnReasonOk = (s: string) => s.trim().length >= RETURN_MIN && s.trim().length <= 1000;
 export const HISTORY_LABEL: Record<string, string> = {

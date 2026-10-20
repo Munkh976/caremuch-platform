@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { AppLayout } from "@/components/AppLayout";
@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Network, Plus, Settings2 } from "lucide-react";
 import { CreateVirtualOfficeDialog } from "@/components/virtual-office/CreateVirtualOfficeDialog";
+import { ROW_OPEN_CLASS, rowOpenProps } from "@/lib/rowOpen";
+import { cn } from "@/lib/utils";
 
 interface VoRow {
   id: string;
@@ -180,12 +182,14 @@ const VirtualOffices = () => {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {offices.map((vo) => (
-              <Card key={vo.id}>
+              // The whole card opens the office like Configure; the switch and the buttons do only their own job.
+              <Card key={vo.id} data-office-card={vo.id} {...rowOpenProps(() => navigate(`/virtual-offices/${vo.id}`))}
+                className={cn(ROW_OPEN_CLASS, "hover:bg-muted/40")}>
                 <CardHeader>
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <CardTitle className="flex items-center gap-2">
-                        {vo.name}
+                      <CardTitle className="flex flex-wrap items-center gap-2">
+                        <Link to={`/virtual-offices/${vo.id}`} className="text-primary underline-offset-4 hover:underline">{vo.name}</Link>
                         {vo.is_primary && <Badge>Primary</Badge>}
                         <Badge variant={vo.is_active ? "secondary" : "outline"}>
                           {vo.is_active ? "Active" : "Inactive"}

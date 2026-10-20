@@ -1,12 +1,11 @@
 import { useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
-import { AlertTriangle, ArrowLeft, FileCheck2, Printer } from "lucide-react";
+import { AlertTriangle, ArrowLeft, FileCheck2 } from "lucide-react";
 import { ModuleShell } from "@/components/compliance/ModuleShell";
-import { NoteActions } from "@/components/compliance/notes/NoteActions";
+import { ReviewPanel } from "@/components/compliance/notes/ReviewPanel";
 import { useRefreshStaffNotes, useStaffNote } from "@/components/compliance/notes/useStaffNotes";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { clientShort, fmtDay, fmtTime, SERVICE_LABEL } from "@/lib/caregiverNotes";
 import { answerText, byGoal, historyLabel, type StaffNote } from "@/lib/staffNotes";
@@ -36,7 +35,7 @@ export function NoteHeaderFields({ d }: { d: StaffNote }) {
   );
 }
 
-/** /progress-notes/:noteId (S8): one note, read only for staff (Q10), with the review actions. */
+/** /progress-notes/:noteId (S8): one note, read only for staff (Q10); the review actions are in the Review panel at the end. */
 export default function ProgressNoteDetail() {
   const { noteId = "" } = useParams();
   const q = useStaffNote(noteId);
@@ -70,10 +69,6 @@ export default function ProgressNoteDetail() {
                     ? <span className="text-sm text-muted-foreground"> ({notBilledReason(d.note.arrived_late, leftEarly(d.note.actual_end, d.note.scheduled_end))})</span> : null}</Field>
                   <Field label={d.authorization?.preview ? "Authorization (FIFO, at review)" : "Authorization"} testid="note-auth">
                     {d.authorization ? d.authorization.auth_number : d.note.billable === false ? `Not billable: ${d.note.non_billable_reason ?? ""}` : d.note.status === "submitted" ? "No authorization fits yet" : "—"}</Field>
-                </div>
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <NoteActions noteId={d.note.id} status={d.note.status} onDone={refresh} />
-                  <Button asChild variant="outline" className="gap-1 hover:bg-muted hover:text-foreground"><Link to={`/progress-notes/${d.note.id}/print`} data-testid="print-link"><Printer className="h-4 w-4" />Print</Link></Button>
                 </div>
               </CardContent>
             </Card>
@@ -119,6 +114,8 @@ export default function ProgressNoteDetail() {
                     {h.reason && <span className="block text-muted-foreground">Reason: {h.reason}</span>}
                   </li>))}
               </ol></CardContent></Card>
+
+            <ReviewPanel key={`${d.note.id}:${d.note.status}`} d={d} onDone={refresh} />
           </>
         )}
       </div>

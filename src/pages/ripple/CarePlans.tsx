@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { ClipboardCheck } from "lucide-react";
 import { format } from "date-fns";
@@ -15,6 +15,8 @@ import { useComplianceOffices } from "@/hooks/useComplianceOffices";
 import { daysUntil, parseDateOnly } from "@/lib/dateOnly";
 import { humanize } from "@/lib/formTemplates";
 import { onboardedCount, type Onboarding } from "@/lib/carePlan";
+import { rowOpenProps } from "@/lib/rowOpen";
+import { OpenButton } from "@/components/compliance/OpenButton";
 
 interface ListRow {
   id: string; name: string; onboarding: Onboarding | null;
@@ -28,6 +30,7 @@ const reviewDue = (r: ListRow) => { const d = r.plan?.next_review_date ?? r.plan
 /** /care-plans (S4): clients of the module office with onboarding, plan, review date and units; G2 risk panel. */
 export default function CarePlans() {
   const { moduleOffices } = useComplianceOffices();
+  const navigate = useNavigate();
   const [picked, setPicked] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
   const officeId = picked ?? moduleOffices[0]?.id ?? null;
@@ -74,17 +77,17 @@ export default function CarePlans() {
         <div className="overflow-x-auto rounded-md border" data-testid="care-plan-list">
           <Table>
             <TableHeader>
-              <TableRow><TableHead>Client</TableHead><TableHead>Onboarding</TableHead><TableHead>Plan</TableHead><TableHead>Next review</TableHead><TableHead>Units (active authorizations)</TableHead></TableRow>
+              <TableRow><TableHead>Client</TableHead><TableHead>Onboarding</TableHead><TableHead>Plan</TableHead><TableHead>Next review</TableHead><TableHead>Units (active authorizations)</TableHead><TableHead className="text-right"><span className="sr-only">Open</span></TableHead></TableRow>
             </TableHeader>
             <TableBody>
-              {isLoading && <TableRow><TableCell colSpan={5} className="text-sm text-muted-foreground">Loading…</TableCell></TableRow>}
-              {isError && <TableRow><TableCell colSpan={5} className="text-sm text-muted-foreground">You can't see this office's clients.</TableCell></TableRow>}
-              {!isLoading && !isError && rows.length === 0 && <TableRow><TableCell colSpan={5} className="text-sm text-muted-foreground">No clients match.</TableCell></TableRow>}
+              {isLoading && <TableRow><TableCell colSpan={6} className="text-sm text-muted-foreground">Loading…</TableCell></TableRow>}
+              {isError && <TableRow><TableCell colSpan={6} className="text-sm text-muted-foreground">You can't see this office's clients.</TableCell></TableRow>}
+              {!isLoading && !isError && rows.length === 0 && <TableRow><TableCell colSpan={6} className="text-sm text-muted-foreground">No clients match.</TableCell></TableRow>}
               {rows.map((r) => {
                 const n = r.onboarding ? onboardedCount(r.onboarding) : 0;
                 return (
-                  <TableRow key={r.id} data-client-row={r.id}>
-                    <TableCell className="font-medium"><Link to={`/care-plans/${r.id}`} className="hover:underline">{r.name}</Link></TableCell>
+                  <TableRow key={r.id} data-client-row={r.id} {...rowOpenProps(() => navigate(`/care-plans/${r.id}`))}>
+                    <TableCell className="font-medium"><Link to={`/care-plans/${r.id}`} className="text-primary underline-offset-4 hover:underline">{r.name}</Link></TableCell>
                     <TableCell>
                       {r.onboarding?.onboarded
                         ? <Badge className="border-success/40 bg-success/10 text-foreground" variant="outline" data-onboarding="onboarded">Onboarded</Badge>
@@ -100,6 +103,7 @@ export default function CarePlans() {
                       {r.units.count ? <>{r.units.available} left of {r.units.authorized} <span className="text-muted-foreground">({r.units.count} auth{r.units.count === 1 ? "" : "s"}{r.units.nextExpiry ? `, next ends ${format(parseDateOnly(r.units.nextExpiry), "MMM d")}` : ""})</span></>
                         : <span className="text-muted-foreground">None</span>}
                     </TableCell>
+                    <TableCell className="text-right"><OpenButton to={`/care-plans/${r.id}`} /></TableCell>
                   </TableRow>
                 );
               })}
