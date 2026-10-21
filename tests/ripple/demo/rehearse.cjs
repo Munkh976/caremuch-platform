@@ -7,6 +7,8 @@
 //   --final-as-of  the demo day the office is reset to at the end (default = --as-of). The evening before the demo:
 //                  --as-of <today> --final-as-of <demo day>.
 //   --keep         skip the final reset (debugging only; run seed-demo --reset afterwards).
+//   --skip-first-reset  don't reseed first (the office was just seeded with seed-demo --reset; R2 still verifies it).
+//                  With --keep, the long run splits into foreground commands: seed, rehearse, seed, verify.
 // Writes happen only through the UI as the demo users and through seed-demo (the owner-approved write path).
 // Passwords: RIPPLE_DEMO_PASSWORD (never printed); without it the users get a random in-memory password, locked at the end.
 const { execSync, spawn } = require("child_process");
@@ -22,6 +24,7 @@ const ROOT = path.resolve(__dirname, "../../..");
 const SHOTS = path.join(ROOT, "docs/screenshots/ripple-ui/demo/playbook");
 const arg = (k) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : null; };
 const KEEP = process.argv.includes("--keep");
+const SKIP_FIRST = process.argv.includes("--skip-first-reset");
 const BAD = /\bZZ\b|ui\d+-[a-z0-9]{6,}|ui-s\d|phase-[a-z]|done-test|sec-[a-z]+-|caremuch-sectest|Bren|Lauren|Mumbower|Williams|Houseman/;
 const rows = []; const log = (...a) => console.log(...a);
 const rec = (id, ok, d) => { rows.push({ id, ok }); log(`${id} ${ok === "INFO" ? "INFO" : ok ? "PASS" : "FAIL"}${d ? " :: " + String(d).replace(/\s+/g, " ").slice(0, 300) : ""}`); };
@@ -119,7 +122,9 @@ let AS_OF;
   const today = (await pgRead(async (c) => (await c.query(`SELECT (now() AT TIME ZONE $1)::date::text d`, [D.TZ])).rows[0].d));
   AS_OF = arg("--as-of") || today; const FINAL = arg("--final-as-of") || AS_OF;
   log(`=== rehearse — demo day ${AS_OF} (today ${today}); reset afterwards to ${KEEP ? "(kept, no reset)" : FINAL} ===`);
-  const s0 = run("seed-demo.cjs", ["--reset", "--as-of", AS_OF]); rec("R1 seed-demo --reset", s0.ok, "");
+  let s0 = { ok: true };
+    if (SKIP_FIRST) log("--skip-first-reset: the office was seeded just before (R2 verifies it)");
+    else { s0 = run("seed-demo.cjs", ["--reset", "--as-of", AS_OF]); rec("R1 seed-demo --reset", s0.ok, ""); }
   const v0 = run("verify-demo.cjs", ["--as-of", AS_OF]); rec("R2 verify-demo before the rehearsal", v0.ok, (v0.out.match(/summary: .*/) || [""])[0]);
   if (!s0.ok || !v0.ok) { process.exitCode = 1; return; }
   await D.closeDb();

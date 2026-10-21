@@ -87,3 +87,5 @@ sessions carry the trainer "Pat Morgan" and a signature date (the S15 Training t
 - None: the demo lives in its own agency. Rounds 1–9, NB1 and the orphan scans pass with the demo present (Oct 6).
 - Mia's overdue credential also triggers the **existing** "Expired certification" rule, which blocks her for any later
   shift whatever the compliance switch (unchanged scheduling rule).
+
+**Long run in the foreground (Oct 21):** `seed-demo --reset --as-of D`, then `rehearse.cjs --as-of D --skip-first-reset --keep`, then `seed-demo --reset --as-of D` and `verify-demo --as-of D`: four commands, each under the 10-minute foreground limit.
