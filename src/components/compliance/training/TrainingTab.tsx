@@ -13,11 +13,11 @@ import { FilterChip } from "@/components/compliance/FilterChip";
 import { parseDateOnly } from "@/lib/dateOnly";
 import { buildRoster, docTypeLabel, filterRoster, METHOD_LABEL, PLAN_TYPE_LABEL, retrainingFor, sessionSummary, trainedCount,
   type RosterFilter, type TrainingContext } from "@/lib/training";
+import { AttachmentsButton, useAttachmentCounts } from "@/components/compliance/attachments/Attachments";
 import { AddToSessionDialog, InserviceDialog, TrainingFormDialog } from "./TrainingDialogs";
 import { useRetraining } from "./useTrainingData";
 
 const fmt = (s: string | null | undefined) => (s ? format(parseDateOnly(s.slice(0, 10)), "MMM d, yyyy") : "—");
-const NO_FILES = <span className="text-muted-foreground" title="File attachments come with S4b">—</span>;
 
 /**
  * Client "Training" tab (S15), modelled on ISK 33.01_01F (IPOS Proof of Training), per plan version:
@@ -26,7 +26,8 @@ const NO_FILES = <span className="text-muted-foreground" title="File attachments
  *   c. training sessions (one training form = one session: date, trainer, attendees) + Record training session;
  *   d. one caregiver roster (Trained <date> by <trainer> / Needs retraining / Never trained) with "Add to a session"
  *      (an existing session of this version, or a new one);
- *   e. history: every version's forms with Print.
+ *   e. history: every version's forms with Print;
+ *   f. files (S4b): the signed in-service and sign-in sheets, per form; earlier versions' files read-only.
  * Training-tier read only (get_client_training_context: no goals, needs or notes), so /training/:clientId (hr_staff) uses it too.
  */
 export function TrainingTab({ ctx, onChanged }: { ctx: TrainingContext; onChanged: () => void }) {
@@ -51,6 +52,8 @@ export function TrainingTab({ ctx, onChanged }: { ctx: TrainingContext; onChange
     },
   });
   const roster = buildRoster(ctx, retrain, shifts.data ?? new Map());
+  const { data: insFiles } = useAttachmentCounts("inservice_form", ctx.inservice_forms.map((f) => f.id));
+  const { data: trFiles } = useAttachmentCounts("training_form", ctx.training_forms.map((f) => f.id));
   const shown = filterRoster(roster, filter);
   const count = trainedCount(roster);
   if (!ctx.plan) return <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">No active plan: training is recorded against the active plan.</CardContent></Card>;
@@ -88,7 +91,7 @@ export function TrainingTab({ ctx, onChanged }: { ctx: TrainingContext; onChange
                   <TableCell className="whitespace-nowrap">{fmt(f.trained_on)}</TableCell>
                   <TableCell>{f.case_manager_name} → {f.program_lead_name ?? "program lead"}</TableCell>
                   <TableCell className="whitespace-nowrap">{fmt(f.signed_at)}</TableCell>
-                  <TableCell>{NO_FILES}</TableCell>
+                  <TableCell><AttachmentsButton kind="inservice_form" parentId={f.id} title={`In-service ${fmt(f.trained_on)}`} count={insFiles?.get(f.id)?.count} /></TableCell>
                   <TableCell className="text-right"><Button asChild size="sm" variant="ghost" className="gap-1"><Link to={`${printBase}/inservice/${f.id}`}><Printer className="h-4 w-4" />Print</Link></Button></TableCell>
                 </TableRow>))}</TableBody>
             </Table></div>
@@ -117,7 +120,7 @@ export function TrainingTab({ ctx, onChanged }: { ctx: TrainingContext; onChange
                         <Button size="sm" variant="ghost" className="gap-1 px-2" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : f.id)} data-testid="session-toggle">
                           {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}{s.attendees} attendee{s.attendees === 1 ? "" : "s"}</Button>
                       </TableCell>
-                      <TableCell>{NO_FILES}</TableCell>
+                      <TableCell><AttachmentsButton kind="training_form" parentId={f.id} title={`Training session ${fmt(s.date)}`} count={trFiles?.get(f.id)?.count} /></TableCell>
                       <TableCell className="text-right"><Button asChild size="sm" variant="ghost" className="gap-1"><Link to={`${printBase}/training/${f.id}`}><Printer className="h-4 w-4" />Print</Link></Button></TableCell>
                     </TableRow>
                     {isOpen && (
@@ -183,7 +186,8 @@ export function TrainingTab({ ctx, onChanged }: { ctx: TrainingContext; onChange
                   <TableCell>v{f.training_version}{f.training_version === tv ? <Badge variant="outline" className="ml-2">current</Badge> : null}</TableCell>
                   <TableCell className="text-sm">CM {f.case_manager_name} → {f.program_lead_name ?? "program lead"}</TableCell>
                   <TableCell className="whitespace-nowrap text-sm">{fmt(f.trained_on)}</TableCell>
-                  <TableCell className="text-right"><Button asChild size="sm" variant="ghost" className="gap-1"><Link to={`${printBase}/inservice/${f.id}`}><Printer className="h-4 w-4" />Print</Link></Button></TableCell>
+                  <TableCell className="whitespace-nowrap text-right">{f.training_version !== tv && <AttachmentsButton kind="inservice_form" parentId={f.id} title={`In-service ${fmt(f.trained_on)} (v${f.training_version})`} count={insFiles?.get(f.id)?.count} readOnly />}
+                    <Button asChild size="sm" variant="ghost" className="gap-1"><Link to={`${printBase}/inservice/${f.id}`}><Printer className="h-4 w-4" />Print</Link></Button></TableCell>
                 </TableRow>))}
               {ctx.training_forms.map((f) => { const s = sessionSummary(f); return (
                 <TableRow key={f.id} data-form="training">
@@ -191,7 +195,8 @@ export function TrainingTab({ ctx, onChanged }: { ctx: TrainingContext; onChange
                   <TableCell>v{f.training_version}{f.training_version === tv ? <Badge variant="outline" className="ml-2">current</Badge> : null}</TableCell>
                   <TableCell className="text-sm">{docTypeLabel(f.plan_document_type)} · {f.records.map((r) => r.caregiver_name).join(", ")}</TableCell>
                   <TableCell className="whitespace-nowrap text-sm">{fmt(s.date)}</TableCell>
-                  <TableCell className="text-right"><Button asChild size="sm" variant="ghost" className="gap-1"><Link to={`${printBase}/training/${f.id}`}><Printer className="h-4 w-4" />Print</Link></Button></TableCell>
+                  <TableCell className="whitespace-nowrap text-right">{f.training_version !== tv && <AttachmentsButton kind="training_form" parentId={f.id} title={`Training session ${fmt(s.date)} (v${f.training_version})`} count={trFiles?.get(f.id)?.count} readOnly />}
+                    <Button asChild size="sm" variant="ghost" className="gap-1"><Link to={`${printBase}/training/${f.id}`}><Printer className="h-4 w-4" />Print</Link></Button></TableCell>
                 </TableRow>); })}
             </TableBody>
           </Table></div>

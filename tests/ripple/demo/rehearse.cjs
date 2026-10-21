@@ -164,7 +164,9 @@ let AS_OF;
       await step("pat-zoe-onboarding", pat, async () => { await pat.getByRole("link", { name: "All clients" }).first().click(); await settle(pat);
         await pat.locator("[data-client-row]", { hasText: "Zoe Nguyen" }).getByRole("link", { name: "Open ›" }).click(); await settle(pat);
         await pat.getByRole("tab", { name: "Onboarding & Documents" }).click(); await settle(pat);
-        return [await has(pat.locator('[data-testid="client-header"]'), /Onboarded/), ""]; });
+        const files = (await pat.locator('[data-doc="consent"] [data-testid="files-button"]').innerText().catch(() => "")).trim();   // S4b demo file
+        await pat.locator('[data-doc="consent"]').scrollIntoViewIfNeeded();
+        return [await has(pat.locator('[data-testid="client-header"]'), /Onboarded/) && files === "Files (1)", `Consent: "${files}"`]; });
       // ---------------- Part 2: IPOS, renewal, retraining (Pat) ----------------
       await step("pat-zoe-ipos-v2", pat, async () => { await pat.getByRole("tab", { name: "IPOS" }).click(); await settle(pat);
         return [await has(pat.locator('[data-testid="client-header"]'), /Plan v2 active/) && await has(pat.locator('[data-testid="plan-history"]'), /superseded/i), (await pat.locator('[data-testid="plan-history"]').innerText()).replace(/\s+/g, " ")]; });
@@ -182,8 +184,9 @@ let AS_OF;
         await pat.locator('[data-testid="cs-retraining-row"]').first().getByRole("link").first().click(); await settle(pat);
         await pat.locator('[data-testid="training-tab"]').waitFor({ timeout: 20000 }); await settle(pat);   // S15: the client's Training tab
         const mia = await pat.locator('[data-roster="Mia Lopez"]').getAttribute("data-status").catch(() => null);
+        const sheet = (await pat.locator('[data-session] [data-testid="files-button"]').first().innerText().catch(() => "")).trim();   // S4b: v2 sign-in sheet
         await pat.locator('[data-testid="roster"]').scrollIntoViewIfNeeded();
-        return [/\/care-plans\/[^?]+\?tab=training/.test(pat.url()) && await has(pat.locator('[data-testid="training-summary"]'), /IPOS v2 \(Annual\) training/) && mia === "retrain", `${pat.url().replace(base, "")}; Mia ${mia}`]; }, { full: false });
+        return [/\/care-plans\/[^?]+\?tab=training/.test(pat.url()) && await has(pat.locator('[data-testid="training-summary"]'), /IPOS v2 \(Annual\) training/) && mia === "retrain" && sheet === "Files (1)", `${pat.url().replace(base, "")}; Mia ${mia}; session "${sheet}"`]; }, { full: false });
       for (const who of ["Ben Carter", "Mia Lopez"]) {
         await step(`pat-credentials-${who.split(" ")[0].toLowerCase()}`, pat, async () => {
           await nav(pat, base, "Dashboard", "/dashboard", '[data-testid="cs-credentials"]'); await settle(pat, 2000);

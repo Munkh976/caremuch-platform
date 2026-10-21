@@ -15,6 +15,8 @@
 // written the way the UI's own pages do, with is_demo = true. All names, goals and objectives are fictional.
 const D = require("./demo-lib.cjs");
 const { admin, pgRead, TZ } = D;
+const { URL_, ANON } = require("../dev/lib.cjs");
+const { jsPDF } = require("jspdf");
 const APPLY = process.argv.includes("--apply"), RESET = process.argv.includes("--reset");
 const arg = (k) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : null; };
 const log = (...a) => console.log(...a);
@@ -22,7 +24,7 @@ const log = (...a) => console.log(...a);
 // ---- the scenario (also drives the dry-run plan) ----
 const PLAN = {
   agency: 1, virtual_office: 1, profiles: 9, credential_types: "the default catalog", user_roles: 9, caregivers: 5, caregiver_skills: 10, clients: 5,
-  form_templates: 10, care_plans: 6, service_authorizations: 6, group_sessions: 2,
+  form_templates: 10, care_plans: 6, service_authorizations: 6, group_sessions: 2, cp_attachments: 2,
 };
 // Visits, by day offset from the demo week's Sunday (W0; billing week Sunday–Saturday). note: reviewed | submitted |
 // returned | none. "D" = the demo day itself. Times are office time.
@@ -103,7 +105,7 @@ async function main() {
   if (C.hr >= 20) throw new Error("REFUSED before any change: after 8 pm office time the UTC date is already tomorrow (the dashboard's 'today'); seed in the morning");
   if (RESET && (D.total(existing.ids) || existing.authUsers.length)) {
     const r = await D.deleteAll(existing, "reset");
-    log(`reset: removed ${r.deleted} rows + ${r.authDeleted} auth users; left ${r.left} rows, ${r.authLeft} auth users`);
+    log(`reset: removed ${r.deleted} rows, ${r.objectsDeleted || 0} stored files + ${r.authDeleted} auth users; left ${r.left} rows, ${r.authLeft} auth users`);
     if (r.left || r.authLeft) throw new Error("reset teardown left rows");
   } else if (APPLY && (D.total(existing.ids) || existing.authUsers.length)) {
     throw new Error("the demo office already exists: use --reset");
@@ -362,6 +364,27 @@ async function seed(C) {
     ["leo.grant@example.com", "Leo Grant", "time_off_approved", "Your time off is approved", "Hi Leo, your personal days are approved.", true],
     ["priya.nair.applicant@example.com", "Priya Nair", "application_received", "Thanks for applying to Ripple Effects", "Hi Priya, thanks for applying. We'll be in touch about an interview.", false]])
     await one("pending_notifications", { agency_id: A, recipient_email: to, recipient_name: name, kind, subject, body, ...(sent ? { sent_at: now } : {}) });
+
+  // ---- Flow 7 (S4b): two attached files so the Files screens aren't empty. Generated PDFs marked fictitious (no
+  // person's data), uploaded through the same path as the UI: the cp-attachments Edge Function signed in as the user.
+  const pdf = (title, lines) => { const d = new jsPDF(); d.setFontSize(16); d.text(title, 20, 22); d.setFontSize(10);
+    d.text("FICTITIOUS DEMO DOCUMENT - generated for the Ripple demo office; not a real person or form.", 20, 31); d.setFontSize(12);
+    lines.forEach((l, i) => d.text(l, 20, 46 + i * 9)); return Buffer.from(d.output("arraybuffer")); };
+  const attach = async (u, kind, parent, name, bytes) => {
+    const call = async (body) => { const tok = (await u.c.auth.getSession()).data.session.access_token;
+      const r = await fetch(`${URL_}/functions/v1/cp-attachments`, { method: "POST", headers: { Authorization: `Bearer ${tok}`, apikey: ANON, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const j = await r.json().catch(() => ({})); if (r.status !== 200) throw new Error(`cp-attachments ${body.action}: ${j.error || r.status}`); return j; };
+    const b = await call({ action: "begin", parent_kind: kind, parent_id: parent, display_name: name, mime_type: "application/pdf", size_bytes: bytes.length });
+    const up = await u.c.storage.from("cp-attachments").uploadToSignedUrl(b.path, b.token, bytes, { contentType: "application/pdf" });
+    if (up.error) throw new Error(`upload ${name}: ${up.error.message}`);
+    await call({ action: "complete", id: b.id });
+  };
+  const zConsent = (await admin.from("client_documents").select("id").eq("client_id", CL.zoe).eq("doc_type", "consent").eq("is_current", true).single()).data.id;
+  const zSession = (await admin.from("plan_training_forms").select("id").eq("care_plan_id", planZ2).single()).data.id;
+  await attach(pat, "client_document", zConsent, "Signed consent to services", pdf("Consent to Services", ["Person served: Zoe N. (demo)", "Services: Community Living Supports",
+    "Signed by the person / guardian: (demo signature)", `Date: ${await day(-56)}`]));
+  await attach(jordan, "training_form", zSession, "IPOS v2 sign-in sheet", pdf("IPOS Proof of Training - sign-in sheet", ["Plan: IPOS v2 (annual)", "Trainer: Pat Morgan",
+    "Attendees: Ana Brooks, Ben Carter (demo staff)", `Date: ${TODAY}`]));
 
   // enforcement stays OFF so the demo can switch it on live
   log(await D.lockPasswords(Object.values(U).map((u) => u.id)));

@@ -1,7 +1,8 @@
 # S4b — File attachments: design and security review
 
-Status: **DESIGN ONLY** (2026-10-21). No migration, bucket, policy or code exists for this yet. The owner approves this
-document before any of it is built.
+Status: **BUILT on DEV** (2026-10-21, migration `20261028120000_s4b_attachments.sql`, Edge Function `cp-attachments`).
+Approved by the owner on Oct 21 with the answers in §11; the sections below are the approved design, §11 records what
+changed on the way.
 
 ## 1. What exists today
 
@@ -161,9 +162,42 @@ CREATE TABLE public.cp_attachments (
 - The custom SMTP / Auth hardening items already in known-issues.
 - Until then, DEV uses fictitious files only (demo office: generated PDFs with no PHI).
 
-## 10. Open questions for the owner
+## 10. Open questions for the owner (answered, see §11)
 
 1. Is the 10 MB limit enough? Phone photos of multi-page forms may need 20 MB, or client-side compression.
 2. Audit every view (`attachment_viewed`) or only add and remove?
 3. Can a caregiver upload their own credential scans (HR verifies), or HR only?
 4. Is HEIC allowed as-is (iPhone default; most browsers can't preview it), or converted on the device?
+
+## 11. Owner answers (Oct 21) and the build
+
+1. **Size:** 20 MB per file (bucket, table CHECK, RPC, browser). Photos are compressed in the browser to a JPEG of about
+   2–3 MB (longest side 2400 px) before upload.
+2. **Views are audited:** `attachment_viewed` on every preview or download (ids and kind only).
+3. **Caregivers upload their own credential scans:** the caregiver app has **Profile → My credentials**. The upload changes
+   nothing on the entry (dates, `is_verified`); the existing unverified rule is unchanged. The file shows **Waiting for HR**
+   (HR: **New upload**) until HR or a manager saves that entry after the upload (`enter_caregiver_credential`, unchanged).
+   A credential HR hasn't entered has no entry to attach to (the caregiver gives it to HR).
+4. **HEIC:** converted to JPEG on the device (`heic2any`, loaded only when needed); if that fails, a clear error that says
+   how to take JPEG photos or upload a PDF. The bucket and the RPC don't accept HEIC.
+5. **`parent_kind = 'care_plan'`** exists now (managers / agency admins; active plan only); S17 attaches the ISK IPOS PDF.
+6. **Abandoned uploads:** pending rows older than 24 h are discarded (row + object) by the Edge Function's `cleanup`
+   action, callable only with a service-role token. **Scheduling it is an owner action** (a Supabase scheduled job calling
+   the function daily); until then it runs on demand.
+7. **S16 signature images will use their own table**, not `cp_attachments`.
+
+As built (differences from §3–§4):
+- **Upload check:** `complete` goes through the Edge Function, which reads the stored object back with the service role,
+  checks its size and file signature (PDF `%PDF-`, JPEG, PNG, .docx = zip with `word/`), marks it checked
+  (`cp_attachment_mark_checked`, service role only), and then calls `complete_attachment_upload` **as the user**. A failed
+  check deletes the object and the pending row.
+- **Signed upload URL lifetime:** Supabase fixes it at 2 hours (not configurable), not 5 minutes. It is single-path, never
+  overwrites (no upsert), and an upload that isn't completed is discarded by the cleanup.
+- **PDF preview:** a plain `<iframe>` from the storage domain (cross-origin, so it can't reach the app); Chrome refuses to
+  render PDFs inside a sandboxed frame. Images use `<img>`. `.docx` is download only.
+- **Reads** go through `list_attachments` (uploader's name, "waiting for HR", can-remove) and `open_attachment` (audited),
+  besides the table's RLS and the bucket's read policy.
+- **Other documents** are saved by `save_other_client_document`, which calls `upsert_client_document` unchanged and then sets
+  `display_name`; `doc_type` is `other_<12 hex>` (no name in it). They don't count toward onboarding.
+- **Gates:** PGlite `s4b.cjs` 18/18, rollback proof 4/4 (events CHECK md5 = DEV before the push), DEV before 2/2 and after
+  12/12 (incl. NB1), browser round 12 10/10, unit tests.

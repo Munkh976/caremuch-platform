@@ -37,6 +37,7 @@ import OrderManagement from "./pages/OrderManagement";
 import NotFound from "./pages/NotFound";
 import AvailableShifts from "./pages/AvailableShifts";
 import CaregiverTimeOff from "./pages/CaregiverTimeOff";
+import CaregiverCredentials from "./pages/CaregiverCredentials";
 import CaregiverSettings from "./pages/CaregiverSettings";
 import Reports from "./pages/Reports";
 import AdminUserManagement from "./pages/AdminUserManagement";
@@ -112,6 +113,7 @@ const App = () => (
           <Route path="/order-management" element={<RequireRole allow={STAFF}><OrderManagement /></RequireRole>} />
           <Route path="/available-shifts" element={<RequireCaregiverRecord><AvailableShifts /></RequireCaregiverRecord>} />
           <Route path="/caregiver-time-off" element={<RequireCaregiverRecord><CaregiverTimeOff /></RequireCaregiverRecord>} />
+          <Route path="/caregiver-credentials" element={<RequireCaregiverRecord><CaregiverCredentials /></RequireCaregiverRecord>} />
           <Route path="/caregiver-settings" element={<RequireCaregiverRecord><CaregiverSettings /></RequireCaregiverRecord>} />
           <Route path="/admin-utilities" element={<RequireRole allow={SYSTEM_ADMIN}><AdminUtilities /></RequireRole>} />
           <Route path="/agency-settings" element={<RequireRole allow={ADMIN}><AgencySettings /></RequireRole>} />

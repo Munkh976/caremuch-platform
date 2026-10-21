@@ -10,7 +10,7 @@ const ROLLBACK = path.resolve(__dirname, "../../../docs/rollback") + "/";
 const LIVE = __dirname + "/live/";
 const EXACT = JSON.parse(fs.readFileSync(LIVE + "exact_definitions.json", "utf8"));
 const liveDef = (n) => EXACT[n] ? EXACT[n].definition : fs.readFileSync(LIVE + n + ".sql", "utf8");
-const STUBS = ["stub.sql", "live_helpers.sql", "stub_b1.sql", "stub_b2.sql", "stub_c.sql", "stub_d.sql", "stub_soff.sql", "stub_ui.sql"];
+const STUBS = ["stub.sql", "live_helpers.sql", "stub_b1.sql", "stub_b2.sql", "stub_c.sql", "stub_d.sql", "stub_soff.sql", "stub_ui.sql", "stub_storage.sql"];
 const SCHED = ["check_assignment_eligibility", "check_assignment_eligibility_bulk", "check_caregiver_shifts_eligibility", "assign_caregiver_to_shift",
   "caregiver_pick_up_shift", "caregiver_pickup_trade_shift", "release_shift_assignments", "compute_earnings_for_time_entry"];
 // care-plan migrations (Phase A .. UI); the S1 menu seed is data for menu tables PGlite doesn't stub

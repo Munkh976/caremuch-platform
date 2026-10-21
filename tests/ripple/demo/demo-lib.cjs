@@ -72,6 +72,8 @@ const F = `WITH f AS (SELECT
     $2::text AS code)`;
 const SHIFTS = `(SELECT id FROM public.shifts s, f WHERE s.virtual_office_id = ANY (f.vo) OR s.client_id = ANY (f.cl))`;
 const STEPS = [
+  // S4b file rows (their objects in the cp-attachments bucket are removed through the Storage API after the transaction)
+  ["cp_attachments", `SELECT id FROM public.cp_attachments a, f WHERE a.agency_id = ANY (f.ag)`],
   // S14 other-menu rows (before shift_assignments: a trade cascades with its assignment)
   ["shift_trades", `SELECT id FROM public.shift_trades t, f WHERE t.original_caregiver_id = ANY (f.cg) OR t.shift_id IN ${SHIFTS}`],
   ["time_off_requests", `SELECT id FROM public.time_off_requests r, f WHERE r.caregiver_id = ANY (f.cg) OR r.agency_id = ANY (f.ag)`],
@@ -125,7 +127,9 @@ async function collect() {
     const outside = [];
     for (const [label, sql] of OUTSIDE) outside.push([label, (await c.query(sql, P())).rows[0].n]);
     const authUsers = (await c.query(`SELECT id FROM public.profiles WHERE email LIKE $1`, [`%${EMAIL_TAG}`])).rows.map((r) => r.id);
-    return { ids, outside, authUsers };
+    // S4b: objects under the demo agency's folder (paths '<agency>/<office>/<uuid>')
+    const objects = (await c.query(`${F} SELECT o.name FROM storage.objects o, f WHERE o.bucket_id = 'cp-attachments' AND split_part(o.name, '/', 1) = ANY (f.ag::text[])`, P())).rows.map((r) => r.name);
+    return { ids, outside, authUsers, objects };
   });
 }
 const ORDER = ["events", ...STEPS.map(([t]) => t)];
@@ -135,7 +139,7 @@ const lit = (a) => `ARRAY[${a.map((x) => `'${x}'`).join(",")}]::uuid[]`;
 
 /** Deletes exactly the collected ids in ONE transaction (supabase db query --linked; the DB password stays read-only), each count checked. */
 async function deleteAll(snapshot, label) {
-  const { ids, outside, authUsers } = snapshot;
+  const { ids, outside, authUsers, objects = [] } = snapshot;
   if (outside.some(([, n]) => n !== 0)) throw new Error(`REFUSED: rows outside the demo would be touched: ${JSON.stringify(outside)}`);
   const body = ORDER.filter((t) => ids[t].length).map((t) =>
     `  DELETE FROM public.${t} WHERE id = ANY (${lit(ids[t])});\n  GET DIAGNOSTICS n = ROW_COUNT;\n  IF n <> ${ids[t].length} THEN RAISE EXCEPTION 'demo ${label}: ${t} deleted %, expected ${ids[t].length}', n; END IF;`).join("\n");
@@ -147,11 +151,15 @@ async function deleteAll(snapshot, label) {
     finally { fs.unlinkSync(file); }
   }
   await closeDb();   // the persistent read connection may have idled out during the transaction: reconnect
+  for (let i = 0; i < objects.length; i += 100) {
+    const { error } = await admin.storage.from("cp-attachments").remove(objects.slice(i, i + 100));
+    if (error) throw new Error(`demo ${label}: removing ${objects.length} stored files failed: ${error.message}`);
+  }
   let authDeleted = 0;
   for (const id of authUsers) { const { error } = await admin.auth.admin.deleteUser(id); if (!error) authDeleted++; }
   const after = await collect();
   let authLeft = 0; for (const id of authUsers) { const { data } = await admin.auth.admin.getUserById(id); if (data && data.user) authLeft++; }
-  return { deleted: total(ids), authDeleted, left: total(after.ids), authLeft };
+  return { deleted: total(ids), authDeleted, left: total(after.ids) + after.objects.length, authLeft, objectsDeleted: objects.length };
 }
 
 module.exports = { AGENCY_NAME, findAgency, admin, pgRead, closeDb, OFFICE_CODE, OFFICE_NAME, TZ, EMAIL_TAG, email, USERS, slug, ENV_PW, findOffice, session, lockPasswords,

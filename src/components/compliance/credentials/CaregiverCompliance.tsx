@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ExpiryPill } from "@/components/compliance/ExpiryPill";
+import { AttachmentsButton, useAttachmentCounts } from "@/components/compliance/attachments/Attachments";
 import { useCurrentProfile } from "@/hooks/useCurrentProfile";
 import { parseDateOnly } from "@/lib/dateOnly";
 import { rpcErrorText } from "@/lib/rpcError";
@@ -37,7 +38,10 @@ const CATEGORY_LABEL: Record<string, string> = {
 const CATEGORY_ORDER = ["background_check", "annual_online", "annual", "in_person_recert"];
 const day = (d: string | null) => (d ? format(parseDateOnly(d), "MMM d, yyyy") : "—");
 
-/** "Credentials & Training" for one caregiver (training tier: manager, agency_admin, hr_staff). */
+/**
+ * "Credentials & Training" for one caregiver (training tier: manager, agency_admin, hr_staff).
+ * S4b: files per credential entry; a scan the caregiver uploaded shows "New upload" until HR saves (renews) the entry.
+ */
 export function CaregiverCompliance({ caregiverId }: { caregiverId: string }) {
   const { profile } = useCurrentProfile();
   const isManager = profile?.roles.some((r) => r === "manager" || r === "agency_admin") ?? false;
@@ -51,6 +55,7 @@ export function CaregiverCompliance({ caregiverId }: { caregiverId: string }) {
       return data as unknown as Compliance;
     },
   });
+  const { data: files } = useAttachmentCounts("credential", (data?.credentials ?? []).map((r) => r.certification_id).filter((x): x is string => !!x));
   if (isLoading) return <p className="text-sm text-muted-foreground">Loading credentials…</p>;
   if (error || !data) return <p className="text-sm text-destructive">{rpcErrorText(error as { code?: string; message?: string })}</p>;
 
@@ -63,7 +68,7 @@ export function CaregiverCompliance({ caregiverId }: { caregiverId: string }) {
           <div className="overflow-x-auto rounded-md border">
             <Table>
               <TableHeader>
-                <TableRow><TableHead>Credential</TableHead><TableHead>Status</TableHead><TableHead>Effective</TableHead><TableHead>Expires</TableHead><TableHead>Entered by</TableHead><TableHead /></TableRow>
+                <TableRow><TableHead>Credential</TableHead><TableHead>Status</TableHead><TableHead>Effective</TableHead><TableHead>Expires</TableHead><TableHead>Entered by</TableHead><TableHead>Files</TableHead><TableHead /></TableRow>
               </TableHeader>
               <TableBody>
                 {rows.map((r) => {
@@ -79,6 +84,8 @@ export function CaregiverCompliance({ caregiverId }: { caregiverId: string }) {
                         {r.entered_by ?? "—"}
                         {r.overridden_by && <div className="mt-1"><Badge variant="outline" className="gap-1 border-warning/50"><ShieldAlert className="h-3 w-3" aria-hidden="true" />Override: {r.overridden_by}</Badge></div>}
                       </TableCell>
+                      <TableCell>{r.certification_id ? <AttachmentsButton kind="credential" parentId={r.certification_id} title={r.name}
+                        count={files?.get(r.certification_id)?.count} waiting={files?.get(r.certification_id)?.waiting} /> : <span className="text-sm text-muted-foreground">—</span>}</TableCell>
                       <TableCell className="whitespace-nowrap text-right">
                         {r.history.length > 0 && <Button size="icon" variant="ghost" aria-label={`History of ${r.name}`} onClick={() => setHistory(r)}><History className="h-4 w-4" /></Button>}
                         <Button size="sm" variant="outline" disabled={hrLocked} title={hrLocked ? "A manager entered or overrode this credential; only a manager can change it" : undefined}
@@ -160,6 +167,8 @@ function CredentialDialog({ caregiverId, row, isManager, onClose }: { caregiverI
     toast.success(overriding ? "Saved as a manager override" : row.certification_id ? "Renewed" : "Entered");
     await qc.invalidateQueries({ queryKey: ["caregiver-compliance", caregiverId] });
     await qc.invalidateQueries({ queryKey: ["credential-expirations"] });
+    await qc.invalidateQueries({ queryKey: ["attachment-counts", "credential"] });   // a caregiver upload stops "waiting for HR"
+    await qc.invalidateQueries({ queryKey: ["attachments", "credential"] });
     onClose();
   };
   return (

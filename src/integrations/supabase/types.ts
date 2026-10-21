@@ -1653,6 +1653,7 @@ export type Database = {
           client_id: string
           created_at: string
           created_by: string | null
+          display_name: string | null
           doc_type: string
           effective_date: string | null
           expiration_date: string | null
@@ -1673,6 +1674,7 @@ export type Database = {
           client_id: string
           created_at?: string
           created_by?: string | null
+          display_name?: string | null
           doc_type: string
           effective_date?: string | null
           expiration_date?: string | null
@@ -1693,6 +1695,7 @@ export type Database = {
           client_id?: string
           created_at?: string
           created_by?: string | null
+          display_name?: string | null
           doc_type?: string
           effective_date?: string | null
           expiration_date?: string | null
@@ -5133,6 +5136,17 @@ export type Database = {
         }
         Returns: Json
       }
+      begin_attachment_upload: {
+        Args: {
+          _description: string | null
+          _display_name: string
+          _mime_type: string
+          _parent_id: string
+          _parent_kind: string
+          _size_bytes: number
+        }
+        Returns: Json
+      }
       build_billing_batch: {
         Args: { _office_id: string; _week_start: string }
         Returns: Json
@@ -5160,6 +5174,10 @@ export type Database = {
           result: Json
           shift_id: string
         }[]
+      }
+      complete_attachment_upload: {
+        Args: { _id: string }
+        Returns: string
       }
       compute_earnings_batch: {
         Args: {
@@ -5685,6 +5703,10 @@ export type Database = {
         Args: { _document_id: string }
         Returns: string
       }
+      list_attachments: {
+        Args: { _parent_ids: string[]; _parent_kind: string }
+        Returns: Json
+      }
       list_authorization_risk: {
         Args: { _office_id: string; _within_days?: number }
         Returns: Json
@@ -5748,6 +5770,10 @@ export type Database = {
       my_client_ids: { Args: never; Returns: string[] }
       order_agency_id: { Args: { _order_id: string }; Returns: string }
       order_client_id: { Args: { _order_id: string }; Returns: string }
+      open_attachment: {
+        Args: { _id: string }
+        Returns: Json
+      }
       override_training_record: {
         Args: {
           _primary_clinician_name: string
@@ -5792,6 +5818,10 @@ export type Database = {
         Args: { _reason?: string; _shift_ids: string[] }
         Returns: number
       }
+      remove_attachment: {
+        Args: { _id: string; _reason: string }
+        Returns: string
+      }
       renew_care_plan: {
         Args: {
           _care_plan_id: string
@@ -5812,6 +5842,18 @@ export type Database = {
           _note_id: string
         }
         Returns: Json
+      }
+      save_other_client_document: {
+        Args: {
+          _client_id: string
+          _display_name: string
+          _doc_type: string | null
+          _effective_date?: string
+          _expiration_date?: string
+          _not_applicable_reason?: string
+          _status: Database["public"]["Enums"]["client_document_status"]
+        }
+        Returns: string
       }
       save_progress_note_draft: {
         Args: {

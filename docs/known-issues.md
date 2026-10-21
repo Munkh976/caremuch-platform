@@ -1455,3 +1455,13 @@ office's rows were agency-visible in the shared agency, so 5 comparisons differe
 - **(Closed Oct 21: round4 rewritten, 26/26)** **Tests:** `tests/ripple/ui/round4.cjs` still had its S6 training checks (Scheduling-tab chips, retraining list,
   "Record training form") and P3 ("Schedule ->" link). S14 / S15 replaced those screens on purpose; round11 covers the
   new ones. round4 needs its own update before it can pass again.
+## S4b attachments: follow-ups (Oct 21)
+
+- **Owner action:** schedule the abandoned-upload cleanup (`cp-attachments` function, action `cleanup`, service-role token)
+  daily; until then it runs on demand.
+- **Before production:** Supabase BAA (HIPAA add-on) before any real client file is stored; Storage in backups / PITR; a
+  retention policy confirmed by compliance; malware scanning (design §9). DEV holds fictitious files only.
+- **HEIC conversion** is tested for the failure path (clear error) only; a real iPhone HEIC photo hasn't been converted in a
+  test yet (no fictitious HEIC sample in the repo). iPhone Safari usually sends JPEG anyway.
+- **Test tooling:** the DEV suites need `pg`, which is installed `--no-save` (not in `package.json`); any `npm install`
+  removes it again (`npm install --no-save pg@8.13.1` restores it).

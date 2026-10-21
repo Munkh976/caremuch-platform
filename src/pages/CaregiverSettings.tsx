@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, CalendarOff, ChevronRight, LogOut } from "lucide-react";
+import { ArrowLeft, CalendarOff, ChevronRight, LogOut, BadgeCheck } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { CaregiverAppShell } from "@/components/caregivers/CaregiverAppShell";
 import { CaregiverProfileSettings } from "@/components/caregivers/CaregiverProfileSettings";
@@ -87,6 +87,10 @@ const CaregiverSettings = () => {
           <CardContent className="space-y-2 p-4">
             <Button variant="outline" className="min-h-11 w-full justify-between hover:bg-muted hover:text-foreground" onClick={() => navigate("/caregiver-time-off")}>
               <span className="flex items-center gap-3"><CalendarOff className="h-4 w-4" />Time off</span>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+            <Button variant="outline" className="min-h-11 w-full justify-between hover:bg-muted hover:text-foreground" onClick={() => navigate("/caregiver-credentials")} data-testid="my-credentials-link">
+              <span className="flex items-center gap-3"><BadgeCheck className="h-4 w-4" />My credentials</span>
               <ChevronRight className="h-4 w-4" />
             </Button>
             <Button variant="outline" className="min-h-11 w-full justify-start gap-3 text-destructive hover:bg-muted hover:text-destructive" onClick={handleSignOut} data-testid="caregiver-sign-out">

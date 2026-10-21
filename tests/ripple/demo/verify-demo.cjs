@@ -82,6 +82,9 @@ const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
           trades: await as(pat, `SELECT json_build_object('board', count(*) FILTER (WHERE status = 'pending' AND NOT requires_manager_approval), 'approval', count(*) FILTER (WHERE status = 'pending' AND requires_manager_approval)) v FROM public.shift_trades`),
           tradeBoardAna: await as(ana, `SELECT count(*)::int v FROM get_caregiver_trade_shifts()`),
           outbox: await as(pat, `SELECT json_build_object('all', count(*), 'unsent', count(*) FILTER (WHERE sent_at IS NULL)) v FROM public.pending_notifications WHERE agency_id = $1`, [off.agency_id]),
+          // S4b: the two demo files, as Pat reads them (table RLS and the bucket's read policy)
+          files: await as(pat, `SELECT json_build_object('rows', (SELECT string_agg(parent_kind || ':' || display_name, ' | ' ORDER BY parent_kind) FROM public.cp_attachments WHERE agency_id = $1),
+            'objects', (SELECT count(*) FROM storage.objects WHERE bucket_id = 'cp-attachments' AND name LIKE $1::text || '/%')) v`, [off.agency_id]),
         },
       });
       await c.query("RESET ROLE");
@@ -155,6 +158,8 @@ const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   rec("M3 Time Off Requests: 3 requests, 2 pending", Number(m.timeOff.all) === 3 && Number(m.timeOff.pending) === 2, JSON.stringify(m.timeOff));
   rec("M4 Shift Trades: 1 on the board (Ana sees it on her Trade Board), 1 waiting for approval", Number(m.trades.board) === 1 && Number(m.trades.approval) === 1 && m.tradeBoardAna === 1, `${JSON.stringify(m.trades)}; Ana's board ${m.tradeBoardAna}`);
   rec("M5 Notification Outbox: 3 messages, 2 not sent", Number(m.outbox.all) === 3 && Number(m.outbox.unsent) === 2, JSON.stringify(m.outbox));
+  rec("A1 Files (S4b): Zoe's signed consent and the IPOS v2 sign-in sheet are attached (2 rows, 2 stored objects, readable by Pat)",
+    m.files.rows === "client_document:Signed consent to services | training_form:IPOS v2 sign-in sheet" && Number(m.files.objects) === 2, JSON.stringify(m.files));
   console.log("summary: " + rows.map((x) => `${x.id.split(" ")[0]}=${x.ok ? "PASS" : "FAIL"}`).join(" "));
   if (rows.some((x) => !x.ok)) process.exitCode = 1;
 })().catch((e) => { console.log("ERROR", e.message); process.exitCode = 1; }).finally(() => D.closeDb());

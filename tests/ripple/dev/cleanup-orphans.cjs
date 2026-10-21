@@ -32,6 +32,8 @@ const FIXTURES = `WITH f AS (SELECT
 const SHIFTS = `(SELECT id FROM public.shifts s, f WHERE s.order_title LIKE $1 OR s.client_id = ANY (f.cl) OR s.virtual_office_id = ANY (f.vo))`;
 const AUTHS = `(SELECT id FROM public.service_authorizations a, f WHERE a.auth_number LIKE $1 OR a.client_id = ANY (f.cl))`;
 const STEPS = [
+  // S4b files (objects under the tagged offices' folders are removed through the Storage API after the transaction)
+  ["cp_attachments", `SELECT id FROM public.cp_attachments a, f WHERE a.client_id = ANY (f.cl) OR a.caregiver_id = ANY (f.cg) OR a.virtual_office_id = ANY (f.vo)`],
   ["shift_assignments", `SELECT id FROM public.shift_assignments WHERE shift_id IN ${SHIFTS}`],
   ["progress_notes", `SELECT id FROM public.progress_notes n, f WHERE n.client_id = ANY (f.cl) OR n.caregiver_id = ANY (f.cg)`],
   ["billing_batches", `SELECT id FROM public.billing_batches b, f WHERE b.virtual_office_id = ANY (f.vo)`],
@@ -74,17 +76,19 @@ async function collect() {
     const outside = [];
     for (const [label, sql] of OUTSIDE) outside.push([label, (await c.query(sql, [LIKE])).rows[0].n]);
     const authUsers = (await c.query(`SELECT id FROM public.profiles WHERE email LIKE $1`, [LIKE])).rows.map((r) => r.id);
-    return { ids, outside, authUsers };
+    const objects = (await c.query(`${FIXTURES} SELECT o.name FROM storage.objects o, f WHERE o.bucket_id = 'cp-attachments' AND split_part(o.name, '/', 2) = ANY (f.vo::text[])`, [LIKE])).rows.map((r) => r.name);
+    return { ids, outside, authUsers, objects };
   });
 }
 const lit = (a) => `ARRAY[${a.map((x) => `'${x}'`).join(",")}]::uuid[]`;
 
 (async () => {
   console.log(`=== cleanup-orphans ${TAG} — ${APPLY ? "APPLY" : "DRY RUN (read-only)"} ===`);
-  const { ids, outside, authUsers } = await collect();
+  const { ids, outside, authUsers, objects } = await collect();
   const order = ["events", ...STEPS.map(([t]) => t)];
   for (const t of order) if (ids[t].length) console.log(`  ${t.padEnd(26)} ${ids[t].length}`);
   console.log(`  ${"auth users (admin API)".padEnd(26)} ${authUsers.length}`);
+  console.log(`  ${"stored files (Storage API)".padEnd(26)} ${objects.length}`);
   console.log(`  total rows: ${order.reduce((n, t) => n + ids[t].length, 0)}`);
   for (const [label, n] of outside) console.log(`  outside the tag: ${label}: ${n}`);
   const bad = outside.filter(([, n]) => n !== 0);
@@ -101,11 +105,15 @@ const lit = (a) => `ARRAY[${a.map((x) => `'${x}'`).join(",")}]::uuid[]`;
   catch (e) { console.log("TRANSACTION FAILED, rolled back:", String(e.stderr || e.message).slice(0, 400)); process.exitCode = 1; return; }
   finally { fs.unlinkSync(file); }
   console.log("transaction committed: every count matched the dry run");
+  for (let i = 0; i < objects.length; i += 100) { const { error } = await admin.storage.from("cp-attachments").remove(objects.slice(i, i + 100)); if (error) console.log(`  stored files: ${error.message}`); }
   let authDeleted = 0;
   for (const id of authUsers) { const { error } = await admin.auth.admin.deleteUser(id); if (!error) authDeleted++; else console.log(`  auth ${id}: ${error.message}`); }
   console.log(`auth users deleted: ${authDeleted}/${authUsers.length}`);
   const after = await collect();
   const left = order.filter((t) => after.ids[t].length).map((t) => `${t} ${after.ids[t].length}`);
+  // the offices are gone now, so re-check the exact object names collected before
+  const objLeft = objects.length ? await pgRead(async (c) => (await c.query(`SELECT count(*)::int n FROM storage.objects WHERE bucket_id = 'cp-attachments' AND name = ANY ($1::text[])`, [objects])).rows[0].n) : 0;
+  if (objLeft) left.push(`stored files ${objLeft}`);
   let authLeft = 0; for (const id of authUsers) { const { data } = await admin.auth.admin.getUserById(id); if (data && data.user) authLeft++; }
   console.log(`re-query: ${left.length || authLeft ? `LEFT ${left.join(", ")}${authLeft ? `, auth ${authLeft}` : ""}` : "NOTHING with the tag remains"}`);
   if (left.length || authLeft) process.exitCode = 1;

@@ -43,7 +43,7 @@ this module.
 | 1.2 | Tab **Measure library** *(03)* | The 8 kinds of data questions | "The 8 kinds of questions on your progress notes." | — |
 | 1.3 | Sidebar **Client Care Plans (IPOS)** *(04)* | List: Ella, Lily (**5 of 8**), Max, Noah, Zoe (**Onboarded**) | "Onboarding status per client." | — |
 | 1.4 | Row **Lily Park** → button **Open ›** (last column; clicking anywhere on the row does the same), then tab **Onboarding & Documents** *(05)* | Badge **Onboarding 5 of 8**; missing: In-service signed, Caregiver training, Progress note set up (measures). Each row has an arrow "Go to …" | "Until all 8 are done, Lily isn't ready to schedule." | — |
-| 1.5 | Link **All clients** (top left), then row **Zoe Nguyen** → **Open ›**, then tab **Onboarding & Documents** *(06)* | Badge **Onboarded**, 8 of 8 complete | — | — |
+| 1.5 | Link **All clients** (top left), then row **Zoe Nguyen** → **Open ›**, then tab **Onboarding & Documents** *(06)* | Badge **Onboarded**, 8 of 8 complete. Under **Intake documents**, Consent shows **Files (1)**: click it for the signed consent (a generated, fictitious PDF) → **Preview** | "The signed papers live with the document version, in private storage; every view is logged." | — |
 
 ## Part 2 — IPOS, renewal and retraining (4 min) · Window P, Pat · on Zoe's page
 
@@ -115,6 +115,11 @@ this module.
   → **Save correction**. **Add authorization** adds a new one.
 - **Case number:** client header → pencil **Edit case number** → **Save**.
 - **Intake documents:** tab **Onboarding & Documents** → pencil **Update <document>** → status → **Save** (adds a new version).
+- **Files (S4b):** the **Files** button on an intake document, an in-service or a training session (Training tab), or a credential
+  (Caregivers → Credentials & Training) → **Add files** (PDF, JPEG, PNG, HEIC photo, Word; up to 20 MB; photos are compressed).
+  **Add other document** (under the intake table) adds a custom-named document. A caregiver adds a scan of their own credential
+  under Profile → **My credentials**; HR sees **New upload** until they renew the entry. Demo files: Zoe's Consent and the
+  IPOS v2 sign-in sheet (Training tab → sessions). Use fictitious files only.
 - **Credentials:** Caregiver Details → **Credentials & Training** → **Renew** / **Enter** → expiry → **Save**. As Pat (a
   manager) over an HR entry this shows an override warning and **Save override**. Jordan Lee (HR) can't change a manager's
   entry.

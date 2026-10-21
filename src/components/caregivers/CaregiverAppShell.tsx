@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
  * Mobile-first shell for the caregiver app: a bottom tab bar instead of the staff AppLayout sidebar.
  * Salvaged from archive/caregiver-app-shell-2026-10 (9a83e24) for Ripple S7, plus the Notes tab.
  * Every route that mounts it is behind RequireCaregiverRecord. AppLayout is unchanged; staff pages never
- * mount this. Time Off lives under Profile.
+ * mount this. Time Off and My credentials live under Profile.
  *
  * `hideNav` lets a page with its own sticky footer (the progress note) give the space back while the
  * on-screen keyboard is open; `bottomPad` reserves room for that footer above the nav.
@@ -21,7 +21,7 @@ export const CAREGIVER_TABS = [
 ] as const;
 
 const isActive = (pathname: string, path: string) =>
-  path === "/caregiver/notes" ? pathname.startsWith("/caregiver/notes") : path === "/caregiver-settings" ? pathname === path || pathname === "/caregiver-time-off" : pathname === path;
+  path === "/caregiver/notes" ? pathname.startsWith("/caregiver/notes") : path === "/caregiver-settings" ? pathname === path || pathname === "/caregiver-time-off" || pathname === "/caregiver-credentials" : pathname === path;
 
 export function CaregiverAppShell({ children, hideNav = false, bottomPad = false }: { children: ReactNode; hideNav?: boolean; bottomPad?: boolean }) {
   const { pathname } = useLocation();

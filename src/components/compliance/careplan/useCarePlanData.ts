@@ -121,13 +121,26 @@ export function usePlanRows(clientId: string, planId: string | null, table: stri
 }
 
 export interface DocumentRow { id: string; doc_type: string; version: number; status: string; not_applicable_reason: string | null; effective_date: string | null;
-  expiration_date: string | null; created_at: string }
+  expiration_date: string | null; created_at: string; display_name: string | null }
 export function useDocuments(clientId: string) {
   return useQuery({
     queryKey: cpKey(clientId, "documents"),
     queryFn: async (): Promise<DocumentRow[]> => {
-      const { data, error } = await supabase.from("client_documents").select("id, doc_type, version, status, not_applicable_reason, effective_date, expiration_date, created_at")
+      const { data, error } = await supabase.from("client_documents").select("id, doc_type, version, status, not_applicable_reason, effective_date, expiration_date, created_at, display_name")
         .eq("client_id", clientId).eq("is_current", true);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
+/** Earlier (not current) versions of every intake document: their files stay attached, read-only (S4b §6). */
+export function useDocumentHistory(clientId: string) {
+  return useQuery({
+    queryKey: cpKey(clientId, "document-history"),
+    queryFn: async () => {
+      const { data, error } = await supabase.from("client_documents").select("id, doc_type, version").eq("client_id", clientId).eq("is_current", false)
+        .order("version", { ascending: false });
       if (error) throw error;
       return data ?? [];
     },
