@@ -8,16 +8,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { ToggleGroup } from "@/components/ui/toggle-group";
-import { FilterChip } from "@/components/compliance/FilterChip";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { UnitsBar } from "@/components/compliance/UnitsBar";
-import { TrainingPanel } from "@/components/compliance/training/TrainingPanel";
-import { useRefreshTraining, useTrainingContext } from "@/components/compliance/training/useTrainingData";
+import { useTrainingContext } from "@/components/compliance/training/useTrainingData";
 import { cn } from "@/lib/utils";
 import { parseDateOnly } from "@/lib/dateOnly";
 import { serviceName } from "@/lib/carePlan";
-import { caregiverStatus, filterCaregivers, unitsByService, type DeliverFilter } from "@/lib/training";
+import { unitsByService } from "@/lib/training";
+import type { CarePlanTab } from "@/lib/carePlan";
 import { evaluateEligibilityBulk } from "@/lib/shiftEligibility";
 import { useAuthorizations } from "./useCarePlanData";
 
@@ -25,16 +23,14 @@ interface ShiftRow { id: string; shift_date: string; start_time: string | null; 
 const hm = (t: string | null) => (t ? t.slice(0, 5) : "");
 
 /**
- * Scheduling tab (S6): this client's recent and upcoming shifts, units per service (projected), and
- * "Caregivers who can deliver" with the engine's eligibility reasons for the next unassigned shift
- * (check_assignment_eligibility_bulk, read only). No assign actions: "Open full Schedule ->" goes to
- * the existing Schedule screen, filtered to this client. Then the training workflow.
+ * Scheduling tab (S6; S15: shifts + eligibility only): this client's recent and upcoming shifts, units per service
+ * (projected), and the engine's eligibility for the next unassigned shift (check_assignment_eligibility_bulk, read
+ * only). No assign actions: "Open full Schedule ->" goes to the Schedule screen, filtered to this client. Training
+ * lives in the Training tab ("N trained caregivers -> Training").
  */
-export function SchedulingTab({ clientId, officeId }: { clientId: string; officeId: string | null }) {
+export function SchedulingTab({ clientId, goTo }: { clientId: string; officeId: string | null; goTo: (t: CarePlanTab) => void }) {
   const ctx = useTrainingContext(clientId);
-  const refresh = useRefreshTraining(clientId);
   const auths = useAuthorizations(clientId);
-  const [filter, setFilter] = useState<DeliverFilter>("trained");
   const [search, setSearch] = useState("");
   const today = ctx.data?.as_of ?? format(new Date(), "yyyy-MM-dd");
   const shifts = useQuery({
@@ -56,16 +52,17 @@ export function SchedulingTab({ clientId, officeId }: { clientId: string; office
     queryFn: () => evaluateEligibilityBulk(nextOpen!.id, officeCaregivers.map((c) => c.caregiver_id)),
   });
   const names = useMemo(() => new Map(officeCaregivers.map((c) => [c.caregiver_id, c.name])), [officeCaregivers]);
-  const shown = filterCaregivers(officeCaregivers, filter).filter((c) => !search.trim() || c.name.toLowerCase().includes(search.trim().toLowerCase()));
+  const shown = [...officeCaregivers].sort((a, b) => a.name.localeCompare(b.name)).filter((c) => !search.trim() || c.name.toLowerCase().includes(search.trim().toLowerCase()));
   const units = unitsByService(auths.data?.authorizations ?? []);
 
   if (ctx.isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
   if (ctx.isError || !ctx.data) return <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">Not available.</CardContent></Card>;
-  const tv = ctx.data.plan?.training_version ?? null;
+  const trained = officeCaregivers.filter((c) => c.trained_current).length;
   return (
     <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4" data-testid="scheduling-tab">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-muted-foreground">Read-only summary. Assigning happens on the Schedule screen.</p>
+        <p className="text-sm text-muted-foreground">Read-only summary. Assigning happens on the Schedule screen.
+          {" "}<button type="button" className="font-medium text-primary underline-offset-4 hover:underline" onClick={() => goTo("training")} data-testid="training-link">{trained} trained caregiver{trained === 1 ? "" : "s"} → Training</button></p>
         <Button asChild size="sm" variant="outline" className="gap-1"><Link to={`/schedule?client=${clientId}`} data-testid="open-schedule">Open full Schedule <ArrowRight className="h-4 w-4" /></Link></Button>
       </div>
 
@@ -100,31 +97,23 @@ export function SchedulingTab({ clientId, officeId }: { clientId: string; office
 
       <Card data-testid="can-deliver">
         <CardHeader className="space-y-3 pb-2">
-          <CardTitle className="text-base">Caregivers who can deliver</CardTitle>
-          <div className="flex flex-wrap items-center gap-2">
-            <ToggleGroup type="single" value={filter} onValueChange={(v) => v && setFilter(v as DeliverFilter)} className="flex-wrap justify-start" aria-label="Caregiver filter">
-              <FilterChip value="trained" data-filter="trained">Trained / effective</FilterChip>
-              <FilterChip value="retrain" data-filter="retrain">Needs retraining</FilterChip>
-              <FilterChip value="all" data-filter="all">All in office</FilterChip>
-            </ToggleGroup>
-            <Input className="w-full sm:w-56" placeholder="Search caregivers" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search caregivers" />
-          </div>
+          <CardTitle className="text-base">Eligibility for the next unassigned shift</CardTitle>
+          <Input className="w-full sm:w-56" placeholder="Search caregivers" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search caregivers" />
           <p className="text-xs text-muted-foreground">
-            {nextOpen ? `Eligibility shown for the next unassigned shift: ${format(parseDateOnly(nextOpen.shift_date), "EEE MMM d")} ${hm(nextOpen.start_time)}.` : "No unassigned upcoming shift, so no eligibility check is shown."}
+            {nextOpen ? `Next unassigned shift: ${format(parseDateOnly(nextOpen.shift_date), "EEE MMM d")} ${hm(nextOpen.start_time)}. Training and credentials are part of the check.` : "No unassigned upcoming shift, so no eligibility check is shown."}
           </p>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto rounded-md border">
             <Table>
-              <TableHeader><TableRow><TableHead>Caregiver</TableHead><TableHead>Training / credentials</TableHead><TableHead>Next unassigned shift</TableHead></TableRow></TableHeader>
+              <TableHeader><TableRow><TableHead>Caregiver</TableHead><TableHead>Eligibility</TableHead></TableRow></TableHeader>
               <TableBody>
-                {shown.length === 0 && <TableRow><TableCell colSpan={3} className="text-sm text-muted-foreground">{filter === "trained" ? `No caregiver is trained on version ${tv} with current credentials.` : "None."}</TableCell></TableRow>}
+                {shown.length === 0 && <TableRow><TableCell colSpan={2} className="text-sm text-muted-foreground">None.</TableCell></TableRow>}
                 {shown.map((c) => {
                   const e = elig.data?.get(c.caregiver_id);
                   return (
                     <TableRow key={c.caregiver_id} data-caregiver={c.name}>
                       <TableCell className="whitespace-nowrap font-medium">{c.name}</TableCell>
-                      <TableCell className="text-sm">{caregiverStatus(c, tv).map((s, i) => <div key={i} className={/not|Needs/.test(s) ? "text-destructive" : ""}>{s}</div>)}</TableCell>
                       <TableCell className="text-sm" data-eligibility>
                         {!nextOpen ? "—" : elig.isLoading ? "Checking…" : !e ? "—" : (
                           <div className="space-y-1">
@@ -141,9 +130,6 @@ export function SchedulingTab({ clientId, officeId }: { clientId: string; office
             </Table>
           </div>
         </CardContent>
-      </Card>
-
-      <TrainingPanel ctx={ctx.data} onChanged={refresh} />
-    </div>
+      </Card>    </div>
   );
 }

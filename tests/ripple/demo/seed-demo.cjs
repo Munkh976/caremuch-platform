@@ -200,7 +200,7 @@ async function seed(C) {
   const t54 = await day(-54);
   const inservice = (plan, on) => must(jordan.c, "record_inservice_form", { _care_plan_id: plan, _case_manager_name: "Robin Hale (case manager)", _program_lead_id: pat.id, _trained_on: on, _signed_at: now });
   const train = (plan, type, eff0, who, on) => must(jordan.c, "record_training_form", { _care_plan_id: plan, _plan_document_type: type, _plan_effective_date: eff0, _location: "Demo office",
-    _records: who.map((k) => ({ caregiver_id: CG[k], training_date: on })) });
+    _records: who.map((k) => ({ caregiver_id: CG[k], training_date: on, trainer_name: "Pat Morgan", signed_date: on })) });
 
   // Flow 2: Zoe — IPOS, goals with data questions, documents, in-service, training v1, two CLS authorizations
   const planZ = await must(pat.c, "create_care_plan", { _client_id: CL.zoe, _plan_type: "initial", _header: { effective_date: await day(-56), expiration_date: await day(300) },
@@ -329,6 +329,40 @@ async function seed(C) {
   await train(planZ2, "ipos_annual", null, ["ana", "ben"], TODAY);
   // Mia's first required credential is entered as lapsed (★ overdue) after her visits were scheduled
   await cred(CG.mia, req[0].id, await at(DAY, -400), await at(DAY, -5));
+  // ---- Flow 6 (S14): rows for the other menus, so those screens aren't empty. Fictitious, demo agency only, no PHI.
+  // Inserted the way the existing intake / registration / caregiver screens store them (service role, like the
+  // agency and clients above); no behaviour changes. Dates are after the seeded schedule, so eligibility is unchanged.
+  // Client Inquiries: three prospective families (care_requests needs a family or a client)
+  const fam = async (name) => one("families", { agency_id: A, virtual_office_id: OFF, family_name: name, is_demo: true });
+  for (const [name, st, src, codes, notes] of [
+    ["Rivera family", "new", "phone", [CLS], "Looking for CLS two afternoons a week for their son (18)."],
+    ["Okafor family", "new", "public_site", [RESP], "Weekend respite, starting next month."],
+    ["Lindqvist family", "reviewing", "staff", [CLS, RESP], "Met at the open house; call back about Saturday mornings."]])
+    await one("care_requests", { agency_id: A, virtual_office_id: OFF, family_id: await fam(name), status: st, source: src, care_type_codes: codes, notes, priority: "normal", is_demo: true });
+  // Caregiver Applications: pending registrations (the review screen's default tab)
+  for (const [first, last, emp, codes] of [["Jamie", "Fox", "part_time", [CLS]], ["Priya", "Nair", "full_time", [CLS, RESP]], ["Tom", "Becker", "part_time", [RESP]]])
+    await one("caregiver_registrations", { agency_id: A, virtual_office_id: OFF, first_name: first, last_name: last, email: `${first}.${last}.applicant@example.com`.toLowerCase(),
+      phone: "555-0160", city: "Portage", state: "MI", employment_type: emp, care_type_codes: codes, status: "pending" });
+  // Time Off Requests: two pending, one approved (after the seeded schedule)
+  for (const [k, type, from, to, st, reason] of [["ben", "vacation", 30, 34, "pending", "Family trip"], ["ivy", "medical", 36, 36, "pending", "Appointment"],
+    ["leo", "personal", 40, 41, "approved", "Moving house"]])
+    await one("time_off_requests", { caregiver_id: CG[k], agency_id: A, virtual_office_id: OFF, request_type: type, start_date: await at(DAY, from), end_date: await at(DAY, to), status: st, reason,
+      ...(st === "approved" ? { approved_by_user_id: pat.id } : {}), is_demo: true });
+  // Shift Trades / Trade Board: Leo offers next Tuesday's Noah visit (open board), Ivy asks for coverage of an Ella visit (manager approval)
+  const trade = async (v, who, approval) => {
+    const sa = (await admin.from("shift_assignments").select("id").eq("shift_id", v.id).eq("caregiver_id", CG[who]).single()).data.id;
+    return one("shift_trades", { shift_assignment_id: sa, shift_id: v.id, original_caregiver_id: CG[who], status: "pending", trade_type: approval ? "agency_coverage" : "trade_board",
+      requires_manager_approval: approval, ...(approval ? { approval_reasons: ["Coverage request"] } : {}), is_demo: true });
+  };
+  await trade(sorted.find((v) => v.c === NOAH && v.who === "leo" && v.k === 9), "leo", false);
+  await trade(sorted.find((v) => v.c === ELLA && v.who === "ivy" && v.k === 15), "ivy", true);
+  // Notification Outbox: messages the app queued (it never sends by itself); one already marked sent
+  for (const [to, name, kind, subject, body, sent] of [
+    ["ben.carter@example.com", "Ben Carter", "time_off_received", "We received your time-off request", "Hi Ben, we received your vacation request. A manager will reply soon.", false],
+    ["leo.grant@example.com", "Leo Grant", "time_off_approved", "Your time off is approved", "Hi Leo, your personal days are approved.", true],
+    ["priya.nair.applicant@example.com", "Priya Nair", "application_received", "Thanks for applying to Ripple Effects", "Hi Priya, thanks for applying. We'll be in touch about an interview.", false]])
+    await one("pending_notifications", { agency_id: A, recipient_email: to, recipient_name: name, kind, subject, body, ...(sent ? { sent_at: now } : {}) });
+
   // enforcement stays OFF so the demo can switch it on live
   log(await D.lockPasswords(Object.values(U).map((u) => u.id)));
   log(`office ${D.OFFICE_NAME}: module on, enforcement off; ${sorted.length} visits, ${noted.length} notes; the week before billed (${wsB}); last week not built; Ana's visit on ${DAY} 08:00 has no note`);

@@ -72,6 +72,13 @@ const F = `WITH f AS (SELECT
     $2::text AS code)`;
 const SHIFTS = `(SELECT id FROM public.shifts s, f WHERE s.virtual_office_id = ANY (f.vo) OR s.client_id = ANY (f.cl))`;
 const STEPS = [
+  // S14 other-menu rows (before shift_assignments: a trade cascades with its assignment)
+  ["shift_trades", `SELECT id FROM public.shift_trades t, f WHERE t.original_caregiver_id = ANY (f.cg) OR t.shift_id IN ${SHIFTS}`],
+  ["time_off_requests", `SELECT id FROM public.time_off_requests r, f WHERE r.caregiver_id = ANY (f.cg) OR r.agency_id = ANY (f.ag)`],
+  ["care_request_time_windows", `SELECT id FROM public.care_request_time_windows w, f WHERE w.agency_id = ANY (f.ag)`],
+  ["care_requests", `SELECT id FROM public.care_requests r, f WHERE r.agency_id = ANY (f.ag)`],
+  ["families", `SELECT id FROM public.families m, f WHERE m.agency_id = ANY (f.ag)`],
+  ["caregiver_registrations", `SELECT id FROM public.caregiver_registrations r, f WHERE r.agency_id = ANY (f.ag)`],
   ["shift_assignments", `SELECT id FROM public.shift_assignments WHERE shift_id IN ${SHIFTS}`],
   ["progress_notes", `SELECT id FROM public.progress_notes n, f WHERE n.client_id = ANY (f.cl) OR n.caregiver_id = ANY (f.cg)`],
   ["billing_batches", `SELECT id FROM public.billing_batches b, f WHERE b.virtual_office_id = ANY (f.vo)`],

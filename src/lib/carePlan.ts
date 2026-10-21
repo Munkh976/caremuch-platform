@@ -180,14 +180,14 @@ export interface OnboardingItem { key: string; status: ItemStatus; training_vers
   objectives?: number; objectives_without_measures?: number; care_plan_id?: string | null }
 export interface Onboarding { client_id: string; as_of: string; onboarded: boolean; items: OnboardingItem[] }
 
-export type CarePlanTab = "ipos" | "goals" | "notes" | "scheduling" | "onboarding";
+export type CarePlanTab = "ipos" | "goals" | "notes" | "training" | "scheduling" | "onboarding";
 export const ONBOARDING_LABEL: Record<string, { label: string; tab: CarePlanTab; anchor?: string }> = {
   ipos: { label: "IPOS (plan of service)", tab: "ipos" },
   assessment: { label: "Assessment", tab: "onboarding", anchor: "doc-assessment" },
-  inservice: { label: "In-service signed", tab: "scheduling" },
+  inservice: { label: "In-service signed", tab: "training", anchor: "inservice-step" },
   client_forms: { label: "Client forms", tab: "onboarding", anchor: "client-forms" },
   safety_behavior_plan: { label: "Safety / behavior plan", tab: "onboarding", anchor: "doc-safety_behavior_plan" },
-  training: { label: "Caregiver training", tab: "scheduling" },
+  training: { label: "Caregiver training", tab: "training" },
   authorization: { label: "Authorization", tab: "ipos", anchor: "authorizations" },
   cls_note_setup: { label: "Progress note set up (measures)", tab: "goals" },
 };

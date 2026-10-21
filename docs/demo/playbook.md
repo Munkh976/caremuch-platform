@@ -54,7 +54,7 @@ this module.
 | 2.3 | Scroll to **Authorizations** *(09)* | A: DEMO-AUTH-1001-A, expires in 12 days, units left. B: DEMO-AUTH-1001-B, 400, period cap 16 per week | "Units come from the authorization that expires first, so A's hours are used before they lapse. B's weekly cap is enforced." | — |
 | 2.4 | Tab **Goals** *(10)* | 3 goals, objectives A–D with Instructions for Staff; C (case manager) for reference only | "In ISK's order, with the staff instructions." | — |
 | 2.5 | Click the objective **1A** in the goals list *(11)* | Right panel: measures "Highest prompt level used", "Steps completed", and the **Edit measures** button | "These are the questions the caregiver answers on the note." Don't save anything here (see the lists below). | — |
-| 2.6 | Sidebar **Dashboard** → in **Caregivers needing retraining**, click **Mia Lopez** *(12)* | `/training/<Zoe>`: step 1 In-service (case manager → program lead), step 2 Training form; Ana and Ben on v2, Mia not | "Every new IPOS version starts retraining, even a renewal with the same goals." | — |
+| 2.6 | Sidebar **Dashboard** → in **Caregivers needing retraining**, click **Mia Lopez** *(12)* | Zoe's **Training** tab: header **IPOS v2 (Annual) training · effective … · In-service signed … · 2 of 3 caregivers trained**; In-service row; Training sessions (date, type of plan, trainer, attendees, Print); **Caregivers** roster with chips All / Trained / Needs retraining: Ana and Ben **Trained**, Mia **Needs retraining (trained v1)** with **Add to a session**; History of every version | "Every new IPOS version starts retraining, even a renewal with the same goals." | — |
 | 2.7 | Sidebar **Dashboard** → in **Expiring credentials**, click **Ben Carter** *(13)* | Caregiver Details → **Credentials & Training**: Bloodborne Pathogens "Expires in 20 days" (red), Basic First Aid "Expires in 45 days" (yellow) | "HR enters these; the colours show what's due." | Esc / ✕ |
 | 2.8 | Same panel, click **Mia Lopez** *(14)* | Basic First Aid **★ Overdue 5 days** | — | Esc / ✕ |
 
@@ -118,8 +118,9 @@ this module.
 - **Credentials:** Caregiver Details → **Credentials & Training** → **Renew** / **Enter** → expiry → **Save**. As Pat (a
   manager) over an HR entry this shows an override warning and **Save override**. Jordan Lee (HR) can't change a manager's
   entry.
-- **In-service and training:** `/training/<client>` (Dashboard → Caregivers needing retraining → a name) → **Record
-  in-service** → **Record training form**.
+- **In-service and training:** the client's **Training** tab (Dashboard → Caregivers needing retraining → a name, or
+  Onboarding → "Caregiver training" →) → **Record in-service** → **Record training session** (date, trainer, attendees), or
+  **Add to a session** on a caregiver who needs retraining. HR uses the same screen at `/training/<client>`.
 - **Progress note:** only the caregiver, only while Draft or Returned (Window A).
 - **Enforcement switch:** only Sam (agency admin). For Pat the switch is disabled: "Only an agency admin can change these
   settings."

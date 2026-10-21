@@ -70,6 +70,18 @@ service_authorizations 6, care_plans 6, caregiver_certifications 100, caregiver_
 form_templates 10, office_service_types 2, clients 5, caregivers 5, user_roles 9, profiles 9, virtual_office 1,
 credential_types 22, agency 1 (679 rows) + 9 auth users.
 
+**Other menus (S14, Oct 21):** so those screens aren't empty, the seed also adds (fictitious, demo agency only, dates
+after the seeded schedule so eligibility is unchanged):
+- Client Inquiries: 3 families with an inquiry each (2 new, 1 reviewing);
+- Caregiver Applications: 3 pending registrations;
+- Time Off Requests: Ben (vacation, pending), Ivy (medical, pending), Leo (personal, approved);
+- Shift Trades: Leo offers next Tuesday's Noah visit on the Trade Board (Ana sees it); Ivy asks for coverage of an Ella
+  visit (manager approval);
+- Notification Outbox: 3 messages, 1 marked sent.
+
+`verify-demo` checks each screen (M1–M5); the reset removes them like everything else (17 rows + their events). Training
+sessions carry the trainer "Pat Morgan" and a signature date (the S15 Training tab shows them).
+
 ## Effects on the regular suites
 
 - None: the demo lives in its own agency. Rounds 1–9, NB1 and the orphan scans pass with the demo present (Oct 6).

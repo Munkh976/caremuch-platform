@@ -70,3 +70,42 @@ export function unitsByService<T extends { service_type: string; status: string;
   }
   return [...m.values()].sort((a, b) => a.service_type.localeCompare(b.service_type));
 }
+
+// ---------------------------------------------------------------------------------------------
+// S15 Training tab (ISK 33.01_01F): sessions = training forms; roster = office caregivers merged with the retraining list.
+export const PLAN_TYPE_LABEL = { initial: "Initial", annual: "Annual", addendum: "Addendum" } as const;
+
+/** One training form as a session row: date (earliest attendee date), trainer(s), attendee count. */
+export function sessionSummary(f: TrainingForm) {
+  const dates = f.records.map((r) => r.training_date).filter((d): d is string => !!d).sort();
+  const trainers = [...new Set(f.records.map((r) => r.trainer_name?.trim()).filter((t): t is string => !!t))];
+  return { id: f.id, date: dates[0] ?? f.created_at.slice(0, 10), trainer: trainers.join(", ") || null, attendees: f.records.length, docType: f.plan_document_type, version: f.training_version };
+}
+
+export type RosterFilter = "all" | "trained" | "retrain";
+export interface RosterRow {
+  caregiver_id: string; name: string; status: "trained" | "retrain" | "never"; trained_on: string | null; trainer: string | null;
+  trained_version: number | null; credentials_current: boolean; next_shift: string | null;
+}
+/**
+ * The caregiver roster for the current training version: Trained <date> by <trainer> (latest record at the current
+ * version) / Needs retraining (trained on an earlier version, or on the retraining list) / Never trained.
+ * `nextShift`: the caregiver's next shift with this client (from the retraining list or the client's shifts).
+ */
+export function buildRoster(ctx: TrainingContext, retrain: { caregiver_id: string; next: string }[], nextShift: Map<string, string>): RosterRow[] {
+  const tv = ctx.plan?.training_version ?? null;
+  const retrainIds = new Map(retrain.map((r) => [r.caregiver_id, r.next]));
+  return ctx.caregivers.map((c) => {
+    const recs = ctx.training_forms.filter((f) => f.training_version === tv).flatMap((f) => f.records).filter((r) => r.caregiver_id === c.caregiver_id)
+      .sort((a, b) => (b.training_date ?? "").localeCompare(a.training_date ?? ""));
+    const status: RosterRow["status"] = c.trained_current ? "trained" : c.trained_version !== null || retrainIds.has(c.caregiver_id) ? "retrain" : "never";
+    return { caregiver_id: c.caregiver_id, name: c.name, status, trained_on: c.trained_current ? recs[0]?.training_date ?? null : null, trainer: c.trained_current ? recs[0]?.trainer_name ?? null : null,
+      trained_version: c.trained_version, credentials_current: c.credentials_current, next_shift: retrainIds.get(c.caregiver_id) ?? nextShift.get(c.caregiver_id) ?? null };
+  }).sort((a, b) => a.name.localeCompare(b.name));
+}
+export const filterRoster = (rows: RosterRow[], f: RosterFilter) => f === "all" ? rows : rows.filter((r) => r.status === (f === "trained" ? "trained" : "retrain"));
+/** "N of M caregivers trained": M = caregivers who work with this client (trained on any version, on the retraining list, or with a next shift). */
+export function trainedCount(rows: RosterRow[]) {
+  const theirs = rows.filter((r) => r.status !== "never" || r.next_shift);
+  return { trained: rows.filter((r) => r.status === "trained").length, of: theirs.length };
+}

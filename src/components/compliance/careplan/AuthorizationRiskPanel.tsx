@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { serviceName } from "@/lib/carePlan";
+import { OpenButton } from "@/components/compliance/OpenButton";
 
 export interface RiskRow { authorization_id: string; client_id: string; client_name: string; auth_number: string; service_type: string; expiration_date: string; days: number;
   band: "red" | "yellow" | "ok"; unit_minutes: number; units_authorized: number; units_available: number; units_pending: number; units_at_risk: number; hours_at_risk: number }
@@ -49,7 +50,7 @@ export function AuthorizationRiskPanel({ officeId, withinDays = 60 }: { officeId
                   {r.units_at_risk} units at risk ({r.hours_at_risk} h)
                 </span>
                 <span className="text-xs text-muted-foreground">{r.units_pending} scheduled</span>
-                <Link to={`/schedule?client=${r.client_id}`} className="whitespace-nowrap text-xs font-medium text-primary hover:underline" data-testid="risk-schedule-link">Schedule →</Link>
+                <OpenButton to={`/schedule?client=${r.client_id}`} label="Schedule" testId="risk-schedule-link" />
               </div>
             </li>
           ))}

@@ -8,6 +8,8 @@ import { IposTab } from "@/components/compliance/careplan/IposTab";
 import { GoalsTab } from "@/components/compliance/careplan/GoalsTab";
 import { OnboardingTab } from "@/components/compliance/careplan/OnboardingTab";
 import { SchedulingTab } from "@/components/compliance/careplan/SchedulingTab";
+import { TrainingTab } from "@/components/compliance/training/TrainingTab";
+import { useRefreshTraining, useTrainingContext } from "@/components/compliance/training/useTrainingData";
 import { ClientNotesTab } from "@/components/compliance/notes/ClientNotesTab";
 import { useClientHead, useOnboarding, usePlans, useRefreshClient, useShells } from "@/components/compliance/careplan/useCarePlanData";
 import { Badge } from "@/components/ui/badge";
@@ -17,7 +19,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useComplianceOffices } from "@/hooks/useComplianceOffices";
 import { onboardedCount, type CarePlanTab } from "@/lib/carePlan";
 
-const TABS: CarePlanTab[] = ["ipos", "goals", "notes", "scheduling", "onboarding"];
+const TABS: CarePlanTab[] = ["ipos", "goals", "notes", "training", "scheduling", "onboarding"];
 
 /** /care-plans/:clientId (S4/S5): one client's plan of service. Ids only in the URL (?tab=). */
 export default function ClientCarePlan() {
@@ -78,6 +80,7 @@ export default function ClientCarePlan() {
                   <TabsTrigger value="ipos">IPOS</TabsTrigger>
                   <TabsTrigger value="goals">Goals</TabsTrigger>
                   <TabsTrigger value="notes">Progress Notes</TabsTrigger>
+                  <TabsTrigger value="training">Training</TabsTrigger>
                   <TabsTrigger value="scheduling">Scheduling</TabsTrigger>
                   <TabsTrigger value="onboarding">Onboarding &amp; Documents</TabsTrigger>
                 </TabsList>
@@ -85,7 +88,8 @@ export default function ClientCarePlan() {
               <TabsContent value="ipos" className="mt-4"><IposTab clientId={clientId} officeId={officeId} caseNumber={client.data?.case_number ?? null} onChanged={refresh} /></TabsContent>
               <TabsContent value="goals" className="mt-4"><GoalsTab clientId={clientId} officeId={officeId} plan={active} onChanged={refresh} /></TabsContent>
               <TabsContent value="notes" className="mt-4"><ClientNotesTab clientId={clientId} officeId={officeId} /></TabsContent>
-              <TabsContent value="scheduling" className="mt-4"><SchedulingTab clientId={clientId} officeId={officeId} /></TabsContent>
+              <TabsContent value="training" className="mt-4"><ClientTrainingTab clientId={clientId} /></TabsContent>
+              <TabsContent value="scheduling" className="mt-4"><SchedulingTab clientId={clientId} officeId={officeId} goTo={goTo} /></TabsContent>
               <TabsContent value="onboarding" className="mt-4">
                 <OnboardingTab clientId={clientId} onboarding={onboarding.data} trainingVersion={active?.training_version ?? null} goTo={goTo} onChanged={refresh} />
               </TabsContent>
@@ -96,4 +100,13 @@ export default function ClientCarePlan() {
       </div>
     </ModuleShell>
   );
+}
+
+/** The client's Training tab (S15): the training-tier context read, shared with /training/:clientId. */
+function ClientTrainingTab({ clientId }: { clientId: string }) {
+  const ctx = useTrainingContext(clientId);
+  const refresh = useRefreshTraining(clientId);
+  if (ctx.isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (ctx.isError || !ctx.data) return <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">Not available.</CardContent></Card>;
+  return <TrainingTab ctx={ctx.data} onChanged={refresh} />;
 }

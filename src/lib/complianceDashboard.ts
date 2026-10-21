@@ -36,7 +36,7 @@ export function retrainingRows(rows: RetrainShiftRow[], caregivers: Map<string, 
     const k = `${r.caregiver_id}|${r.client_id}`; const cur = by.get(k);
     if (cur) { cur.shifts += 1; continue; }
     by.set(k, { caregiver_id: r.caregiver_id, caregiver_name: caregivers.get(r.caregiver_id) ?? "Caregiver", client_id: r.client_id, client_name: clients.get(r.client_id) ?? "Client",
-      next_shift: r.shift_date, shifts: 1, training_version: r.training_version, href: `/training/${r.client_id}` });
+      next_shift: r.shift_date, shifts: 1, training_version: r.training_version, href: `/care-plans/${r.client_id}?tab=training` });
   }
   return [...by.values()];
 }

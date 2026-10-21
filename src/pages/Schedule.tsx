@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/select";
 import {
   AlertTriangle,
+  ArrowLeft,
   CalendarDays,
   ChevronLeft,
   ChevronRight,
@@ -93,7 +94,17 @@ const Schedule = () => {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   // Optional ?client=<id> (deep link from the care-plan screens): narrows the list to one client. Absent = unchanged page.
+  // The "Client" select sets / clears the same URL parameter; the page opened from a client keeps a link back to its care plan
+  // (the origin travels in the router state, so it survives the URL change; nothing is stored).
+  const location = useLocation();
   const clientFilter = searchParams.get("client");
+  const [openedFromClient] = useState<string | null>(() => (location.state as { fromClient?: string } | null)?.fromClient ?? searchParams.get("client"));
+  const setClientFilter = (v: string) => {
+    const p = new URLSearchParams(searchParams);
+    if (v === "all") p.delete("client"); else p.set("client", v);
+    setSearchParams(p, { replace: true, state: openedFromClient ? { fromClient: openedFromClient } : null });
+  };
+  const clientName = (id: string | null) => { const c = clients.find((x) => x.id === id); return c ? [c.first_name, c.last_name].filter(Boolean).join(" ") : null; };
 
   const [selectedShift, setSelectedShift] = useState<any>(null);
   const [shiftToAssign, setShiftToAssign] = useState<any>(null);
@@ -285,6 +296,11 @@ const Schedule = () => {
   return (
     <AppLayout>
       <div className="p-6 space-y-6">
+        {openedFromClient && (
+          <Link to={`/care-plans/${openedFromClient}`} className="flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground" data-testid="back-to-client">
+            <ArrowLeft className="h-4 w-4" />Back to {clients.find((x) => x.id === openedFromClient)?.first_name ?? "the client"}'s care plan
+          </Link>
+        )}
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold">Schedule Management</h1>
@@ -369,12 +385,19 @@ const Schedule = () => {
                   <SelectItem value="cancelled">Cancelled</SelectItem>
                 </SelectContent>
               </Select>
-              {clientFilter && (
-                <Badge variant="secondary" className="gap-1" data-testid="client-filter">
-                  {(() => { const c = clients.find((x) => x.id === clientFilter); return c ? `Client: ${[c.first_name, c.last_name].filter(Boolean).join(" ")}` : "One client"; })()}
-                  <button type="button" className="ml-1 underline" onClick={() => { const p = new URLSearchParams(searchParams); p.delete("client"); setSearchParams(p, { replace: true }); }}>Clear</button>
-                </Badge>
-              )}
+              <Select value={clientFilter ?? "all"} onValueChange={setClientFilter}>
+                <SelectTrigger className="w-[190px]" aria-label="Client" data-testid="client-filter">
+                  <SelectValue placeholder="All clients">{clientFilter ? clientName(clientFilter) ?? "One client" : "All clients"}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All clients</SelectItem>
+                  {clients.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {[c.first_name, c.last_name].filter(Boolean).join(" ")}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </CardContent>
         </Card>

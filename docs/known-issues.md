@@ -1437,3 +1437,21 @@ office's rows were agency-visible in the shared agency, so 5 comparisons differe
   was approved or billed is in no bill yet, so it can still be undone.
 - (Closed Oct 20) The client page's Progress Notes tab no longer has row actions (Mark reviewed / Return removed,
   `NoteActions` deleted): rows have Print and Open › only; reviewing happens only in the note page's Review panel.
+
+## OPEN (S14 / S15, Oct 21): follow-ups
+
+**Status:** Logged 2026-10-21.
+- **Note history "Review undone" line (S14.3):** not done. `get_progress_note_for_staff` only lists the created, submitted,
+  returned and reviewed events, so the page can't show who undid a review or when. Showing it needs the reader to also
+  return `progress_note_review_undone`. That changes an existing function, which needs owner approval. Until then the
+  page shows "Reviewed (later undone)".
+- **"Add to a session" (S15)** opens **Record training session** with the caregiver as an attendee. That records a NEW
+  session. `record_training_form` has no way to add attendees to an existing session; that would need a new additive
+  RPC (`add_training_attendees`), which needs owner approval.
+- **Attachments columns** (in-service, sessions) show "—" until S4b (`docs/design/s4b-file-attachments.md`).
+- **Seeded applications:** the existing `caregiver_registrations` insert trigger logs `caregiver_application_received`
+  with `is_demo = false`, so the demo agency's 3 seeded applications count as real events in that agency's analytics.
+  The demo reset deletes them.
+- **Tests:** `tests/ripple/ui/round4.cjs` still has its S6 training checks (Scheduling-tab chips, retraining list,
+  "Record training form") and P3 ("Schedule ->" link). S14 / S15 replaced those screens on purpose; round11 covers the
+  new ones. round4 needs its own update before it can pass again.

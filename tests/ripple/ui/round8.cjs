@@ -157,7 +157,7 @@ async function offPhase(base, F, browser) {
   const ptext = await panel.innerText();
   const confirmDisabled = await confirmBtn(dlg).isDisabled();
   await panel.scrollIntoViewIfNeeded(); await shot(page, "assign-advisory-1440");
-  const want = { credential_missing: `/caregivers?caregiver=${F.G1}&tab=credentials`, training_missing: `/training/${F.CX}`, units_short: `/care-plans/${F.CX}?tab=ipos` };
+  const want = { credential_missing: `/caregivers?caregiver=${F.G1}&tab=credentials`, training_missing: `/care-plans/${F.CX}?tab=training`, units_short: `/care-plans/${F.CX}?tab=ipos` };
   rec("O1 enforcement OFF: the assign dialog shows the care-plan checks as amber Advisory lines with the server text (credential, training on the current plan, units) and a Fix → link each; Confirm stays enabled",
     ["credential_missing", "training_missing", "units_short"].every((c) => lines.some(([k, b]) => k === c && b === "false")) && lines.every(([, b]) => b === "false")
       && Object.entries(want).every(([c, h]) => hrefs.some(([k, href, t]) => k === c && href === h && t === "_blank")) && /needs 4 units; 2 projected units remain/.test(ptext) && !confirmDisabled,
@@ -263,7 +263,7 @@ async function onPhase(base, F, browser) {
     await page.goto(`${base}${href}`); await page.waitForTimeout(4500);
     const u = new URL(page.url());
     if (code === "credential_missing") land[code] = /\/caregivers/.test(u.pathname) && (await page.locator('[role="tab"][data-state="active"]', { hasText: /Credentials/ }).count()) > 0;
-    if (code === "training_missing") land[code] = u.pathname === `/training/${F.CX}` && /Zoe/.test(await page.locator("body").innerText());
+    if (code === "training_missing") land[code] = u.pathname === `/care-plans/${F.CX}` && u.search === "?tab=training" && /Zoe/.test(await page.locator("body").innerText());
     if (code === "units_short") land[code] = u.pathname === `/care-plans/${F.CX}` && (await page.locator('[data-testid="authorizations"]').count()) > 0;
     if (code === "credential_missing") await shot(page, "fix-credentials-1440");
   }

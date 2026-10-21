@@ -175,7 +175,10 @@ let AS_OF;
         return [await has(pat.locator('[data-testid="measures-panel"]'), /Highest prompt level used/), ""]; });
       await step("pat-training-zoe-from-dashboard", pat, async () => { await nav(pat, base, "Dashboard", "/dashboard", '[data-testid="cs-retraining"]'); await settle(pat, 2000);
         await pat.locator('[data-testid="cs-retraining-row"]').first().getByRole("link").first().click(); await settle(pat);
-        return [/\/training\//.test(pat.url()) && await has(pat.locator("body"), /Zoe/) && await has(pat.locator("body"), /Mia Lopez/), pat.url().replace(base, "")]; });
+        await pat.locator('[data-testid="training-tab"]').waitFor({ timeout: 20000 }); await settle(pat);   // S15: the client's Training tab
+        const mia = await pat.locator('[data-roster="Mia Lopez"]').getAttribute("data-status").catch(() => null);
+        await pat.locator('[data-testid="roster"]').scrollIntoViewIfNeeded();
+        return [/\/care-plans\/[^?]+\?tab=training/.test(pat.url()) && await has(pat.locator('[data-testid="training-summary"]'), /IPOS v2 \(Annual\) training/) && mia === "retrain", `${pat.url().replace(base, "")}; Mia ${mia}`]; }, { full: false });
       for (const who of ["Ben Carter", "Mia Lopez"]) {
         await step(`pat-credentials-${who.split(" ")[0].toLowerCase()}`, pat, async () => {
           await nav(pat, base, "Dashboard", "/dashboard", '[data-testid="cs-credentials"]'); await settle(pat, 2000);

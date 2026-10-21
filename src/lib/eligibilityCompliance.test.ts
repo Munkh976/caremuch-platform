@@ -20,7 +20,7 @@ describe("care-plan checks in an eligibility result (S10)", () => {
   it("Fix links: caregiver Credentials tab, client training page, client IPOS / Authorizations; none without the id", () => {
     expect(fixLinkFor("credential_missing", { caregiverId: "g1" })?.href).toBe("/caregivers?caregiver=g1&tab=credentials");
     expect(fixLinkFor("certification_expired", { caregiverId: "g1" })?.href).toBe("/caregivers?caregiver=g1&tab=credentials");
-    expect(fixLinkFor("training_missing", { clientId: "c1" })?.href).toBe("/training/c1");
+    expect(fixLinkFor("training_missing", { clientId: "c1" })?.href).toBe("/care-plans/c1?tab=training");
     expect(fixLinkFor("units_short_period", { clientId: "c1" })?.href).toBe("/care-plans/c1?tab=ipos");
     expect(fixLinkFor("authorization_expired", { clientId: "c1" })?.href).toBe("/care-plans/c1?tab=ipos");
     expect(fixLinkFor("training_missing", {})).toBeNull();

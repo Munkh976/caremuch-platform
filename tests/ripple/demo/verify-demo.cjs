@@ -19,6 +19,7 @@ const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(asOf)) throw new Error("--as-of must be YYYY-MM-DD");
     const pat = (await q(`SELECT id FROM public.profiles WHERE email = $1`, [D.email("pat.morgan")]))[0].id;
     const sam = (await q(`SELECT id FROM public.profiles WHERE email = $1`, [D.email("sam.rivera")]))[0].id;
+    const ana = (await q(`SELECT id FROM public.profiles WHERE email = $1`, [D.email("ana.brooks")]))[0].id;
     await c.query("BEGIN READ ONLY");
     try {
       const W = (await q(`SELECT ($2::date - ((extract(isodow FROM $2::date)::int - v.billing_week_start + 7) % 7))::text w0, v.billing_week_start wks,
@@ -73,6 +74,15 @@ const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
         lastWeek: await as(pat, `SELECT get_billing_week($1, $2::date) v`, [off.id, W.a]),
         weekBefore: await as(pat, `SELECT get_billing_week($1, $2::date) v`, [off.id, W.b]),
         status: await as(sam, `SELECT list_billing_week_status() v`),
+        // S14 other menus, read the way each screen reads them (RLS as the viewer)
+        menus: {
+          inquiries: await as(pat, `SELECT json_build_object('all', count(*), 'new', count(*) FILTER (WHERE status = 'new')) v FROM public.care_requests WHERE agency_id = $1`, [off.agency_id]),
+          applications: await as(sam, `SELECT json_build_object('all', count(*), 'pending', count(*) FILTER (WHERE status = 'pending')) v FROM public.caregiver_registrations WHERE agency_id = $1`, [off.agency_id]),
+          timeOff: await as(pat, `SELECT json_build_object('all', count(*), 'pending', count(*) FILTER (WHERE status = 'pending')) v FROM public.time_off_requests WHERE agency_id = $1`, [off.agency_id]),
+          trades: await as(pat, `SELECT json_build_object('board', count(*) FILTER (WHERE status = 'pending' AND NOT requires_manager_approval), 'approval', count(*) FILTER (WHERE status = 'pending' AND requires_manager_approval)) v FROM public.shift_trades`),
+          tradeBoardAna: await as(ana, `SELECT count(*)::int v FROM get_caregiver_trade_shifts()`),
+          outbox: await as(pat, `SELECT json_build_object('all', count(*), 'unsent', count(*) FILTER (WHERE sent_at IS NULL)) v FROM public.pending_notifications WHERE agency_id = $1`, [off.agency_id]),
+        },
       });
       await c.query("RESET ROLE");
       return out;
@@ -139,6 +149,12 @@ const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   rec("S1 exactly 1 unassigned visit: Zoe, next week's Thursday", r.unassigned.length === 1 && r.unassigned[0].c === "Zoe" && r.unassigned[0].d === thu.toISOString().slice(0, 10), JSON.stringify(r.unassigned));
   rec("S2 readiness: enforcement off and upcoming visits it would block (Mia)", r.readiness.would_block > 0 && !r.readiness.enforcement, `${r.readiness.would_block} of ${r.readiness.shifts_checked}; ${JSON.stringify(r.readiness.by_reason)}`);
   rec("F1 setup: active plans use ≥ 6 of the 8 measure types", r.kinds.n >= 6, `${r.kinds.n}`);
+  const m = r.menus;
+  rec("M1 Client Inquiries: 3 inquiries, 2 new", Number(m.inquiries.all) === 3 && Number(m.inquiries.new) === 2, JSON.stringify(m.inquiries));
+  rec("M2 Caregiver Applications: 3 pending", Number(m.applications.all) === 3 && Number(m.applications.pending) === 3, JSON.stringify(m.applications));
+  rec("M3 Time Off Requests: 3 requests, 2 pending", Number(m.timeOff.all) === 3 && Number(m.timeOff.pending) === 2, JSON.stringify(m.timeOff));
+  rec("M4 Shift Trades: 1 on the board (Ana sees it on her Trade Board), 1 waiting for approval", Number(m.trades.board) === 1 && Number(m.trades.approval) === 1 && m.tradeBoardAna === 1, `${JSON.stringify(m.trades)}; Ana's board ${m.tradeBoardAna}`);
+  rec("M5 Notification Outbox: 3 messages, 2 not sent", Number(m.outbox.all) === 3 && Number(m.outbox.unsent) === 2, JSON.stringify(m.outbox));
   console.log("summary: " + rows.map((x) => `${x.id.split(" ")[0]}=${x.ok ? "PASS" : "FAIL"}`).join(" "));
   if (rows.some((x) => !x.ok)) process.exitCode = 1;
 })().catch((e) => { console.log("ERROR", e.message); process.exitCode = 1; }).finally(() => D.closeDb());

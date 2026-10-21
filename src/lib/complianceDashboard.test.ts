@@ -31,7 +31,7 @@ describe("dashboard compliance section (S11)", () => {
     ], new Map([["g1", "Mia Lopez"]]), new Map([["c1", "Zoe N."], ["c2", "Max O."]]));
     expect(rows.map((r) => [r.caregiver_name, r.client_name, r.next_shift, r.shifts])).toEqual([["Mia Lopez", "Zoe N.", "2026-10-08", 2], ["Mia Lopez", "Max O.", "2026-10-10", 1]]);
     expect(distinctCaregivers(rows)).toBe(1);
-    expect(rows[0].href).toBe("/training/c1");
+    expect(rows[0].href).toBe("/care-plans/c1?tab=training");
   });
   it("readiness reasons: labelled and sorted by count", () => {
     const r = { by_reason: { units_short: 1, training_missing: 3, credential_missing: 3 } } as unknown as Readiness;

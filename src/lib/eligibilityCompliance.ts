@@ -23,11 +23,11 @@ export function complianceLabel(i: EligibilityIssue): string {
   return `Group is full (1:${m ? m[1] : 3})`;
 }
 
-/** Where a check is fixed: the caregiver's Credentials tab, the client's training page, or the client's IPOS / Authorizations. */
+/** Where a check is fixed: the caregiver's Credentials tab, the client's Training tab, or the client's IPOS / Authorizations. */
 export function fixLinkFor(code: string, ctx: { caregiverId?: string | null; clientId?: string | null }) {
   if ((code === "credential_missing" || code === "certification_expired" || code === "certification_unverified") && ctx.caregiverId)
     return { href: `/caregivers?caregiver=${ctx.caregiverId}&tab=credentials`, text: "Credentials" };
-  if (code === "training_missing" && ctx.clientId) return { href: `/training/${ctx.clientId}`, text: "Training" };
+  if (code === "training_missing" && ctx.clientId) return { href: `/care-plans/${ctx.clientId}?tab=training`, text: "Training" };
   if ((code.startsWith("authorization_") || code.startsWith("units_short")) && ctx.clientId)
     return { href: `/care-plans/${ctx.clientId}?tab=ipos`, text: "IPOS / Authorizations" };
   return null;

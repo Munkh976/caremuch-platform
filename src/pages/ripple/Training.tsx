@@ -4,7 +4,7 @@ import { format } from "date-fns";
 import { ArrowLeft, GraduationCap } from "lucide-react";
 import { ModuleShell } from "@/components/compliance/ModuleShell";
 import { OfficePicker } from "@/components/compliance/OfficePicker";
-import { TrainingPanel } from "@/components/compliance/training/TrainingPanel";
+import { TrainingTab } from "@/components/compliance/training/TrainingTab";
 import { useRefreshTraining, useTrainingContext, useTrainingStatus } from "@/components/compliance/training/useTrainingData";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -70,7 +70,7 @@ export function TrainingClient() {
               <div><h2 className="text-xl font-semibold">{ctx.data.client_name}</h2><p className="text-sm text-muted-foreground">{ctx.data.office_name}</p></div>
               {ctx.data.plan && <Badge variant="outline">Plan v{ctx.data.plan.version} · training v{ctx.data.plan.training_version}</Badge>}
             </CardContent></Card>
-            <TrainingPanel ctx={ctx.data} onChanged={refresh} />
+            <TrainingTab ctx={ctx.data} onChanged={refresh} />
           </>
         )}
       </div>
