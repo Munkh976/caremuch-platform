@@ -120,8 +120,6 @@ const fits = async (page, id, label) => { const ok = await noHScroll(page); rec(
 const pick = async (page, trigger, option) => { await page.locator(trigger).click(); await page.getByRole("option", { name: option, exact: true }).click(); };
 const ctxFor = (browser, w) => browser.newContext({ viewport: { width: w, height: w < 500 ? 844 : 900 }, ...(w < 500 ? { isMobile: true, hasTouch: true } : {}) });
 const closeDialogs = async (page) => { for (let i = 0; i < 3 && await page.locator('[role="dialog"]').count(); i++) { await page.keyboard.press("Escape"); await page.waitForTimeout(300); } };
-const shown = (page) => page.locator('[data-testid="can-deliver"] tr[data-caregiver]').evaluateAll((els) => els.map((e) => e.getAttribute("data-caregiver").split(" ")[0]));
-const setFilter = async (page, f) => { await page.locator(`[data-filter="${f}"]`).click(); await page.waitForTimeout(500); };
 // S6 polish (a): the active chip's background is the app's primary (navy), not the accent (teal)
 const chipColors = (page, sel) => page.evaluate((s) => { const probe = (cls) => { const d = document.createElement("div"); d.className = cls; document.body.appendChild(d);
   const c = getComputedStyle(d).backgroundColor; d.remove(); return c; };
@@ -159,7 +157,7 @@ async function polish(base, F, browser) {
     await li.locator('[data-testid="risk-schedule-link"]').click(); await p.locator('[data-testid="client-filter"]').waitFor({ timeout: 30000 }); await p.waitForTimeout(1500);
     const chip = await p.locator('[data-testid="client-filter"]').innerText();
     await shot(p, "polish-3-schedule-filtered-1440");
-    rec("P3 risk panel shows the client's full name and a 'Schedule ->' link; it opens the Schedule screen filtered to that client",
+    rec("P3 risk panel shows the client's full name and a 'Schedule ›' button; it opens the Schedule screen with the Client filter set to that client",
       txt.includes(`ZZ Training Client ${RUN}`) && href === `/schedule?client=${F.CX}` && chip.includes(`Training Client ${RUN}`), `"${txt.replace(/\s+/g, " ").slice(0, 90)}"; href ${href}; chip "${chip.replace(/\s+/g, " ")}"`);
     // 4: Required is a switch
     await p.goto(`${base}/form-templates`); await p.locator(`[data-shell="ZZ IPOS ${RUN}"]`).click();
@@ -210,66 +208,76 @@ async function caseNumber(base, F, browser) {
 }
 
 // =============================================================================================
+// S6 training workflow, on the S15 screens: the client's Training tab (in-service, sessions, roster, history) and the
+// Scheduling tab (shifts + eligibility + a link to Training). Same coverage as the S6 round: refusal before the
+// in-service, in-service and a session through the UI, trained / retraining after a renewal and back, prints, 390,
+// hr_staff from the Caregiver tab, refusals.
+const openTraining = async (page, base, F) => { await page.goto(`${base}/care-plans/${F.CX}?tab=training`); await page.locator('[data-testid="training-tab"]').waitFor({ timeout: 30000 }); await page.waitForTimeout(1500); };
+const roster = (page, status) => page.locator(status ? `[data-roster][data-status="${status}"]` : "[data-roster]").evaluateAll((els) => els.map((e) => e.getAttribute("data-roster").split(" ")[0]).sort());
 async function s6(base, F, browser) {
   const ctx = await ctxFor(browser, 1440); const page = await ctx.newPage();
   await login(page, base, F.mgrRX); await openScheduling(page, base, F);
   const shiftsTxt = await page.locator('[data-testid="client-shifts"]').innerText();
   const unitsTxt = await page.locator('[data-testid="units-by-service"]').innerText();
-  const t0 = await shown(page);
+  const link0 = (await page.locator('[data-testid="training-link"]').innerText()).trim();
   await shot(page, "s6-scheduling-tab-1440");
-  rec("S6-tab Scheduling tab: this client's shifts (assigned + unassigned), units per service with the UnitsBar, 'Open full Schedule' link; default filter shows nobody before any training",
-    /Hank/.test(shiftsTxt) && /Unassigned/.test(shiftsTxt) && /CLS/.test(unitsTxt) && /units left/.test(unitsTxt) && t0.length === 0
-      && (await page.locator('[data-testid="open-schedule"]').getAttribute("href")) === `/schedule?client=${F.CX}`, `trained filter ${t0.join(",") || "empty"}`);
-  // training form refused before the in-service
-  await page.getByRole("button", { name: "Record training form" }).click(); await page.locator('[data-testid="training-refused"]').waitFor({ timeout: 10000 }); await page.waitForTimeout(400);
+  rec("S6-tab Scheduling tab: this client's shifts (assigned + unassigned), units per service with the UnitsBar, 'Open full Schedule' link, '0 trained caregivers → Training' (training lives in the Training tab)",
+    /Hank/.test(shiftsTxt) && /Unassigned/.test(shiftsTxt) && /CLS/.test(unitsTxt) && /units left/.test(unitsTxt) && link0 === "0 trained caregivers → Training"
+      && (await page.locator('[data-testid="open-schedule"]').getAttribute("href")) === `/schedule?client=${F.CX}` && (await page.locator('[data-testid="training-panel"]').count()) === 0, `link "${link0}"`);
+  // a session is refused before the in-service
+  await openTraining(page, base, F);
+  await page.locator('[data-testid="record-session"]').click(); await page.locator('[data-testid="training-refused"]').waitFor({ timeout: 10000 }); await page.waitForTimeout(400);
   const refusedTxt = await page.locator('[data-testid="training-refused"]').innerText();
-  const submit = await page.locator('[data-testid="training-dialog"]').getByRole("button", { name: "Record training" }).count();
+  const submit = await page.locator('[data-testid="training-dialog"]').getByRole("button", { name: "Record session" }).count();
   await shot(page, "s6-training-refused-1440");
-  await page.getByRole("button", { name: "Go to the in-service step" }).click(); await page.locator('[data-testid="inservice-dialog"]').waitFor({ timeout: 10000 });
+  await page.getByRole("button", { name: "Go to the in-service" }).click(); await page.locator('[data-testid="inservice-dialog"]').waitFor({ timeout: 10000 });
   const { error: rpcEarly } = await F.mgrRX.c.rpc("record_training_form", { _care_plan_id: F.plan, _plan_document_type: "ipos_initial", _plan_effective_date: null, _location: null, _records: [{ caregiver_id: F.G1, training_date: await dbDay(0) }] });
-  rec("S6-refused before the in-service the training form explains it (no submit) and links to the in-service step; the RPC refuses too",
+  rec("S6-refused before the in-service 'Record training session' explains it (no submit) and links to the in-service; the RPC refuses too",
     /in-service form for training version 1 isn't recorded yet/.test(refusedTxt) && submit === 0 && /in-service form for this plan version first/.test(rpcEarly ? rpcEarly.message : ""), `"${refusedTxt.replace(/\s+/g, " ").slice(0, 80)}"; RPC "${rpcEarly ? rpcEarly.message.slice(0, 50) : "ACCEPTED"}"`);
   // in-service (UI)
   await page.locator("#in-cm").fill("Casey Manager"); await pick(page, "#in-lead", "ZZ Manager RX");
   await shot(page, "s6-inservice-dialog-1440");
-  await page.getByRole("button", { name: "Record in-service" }).last().click(); await page.waitForTimeout(2000);
-  // training form (UI): Gail + Hank
-  await page.getByRole("button", { name: "Record training form" }).click(); await page.locator("#tr-type").waitFor({ timeout: 10000 });
+  await page.getByRole("button", { name: "Record in-service" }).last().click(); await page.waitForTimeout(2500);
+  // a session (UI): Gail + Hank
+  await page.locator('[data-testid="record-session"]').click(); await page.locator("#tr-type").waitFor({ timeout: 10000 });
+  await page.locator("#tr-trainer").fill("ZZ Manager RX"); await page.locator("#tr-loc").fill("Ripple office");
   for (const [i, name] of [[0, "Gail"], [1, "Hank"]]) {
-    await page.getByRole("button", { name: "Add caregiver" }).click();
+    await page.getByRole("button", { name: "Add attendee" }).click();
     await page.locator(`#tr-${i}-cg`).click(); await page.getByRole("option", { name: new RegExp(`^${name} `) }).click();
     await pick(page, `#tr-${i}-method`, i === 0 ? "Received during the PCP meeting" : "Received outside the PCP meeting");
-    await page.locator(`#tr-${i}-clin`).fill("Dr. Primary"); await page.locator(`#tr-${i}-trainer`).fill("ZZ Manager RX");
+    await page.locator(`#tr-${i}-clin`).fill("Dr. Primary");
   }
-  await page.locator("#tr-loc").fill("Ripple office");
   await shot(page, "s6-training-form-1440");
-  await page.getByRole("button", { name: "Record training", exact: true }).click(); await page.waitForTimeout(2500);
-  const t1 = await shown(page);
-  await setFilter(page, "all"); const all1 = await shown(page);
+  await page.getByRole("button", { name: "Record session", exact: true }).click(); await page.locator('[data-testid="training-dialog"]').waitFor({ state: "detached", timeout: 20000 }); await page.waitForTimeout(2000);
+  const t1 = await roster(page, "trained"), all1 = await roster(page);
+  const sessTxt = await page.locator("[data-session]").first().innerText();
+  await page.locator('[data-filter="trained"]').click(); await page.waitForTimeout(400);
+  const chips = await chipColors(page, "[data-filter]");
+  await page.locator('[aria-label="Caregiver filter"]').screenshot({ path: path.join(SHOTS, "s6p-a-training-chips-1440.png") });
+  await shot(page, "s6-filter-trained-1440");
+  rec("S6p-a2 Training roster 'Trained' chip: the active chip uses the primary navy (not the teal accent)", !!chips.on && chips.on === chips.primary && chips.on !== chips.accent, JSON.stringify(chips));
+  await openScheduling(page, base, F);
   const eligTxt = await page.locator('[data-testid="can-deliver"] tr[data-caregiver^="Gail"] [data-eligibility]').innerText();
-  await shot(page, "s6-filter-all-1440");
-  await setFilter(page, "trained"); await shot(page, "s6-filter-trained-1440");
-  const schedChips = await chipColors(page, "[data-filter]");
-  await page.locator('[aria-label="Caregiver filter"]').screenshot({ path: path.join(SHOTS, "s6p-a-scheduling-chips-1440.png") });
-  rec("S6p-a2 Scheduling tab 'Trained / effective' chip: the active chip uses the primary navy (not the teal accent)",
-    !!schedChips.on && schedChips.on === schedChips.primary && schedChips.on !== schedChips.accent, JSON.stringify(schedChips));
-  rec("S6-trained after in-service + training: 'Trained / effective' shows Gail and Hank (Ivy: no credentials, not trained); 'All in office' shows all three with the engine's eligibility for the next unassigned shift",
-    t1.join(",") === "Gail,Hank" && all1.join(",") === "Gail,Hank,Ivy" && /Eligible|Needs approval|Blocked/.test(eligTxt), `trained ${t1.join(",")}; all ${all1.join(",")}; Gail elig "${eligTxt.replace(/\s+/g, " ").slice(0, 80)}"`);
+  const link1 = (await page.locator('[data-testid="training-link"]').innerText()).trim();
+  rec("S6-trained after in-service + session: the session row (trainer ZZ Manager RX, 2 attendees); roster Trained = Gail, Hank, All = Gail, Hank, Ivy; the Scheduling tab shows the engine's eligibility for the next unassigned shift and '2 trained caregivers → Training'",
+    t1.join(",") === "Gail,Hank" && all1.join(",") === "Gail,Hank,Ivy" && /ZZ Manager RX/.test(sessTxt) && /2 attendees/.test(sessTxt) && /Eligible|Needs approval|Blocked/.test(eligTxt) && link1 === "2 trained caregivers → Training",
+    `trained ${t1.join(",")}; all ${all1.join(",")}; Gail elig "${eligTxt.replace(/\s+/g, " ").slice(0, 60)}"; link "${link1}"`);
   // renewal -> everyone needs retraining
   F.plan2 = await must(F.mgrRX.c, "renew_care_plan", { _care_plan_id: F.plan });
-  await openScheduling(page, base, F);
-  const t2 = await shown(page); await setFilter(page, "retrain"); const r2 = await shown(page);
-  await shot(page, "s6-filter-retrain-1440");
-  const retrainTxt = await page.locator('[data-testid="retraining-list"]').innerText();
-  await page.locator('[data-testid="retraining-list"]').scrollIntoViewIfNeeded(); await shot(page, "s6-retraining-list-1440");
-  rec("S6-renewal after a renewal nobody is 'Trained / effective'; Gail and Hank move to 'Needs retraining'; the retraining list shows Hank (assigned shift) at version 2",
-    t2.length === 0 && r2.join(",") === "Gail,Hank" && /Hank/.test(retrainTxt) && /version 2/.test(retrainTxt), `trained ${t2.join(",") || "empty"}; retrain ${r2.join(",")}; list "${retrainTxt.replace(/\s+/g, " ").slice(0, 100)}"`);
+  await openTraining(page, base, F);
+  const t2 = await roster(page, "trained"), r2 = await roster(page, "retrain");
+  const hankTxt = await page.locator('[data-roster^="Hank"]').innerText();
+  await page.locator('[data-filter="retrain"]').click(); await page.waitForTimeout(400);
+  await page.locator('[data-testid="roster"]').scrollIntoViewIfNeeded(); await shot(page, "s6-filter-retrain-1440");
+  rec("S6-renewal after a renewal nobody is Trained; Gail and Hank 'Needs retraining (trained v1)'; Hank's row shows his next shift (the retraining list is merged into the roster)",
+    t2.length === 0 && r2.join(",") === "Gail,Hank" && /trained v1/.test(hankTxt) && /\w{3} \d{1,2}, \d{4}/.test(hankTxt), `trained ${t2.join(",") || "empty"}; retrain ${r2.join(",")}; Hank "${hankTxt.replace(/\s+/g, " ").slice(0, 100)}"`);
   // retrained at v2 (RPC) -> back
   await must(F.mgrRX.c, "record_inservice_form", { _care_plan_id: F.plan2, _case_manager_name: "Casey Manager", _program_lead_id: F.mgrRX.id, _trained_on: await dbDay(0), _signed_at: await dbNow() });
   await must(F.mgrRX.c, "record_training_form", { _care_plan_id: F.plan2, _plan_document_type: "ipos_annual", _plan_effective_date: null, _location: null,
     _records: [{ caregiver_id: F.G1, training_date: await dbDay(0) }, { caregiver_id: F.G2, training_date: await dbDay(0) }] });
-  await openScheduling(page, base, F); const t3 = await shown(page);
-  rec("S6-back after in-service + training at version 2 they return to 'Trained / effective'", t3.join(",") === "Gail,Hank", `trained ${t3.join(",")}`);
+  await openTraining(page, base, F); const t3 = await roster(page, "trained");
+  const hist = await page.locator('[data-testid="training-history"] tbody tr').count();
+  rec("S6-back after in-service + session at version 2 they are Trained again; History lists all four forms (2 in-service, 2 sessions)", t3.join(",") === "Gail,Hank" && hist === 4, `trained ${t3.join(",")}; history ${hist}`);
   // print previews
   const tctx = await must(F.mgrRX.c, "get_client_training_context", { _client_id: F.CX });
   const inId = tctx.inservice_forms.find((f) => f.training_version === 1).id, trId = tctx.training_forms.find((f) => f.training_version === 1).id;
@@ -296,10 +304,9 @@ async function s6(base, F, browser) {
   { const c = await ctxFor(browser, 390); const p = await c.newPage();
     await login(p, base, F.mgrRX); await openScheduling(p, base, F);
     await shot(p, "s6-scheduling-tab-390"); await fits(p, "S6-390a Scheduling tab fits at 390px", "scheduling");
-    await setFilter(p, "retrain"); await p.locator('[data-testid="can-deliver"]').scrollIntoViewIfNeeded(); await shot(p, "s6-filter-retrain-390");
-    await p.locator('[data-testid="retraining-list"]').scrollIntoViewIfNeeded(); await shot(p, "s6-retraining-list-390");
-    await p.getByRole("button", { name: "Record in-service" }).click(); await p.locator('[data-testid="inservice-dialog"]').waitFor(); await p.waitForTimeout(400); await shot(p, "s6-inservice-dialog-390"); await closeDialogs(p);
-    await p.getByRole("button", { name: "Record training form" }).click(); await p.locator("#tr-type").waitFor(); await p.getByRole("button", { name: "Add caregiver" }).click(); await p.waitForTimeout(400);
+    await openTraining(p, base, F); await shot(p, "s6-training-tab-390", true); await fits(p, "S6-390b Training tab fits at 390px", "training");
+    await p.locator('[data-testid="record-inservice"]').click(); await p.locator('[data-testid="inservice-dialog"]').waitFor(); await p.waitForTimeout(400); await shot(p, "s6-inservice-dialog-390"); await closeDialogs(p);
+    await p.locator('[data-testid="record-session"]').click(); await p.locator("#tr-type").waitFor(); await p.getByRole("button", { name: "Add attendee" }).click(); await p.waitForTimeout(400);
     await shot(p, "s6-training-form-390"); await closeDialogs(p);
     await p.goto(`${base}/training/${F.CX}/print/training/${trId}`); await p.locator('[data-print="training"]').waitFor({ timeout: 30000 }); await p.waitForTimeout(400);
     await shot(p, "s6-print-training-390", true);
@@ -309,10 +316,10 @@ async function s6(base, F, browser) {
   // refusal screen at 390 (a fresh renewal so the in-service is missing again)
   F.plan3 = await must(F.mgrRX.c, "renew_care_plan", { _care_plan_id: F.plan2 });
   { const c = await ctxFor(browser, 390); const p = await c.newPage();
-    await login(p, base, F.mgrRX); await openScheduling(p, base, F);
-    await p.getByRole("button", { name: "Record training form" }).click(); await p.locator('[data-testid="training-refused"]').waitFor(); await p.waitForTimeout(400);
+    await login(p, base, F.mgrRX); await openTraining(p, base, F);
+    await p.locator('[data-testid="record-session"]').click(); await p.locator('[data-testid="training-refused"]').waitFor(); await p.waitForTimeout(400);
     await shot(p, "s6-training-refused-390"); await c.close(); }
-  // put the in-service back so hr_staff can record a training form at v3
+  // put the in-service back so hr_staff can record a session at v3
   await must(F.mgrRX.c, "record_inservice_form", { _care_plan_id: F.plan3, _case_manager_name: "Casey Manager", _program_lead_id: F.aa.id, _trained_on: await dbDay(0), _signed_at: await dbNow() });
 
   // ---------- hr_staff: from the Caregiver tab and the training page, no clinical content ----------
@@ -323,14 +330,13 @@ async function s6(base, F, browser) {
     await p.locator('[data-testid="credentials-tab"]').waitFor({ timeout: 20000 }); await p.waitForTimeout(800);
     const link = p.locator('[data-testid="record-training-link"]').first(); const linkHref = await link.getAttribute("href");
     await link.scrollIntoViewIfNeeded(); await shot(p, "s6-hr-caregiver-tab-link-1440");
-    await link.evaluate((el) => el.click()); await p.locator('[data-testid="training-panel"]').waitFor({ timeout: 30000 }); await p.waitForTimeout(800);
+    await link.evaluate((el) => el.click()); await p.locator('[data-testid="training-tab"]').waitFor({ timeout: 30000 }); await p.waitForTimeout(800);
     const hdr = (await p.locator('[data-testid="training-header"] h2').innerText()).trim();
     await shot(p, "s6p-b-hr-training-full-name-1440");
-    rec("S6p-b hr_staff on /training/:clientId sees the client's full name (as on the paper form and the print), not initials",
-      hdr === `ZZ Training Client ${RUN}`, `header "${hdr}"`);
-    await p.getByRole("button", { name: "Record training form" }).click(); await p.locator("#tr-type").waitFor({ timeout: 10000 });
-    await p.getByRole("button", { name: "Add caregiver" }).click(); await p.locator("#tr-0-cg").click(); await p.getByRole("option", { name: /^Ivy / }).click();
-    await p.getByRole("button", { name: "Record training", exact: true }).click(); await p.waitForTimeout(2500);
+    rec("S6p-b hr_staff on /training/:clientId sees the client's full name (as on the paper form and the print), not initials", hdr === `ZZ Training Client ${RUN}`, `header "${hdr}"`);
+    await p.locator('[data-testid="record-session"]').click(); await p.locator("#tr-type").waitFor({ timeout: 10000 });
+    await p.getByRole("button", { name: "Add attendee" }).click(); await p.locator("#tr-0-cg").click(); await p.getByRole("option", { name: /^Ivy / }).click();
+    await p.getByRole("button", { name: "Record session", exact: true }).click(); await p.locator('[data-testid="training-dialog"]').waitFor({ state: "detached", timeout: 20000 }); await p.waitForTimeout(1500);
     const body = await p.locator("body").innerText();
     await shot(p, "s6-hr-training-page-1440");
     const ivy = (await admin.from("plan_training_records").select("id, entered_by").eq("caregiver_id", F.G3).eq("care_plan_id", F.plan3)).data;
@@ -338,13 +344,13 @@ async function s6(base, F, browser) {
     await shot(p, "s6-hr-training-list-1440");
     rec("S6p-d the hr_staff /training list shows the client's full name", listBody.includes(`ZZ Training Client ${RUN}`), `full name ${listBody.includes(`ZZ Training Client ${RUN}`) ? "shown" : "MISSING"}`);
     await p.goto(`${base}/care-plans/${F.CX}`); await p.waitForTimeout(4000); const cpPath = new URL(p.url()).pathname;
-    rec("S6-hr hr_staff opens the training form from the Caregiver tab ('Record training ->') and the training page, records a training form, and sees no clinical text anywhere; the client care-plan page stays closed",
+    rec("S6-hr hr_staff opens the Training screen from the Caregiver tab ('Record training ->'), records a session, and sees no clinical text anywhere; the client care-plan page stays closed",
       linkHref === `/training/${F.CX}` && ivy.length === 1 && ivy[0].entered_by === F.hrRX.id && !CLINICAL.test(body) && !CLINICAL.test(listBody) && cpPath !== `/care-plans/${F.CX}`,
       `link ${linkHref}; recorded ${ivy.length}; clinical ${CLINICAL.test(body + listBody) ? "LEAKED" : "none"}; /care-plans -> ${cpPath}`);
     await c.close(); }
   // ---------- refusals ----------
   for (const [u, label, url, expect] of [[F.mgrRY, "office-Y manager", `/training/${F.CX}`, "denied"], [F.schRX, "scheduler", `/training/${F.CX}`, "redirect"],
-    [F.schRX, "scheduler (client Scheduling tab)", `/care-plans/${F.CX}?tab=scheduling`, "redirect"], [F.mgrKY, "Kind-Care-only manager", `/training/${F.CX}`, "redirect"]]) {
+    [F.schRX, "scheduler (client Training tab)", `/care-plans/${F.CX}?tab=training`, "redirect"], [F.mgrKY, "Kind-Care-only manager", `/training/${F.CX}`, "redirect"]]) {
     const c = await ctxFor(browser, 1440); const p = await c.newPage();
     await login(p, base, u); await p.goto(`${base}${url}`); await p.waitForTimeout(5000);
     const pth = new URL(p.url()).pathname, denied = await p.locator('[data-testid="training-denied"], [data-testid="client-denied"]').count(), body = await p.locator("body").innerText();
@@ -353,7 +359,6 @@ async function s6(base, F, browser) {
     await c.close();
   }
 }
-
 async function run(base) {
   let F;
   try {

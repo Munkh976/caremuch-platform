@@ -1452,6 +1452,6 @@ office's rows were agency-visible in the shared agency, so 5 comparisons differe
 - **Seeded applications:** the existing `caregiver_registrations` insert trigger logs `caregiver_application_received`
   with `is_demo = false`, so the demo agency's 3 seeded applications count as real events in that agency's analytics.
   The demo reset deletes them.
-- **Tests:** `tests/ripple/ui/round4.cjs` still has its S6 training checks (Scheduling-tab chips, retraining list,
+- **(Closed Oct 21: round4 rewritten, 26/26)** **Tests:** `tests/ripple/ui/round4.cjs` still had its S6 training checks (Scheduling-tab chips, retraining list,
   "Record training form") and P3 ("Schedule ->" link). S14 / S15 replaced those screens on purpose; round11 covers the
   new ones. round4 needs its own update before it can pass again.
