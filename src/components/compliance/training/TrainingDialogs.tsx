@@ -11,7 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { FieldInput } from "@/components/compliance/careplan/FieldInput";
 import { cleanFieldValues, validateFieldValues, type FieldValues } from "@/lib/carePlan";
-import { docTypeFor, METHOD_LABEL, PLAN_DOC_TYPES, type PlanDocType, type TrainingContext } from "@/lib/training";
+import { docTypeFor, docTypeLabel, METHOD_LABEL, PLAN_DOC_TYPES, sessionSummary, type PlanDocType, type TrainingContext } from "@/lib/training";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { rpcErrorText } from "@/lib/rpcError";
 
 /** A date (YYYY-MM-DD) as a timestamp at local noon, for signed_at (the server refuses future times). */
@@ -136,6 +137,50 @@ export function TrainingFormDialog({ open, onOpenChange, ctx, today, onSaved, on
           </div>
         )}
         <DialogFooter><Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>{ctx.inservice_current && <Button onClick={save} disabled={busy}>Record session</Button>}</DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * "Add to a session" (post-demo 1b): add one caregiver to an EXISTING session of the current version
+ * (add_training_attendees: the session's date and trainer, their own signature date), or start a new session.
+ */
+export function AddToSessionDialog({ open, onOpenChange, ctx, caregiverId, today, onSaved, onNewSession }: {
+  open: boolean; onOpenChange: (o: boolean) => void; ctx: TrainingContext; caregiverId: string; today: string; onSaved: () => void; onNewSession: () => void;
+}) {
+  const tv = ctx.plan?.training_version ?? null;
+  const sessions = ctx.training_forms.filter((f) => f.training_version === tv && !f.records.some((r) => r.caregiver_id === caregiverId)).map(sessionSummary);
+  const [pick, setPick] = useState<string>("new"); const [signed, setSigned] = useState(today); const [busy, setBusy] = useState(false);
+  useEffect(() => { if (open) { setPick(sessions[0]?.id ?? "new"); setSigned(today); } }, [open]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const name = ctx.caregivers.find((c) => c.caregiver_id === caregiverId)?.name ?? "Caregiver";
+  const fmtD = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  const go = async () => {
+    if (pick === "new") { onOpenChange(false); onNewSession(); return; }
+    setBusy(true);
+    const { error } = await supabase.rpc("add_training_attendees", { _training_form_id: pick, _records: [{ caregiver_id: caregiverId, ...(signed ? { signed_date: signed } : {}) }] as Json });
+    setBusy(false);
+    if (error) { toast.error(rpcErrorText(error)); return; }
+    toast.success(`${name} added to the session`); onSaved(); onOpenChange(false);
+  };
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[90vh] grid-cols-[minmax(0,1fr)] overflow-y-auto sm:max-w-[520px]" data-testid="add-to-session-dialog">
+        <DialogHeader><DialogTitle>Add {name} to a training session</DialogTitle>
+          <DialogDescription>A session of training version {tv}: they get its date of training and trainer, and their own signature date.</DialogDescription></DialogHeader>
+        <RadioGroup value={pick} onValueChange={setPick} className="space-y-2">
+          {sessions.map((s) => (
+            <Label key={s.id} htmlFor={`sess-${s.id}`} className="flex cursor-pointer items-center gap-3 rounded-md border p-3 font-normal" data-session-option={s.id}>
+              <RadioGroupItem id={`sess-${s.id}`} value={s.id} />
+              <span>{fmtD(s.date)} · {docTypeLabel(s.docType)}{s.trainer ? ` · ${s.trainer}` : ""} · {s.attendees} attendee{s.attendees === 1 ? "" : "s"}</span>
+            </Label>))}
+          <Label htmlFor="sess-new" className="flex cursor-pointer items-center gap-3 rounded-md border p-3 font-normal" data-session-option="new">
+            <RadioGroupItem id="sess-new" value="new" /><span>A new session</span>
+          </Label>
+        </RadioGroup>
+        {pick !== "new" && <div className="space-y-1"><Label htmlFor="sess-signed">Signature date</Label><Input id="sess-signed" type="date" value={signed} onChange={(e) => setSigned(e.target.value)} /></div>}
+        <DialogFooter><Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button onClick={go} disabled={busy} data-testid="confirm-add-to-session">{pick === "new" ? "Continue" : "Add to session"}</Button></DialogFooter>
       </DialogContent>
     </Dialog>
   );

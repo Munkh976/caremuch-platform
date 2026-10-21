@@ -13,7 +13,7 @@ import { FilterChip } from "@/components/compliance/FilterChip";
 import { parseDateOnly } from "@/lib/dateOnly";
 import { buildRoster, docTypeLabel, filterRoster, METHOD_LABEL, PLAN_TYPE_LABEL, retrainingFor, sessionSummary, trainedCount,
   type RosterFilter, type TrainingContext } from "@/lib/training";
-import { InserviceDialog, TrainingFormDialog } from "./TrainingDialogs";
+import { AddToSessionDialog, InserviceDialog, TrainingFormDialog } from "./TrainingDialogs";
 import { useRetraining } from "./useTrainingData";
 
 const fmt = (s: string | null | undefined) => (s ? format(parseDateOnly(s.slice(0, 10)), "MMM d, yyyy") : "—");
@@ -24,12 +24,13 @@ const NO_FILES = <span className="text-muted-foreground" title="File attachments
  *   a. header: plan version and type, effective date, in-service signed, N of M caregivers trained;
  *   b. in-service (case manager -> program lead) + Record;
  *   c. training sessions (one training form = one session: date, trainer, attendees) + Record training session;
- *   d. one caregiver roster (Trained <date> by <trainer> / Needs retraining / Never trained) with "Add to a session";
+ *   d. one caregiver roster (Trained <date> by <trainer> / Needs retraining / Never trained) with "Add to a session"
+ *      (an existing session of this version, or a new one);
  *   e. history: every version's forms with Print.
  * Training-tier read only (get_client_training_context: no goals, needs or notes), so /training/:clientId (hr_staff) uses it too.
  */
 export function TrainingTab({ ctx, onChanged }: { ctx: TrainingContext; onChanged: () => void }) {
-  const [dialog, setDialog] = useState<"inservice" | "training" | null>(null);
+  const [dialog, setDialog] = useState<"inservice" | "training" | "add" | null>(null);
   const [preset, setPreset] = useState<string[]>([]);
   const [open, setOpen] = useState<string | null>(null);
   const [filter, setFilter] = useState<RosterFilter>("all");
@@ -161,7 +162,7 @@ export function TrainingTab({ ctx, onChanged }: { ctx: TrainingContext; onChange
                   <TableCell className="text-sm">{r.credentials_current ? "Current" : <span className="text-destructive">Not current</span>}</TableCell>
                   <TableCell className="whitespace-nowrap text-sm">{fmt(r.next_shift)}</TableCell>
                   <TableCell className="text-right">
-                    {r.status !== "trained" && <Button size="sm" variant="outline" className="gap-1 hover:bg-muted hover:text-foreground" onClick={() => addTo([r.caregiver_id])} data-testid="add-to-session"><UserPlus className="h-4 w-4" />Add to a session</Button>}
+                    {r.status !== "trained" && <Button size="sm" variant="outline" className="gap-1 hover:bg-muted hover:text-foreground" onClick={() => { setPreset([r.caregiver_id]); setDialog(sessions.length ? "add" : "training"); }} data-testid="add-to-session"><UserPlus className="h-4 w-4" />Add to a session</Button>}
                   </TableCell>
                 </TableRow>))}
             </TableBody>
@@ -198,6 +199,8 @@ export function TrainingTab({ ctx, onChanged }: { ctx: TrainingContext; onChange
       </Card>
 
       {dialog === "inservice" && <InserviceDialog open onOpenChange={(o) => !o && setDialog(null)} ctx={ctx} today={ctx.as_of} onSaved={onChanged} />}
+      {dialog === "add" && preset[0] && <AddToSessionDialog open onOpenChange={(o) => !o && setDialog(null)} ctx={ctx} caregiverId={preset[0]} today={ctx.as_of} onSaved={onChanged}
+        onNewSession={() => setDialog("training")} />}
       {dialog === "training" && <TrainingFormDialog open onOpenChange={(o) => !o && setDialog(null)} ctx={ctx} today={ctx.as_of} onSaved={onChanged} initialCaregivers={preset}
         onGoToInservice={() => { setDialog("inservice"); document.getElementById("inservice-step")?.scrollIntoView({ block: "center" }); }} />}
     </div>

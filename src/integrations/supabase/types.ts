@@ -5110,6 +5110,10 @@ export type Database = {
       }
     }
     Functions: {
+      add_training_attendees: {
+        Args: { _records: Json; _training_form_id: string }
+        Returns: number
+      }
       approve_batch_notes: {
         Args: { _batch_id: string; _note_ids: string[] }
         Returns: Json

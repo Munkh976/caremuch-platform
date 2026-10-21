@@ -21,9 +21,9 @@ module.exports = async function undoFlows({ base, F, browser, rec, admin, must, 
   const r1 = await row(F.N4), av1 = await avail();
   const hist = await page.locator('[data-testid="note-history"]').innerText();
   await panel.scrollIntoViewIfNeeded(); await shot(page, "undo-done-submitted-1440");
-  rec("U1 reviewed note in no bill: 'Undo review' (secondary) → 'Undo this review?' (Cancel keeps it Reviewed) → confirm → Submitted (DB), authorization cleared, units back (+4); the panel offers the statement and Mark reviewed again; the history marks the review '(later undone)'",
+  rec("U1 reviewed note in no bill: 'Undo review' (secondary) → 'Undo this review?' (Cancel keeps it Reviewed) → confirm → Submitted (DB), authorization cleared, units back (+4); the panel offers the statement and Mark reviewed again; the history shows 'Reviewed' then 'Review undone' (who, when)",
     /Undo this review\?/.test(dlg) && !/draft bill/.test(dlg) && afterCancel === "reviewed" && r1.status === "submitted" && r1.authorization_id === null && av1 === av0 + 4
-      && /Reviewed \(later undone\)/.test(hist) && (await page.locator('[data-testid="mark-reviewed"]').isDisabled()),
+      && /Reviewed · [^\n]*Bren Miller[\s\S]*Review undone · [^\n]*Bren Miller/.test(hist) && (await page.locator('[data-testid="mark-reviewed"]').isDisabled()),
     `cancel → ${afterCancel}; ${r1.status}; units ${av0} → ${av1}; history "${hist.replace(/\s+/g, " ").slice(0, 120)}"`);
 
   await page.locator('[data-testid="review-ack"]').click(); await page.locator('[data-testid="mark-reviewed"]').click();

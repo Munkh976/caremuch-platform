@@ -70,7 +70,7 @@ export const REVIEW_ACK = "I have read this note and it matches the client's pla
 /** Owner decision (Oct 5): the 10-character minimum is enforced here only; the server requires non-empty. */
 export const returnReasonOk = (s: string) => s.trim().length >= RETURN_MIN && s.trim().length <= 1000;
 export const HISTORY_LABEL: Record<string, string> = {
-  progress_note_created: "Started", progress_note_submitted: "Submitted", progress_note_returned: "Returned", progress_note_reviewed: "Reviewed",
+  progress_note_created: "Started", progress_note_submitted: "Submitted", progress_note_returned: "Returned", progress_note_reviewed: "Reviewed", progress_note_review_undone: "Review undone",
 };
 export const historyLabel = (h: StaffHistory) => h.event === "progress_note_submitted" && h.resubmission ? "Resubmitted" : HISTORY_LABEL[h.event] ?? h.event;
 
@@ -87,20 +87,7 @@ export function undoReviewBlocked(note: { status: string; billable: boolean | nu
   return null;
 }
 
-/**
- * The history read lists review events but not undo events (that reader is unchanged). A review was undone when a
- * later review or return follows it, or when it is the last one and the note is no longer reviewed or billed: a
- * reviewed note can't be returned or reviewed again without an undo.
- */
-export function undoneReviews(history: StaffHistory[], status: string): Set<number> {
-  const out = new Set<number>();
-  history.forEach((h, i) => {
-    if (h.event !== "progress_note_reviewed") return;
-    const later = history.slice(i + 1).some((x) => x.event === "progress_note_reviewed" || x.event === "progress_note_returned");
-    if (later || !["reviewed", "billed"].includes(status)) out.add(i);
-  });
-  return out;
-}
+
 
 /** One answer as plain text (screen and print). */
 export function answerText(m: NoteMeasure, a: Answer | undefined | null): string {

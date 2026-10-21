@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { StaffNote } from "@/lib/staffNotes";
-import { REVIEW_ACK, undoReviewBlocked, undoneReviews, type StaffHistory } from "@/lib/staffNotes";
+import { historyLabel, REVIEW_ACK, undoReviewBlocked, type StaffHistory } from "@/lib/staffNotes";
 import { rowClickOpens, rowKeyOpens } from "@/lib/rowOpen";
 
 vi.mock("@/integrations/supabase/client", () => ({ supabase: { rpc: vi.fn(), from: vi.fn() } }));
@@ -112,16 +112,11 @@ describe("undoReviewBlocked (owner decision, Oct 19: undo while the note is not 
   });
 });
 
-describe("undoneReviews (the history read has no undo event)", () => {
-  const h = (...ev: string[]) => ev.map((e) => ({ event: `progress_note_${e}`, at: "2026-10-19T14:00:00Z", by: null, resubmission: null, billable: null, reason: null })) as StaffHistory[];
-  it("a review followed by another review or a return was undone", () => {
-    expect([...undoneReviews(h("created", "submitted", "reviewed", "reviewed"), "reviewed")]).toEqual([2]);
-    expect([...undoneReviews(h("created", "submitted", "reviewed", "returned", "submitted", "reviewed"), "reviewed")]).toEqual([2]);
-  });
-  it("the last review of a note that is no longer reviewed was undone; a current review is not", () => {
-    expect([...undoneReviews(h("created", "submitted", "reviewed"), "submitted")]).toEqual([2]);
-    expect([...undoneReviews(h("created", "submitted", "reviewed"), "reviewed")]).toEqual([]);
-    expect([...undoneReviews(h("created", "submitted", "reviewed"), "billed")]).toEqual([]);
-    expect([...undoneReviews(h("created", "submitted", "returned", "submitted", "reviewed"), "reviewed")]).toEqual([]);
+describe("history labels (post-demo 1a: the reader lists undo events)", () => {
+  const h = (event: string) => ({ event, at: "2026-10-21T14:00:00Z", by: "Pat Morgan", resubmission: null, billable: null, reason: null }) as StaffHistory;
+  it("reviewed, review undone, resubmitted", () => {
+    expect(historyLabel(h("progress_note_reviewed"))).toBe("Reviewed");
+    expect(historyLabel(h("progress_note_review_undone"))).toBe("Review undone");
+    expect(historyLabel({ ...h("progress_note_submitted"), resubmission: true })).toBe("Resubmitted");
   });
 });

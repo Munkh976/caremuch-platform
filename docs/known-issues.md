@@ -1441,11 +1441,11 @@ office's rows were agency-visible in the shared agency, so 5 comparisons differe
 ## OPEN (S14 / S15, Oct 21): follow-ups
 
 **Status:** Logged 2026-10-21.
-- **Note history "Review undone" line (S14.3):** not done. `get_progress_note_for_staff` only lists the created, submitted,
+- **(Closed Oct 21, 20261027120000)** **Note history "Review undone" line (S14.3):** was not done. `get_progress_note_for_staff` only lists the created, submitted,
   returned and reviewed events, so the page can't show who undid a review or when. Showing it needs the reader to also
   return `progress_note_review_undone`. That changes an existing function, which needs owner approval. Until then the
   page shows "Reviewed (later undone)".
-- **"Add to a session" (S15)** opens **Record training session** with the caregiver as an attendee. That records a NEW
+- **(Closed Oct 21, 20261027120100: existing session or a new one)** **"Add to a session" (S15)** opened **Record training session** with the caregiver as an attendee. That records a NEW
   session. `record_training_form` has no way to add attendees to an existing session; that would need a new additive
   RPC (`add_training_attendees`), which needs owner approval.
 - **Attachments columns** (in-service, sessions) show "—" until S4b (`docs/design/s4b-file-attachments.md`).

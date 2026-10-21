@@ -165,22 +165,34 @@ async function run(base) {
       const onlyAna = await page.locator("[data-roster]").evaluateAll((els) => els.map((e) => e.getAttribute("data-roster")));
       await page.locator('[data-filter="all"]').click(); await settle(page, 400);
       rec("T2 roster filter chips: Needs retraining → Ben; Trained → Ana; All → 3", onlyBen.join() === "Ben Ostrowski" && onlyAna.join() === "Ana Rivera" && (await page.locator("[data-roster]").count()) === 3, `${onlyBen} | ${onlyAna}`);
-      await page.locator('[data-roster="Ben Ostrowski"] [data-testid="add-to-session"]').click(); await page.locator('[data-testid="training-dialog"]').waitFor(); await settle(page, 500);
-      const pre = await page.locator('[data-training-row="0"]').innerText();
-      await page.fill("#tr-trainer", "Bren Miller"); await shot(page, "add-to-session-dialog-1440");
-      await page.getByRole("button", { name: "Record session" }).click(); await page.locator('[data-testid="training-dialog"]').waitFor({ state: "detached", timeout: 20000 }); await settle(page, 1500);
+      // 1b: "Add to a session" offers the existing v2 session or a new one
+      await page.locator('[data-roster="Ben Ostrowski"] [data-testid="add-to-session"]').click(); await page.locator('[data-testid="add-to-session-dialog"]').waitFor(); await settle(page, 500);
+      const opts = await page.locator("[data-session-option]").evaluateAll((els) => els.map((e) => e.getAttribute("data-session-option")));
+      await shot(page, "add-to-session-chooser-1440");
+      await page.locator('[data-testid="confirm-add-to-session"]').click(); await page.locator('[data-testid="add-to-session-dialog"]').waitFor({ state: "detached", timeout: 20000 }); await settle(page, 1500);
       const head2 = (await page.locator('[data-testid="training-summary"]').innerText()).replace(/\s+/g, " ");
-      rec("T3 'Add to a session' opens 'Record training session' with Ben as attendee (session date + trainer + signature date); saved → Ben Trained, '2 of 2 caregivers trained', 2 sessions",
-        /Ben Ostrowski/.test(pre) && (await status(page, "Ben Ostrowski")) === "trained" && /2 of 2 caregivers trained/.test(head2) && (await page.locator("[data-session]").count()) === 2, `"${head2.slice(0, 120)}"`);
-
+      if (!(await page.locator("[data-session-attendees]").count())) { await page.locator('[data-testid="session-toggle"]').first().click(); await settle(page, 400); }
+      const att2 = await page.locator("[data-session-attendees]").innerText();
+      const benTxt = await page.locator('[data-roster="Ben Ostrowski"]').innerText();
+      rec("T3 'Add to a session' offers the existing v2 session (pre-selected) or 'A new session'; adding Ben to the existing one: still 1 session, now 2 attendees, Ben 'Trained … by Bren Miller', '2 of 2 caregivers trained'",
+        opts.length === 2 && opts[1] === "new" && (await page.locator("[data-session]").count()) === 1 && /Ben Ostrowski/.test(att2) && /Ana Rivera/.test(att2)
+          && (await status(page, "Ben Ostrowski")) === "trained" && /by Bren Miller/.test(benTxt) && /2 of 2 caregivers trained/.test(head2), `options ${opts.length}; "${head2.slice(0, 110)}"`);
+      await page.locator('[data-roster="Cleo Park"] [data-testid="add-to-session"]').click(); await page.locator('[data-testid="add-to-session-dialog"]').waitFor(); await settle(page, 400);
+      await page.locator('[data-session-option="new"]').click(); await page.locator('[data-testid="confirm-add-to-session"]').click();
+      await page.locator('[data-testid="training-dialog"]').waitFor(); await settle(page, 500);
+      const pre = await page.locator('[data-training-row="0"]').innerText();
+      await page.fill("#tr-trainer", "Bren Miller"); await shot(page, "new-session-dialog-1440");
+      await page.getByRole("button", { name: "Record session" }).click(); await page.locator('[data-testid="training-dialog"]').waitFor({ state: "detached", timeout: 20000 }); await settle(page, 1500);
+      rec("T3b 'A new session' → 'Record training session' with Cleo as attendee (session date, trainer, signature date); saved → 2 sessions, Cleo Trained",
+        /Cleo Park/.test(pre) && (await page.locator("[data-session]").count()) === 2 && (await status(page, "Cleo Park")) === "trained", `prefill "${pre.replace(/\s+/g, " ").slice(0, 60)}"`);
       // Scheduling tab: shifts + eligibility, link to Training
       await page.goto(`${base}/care-plans/${F.CX}?tab=scheduling`); await page.locator('[data-testid="scheduling-tab"]').waitFor({ timeout: 30000 }); await settle(page, 2500);
       const link = (await page.locator('[data-testid="training-link"]').innerText()).trim(), panels = await page.locator('[data-testid="training-panel"], [data-testid="retraining-list"]').count();
       const eligRows = await page.locator('[data-testid="can-deliver"] [data-caregiver]').count();
       await shot(page, "scheduling-tab-1440", true);
       await page.locator('[data-testid="training-link"]').click(); await page.locator('[data-testid="training-tab"]').waitFor({ timeout: 20000 });
-      rec("T4 Scheduling tab keeps shifts + eligibility (no training panel or retraining list) and links '2 trained caregivers → Training' to the Training tab",
-        link === "2 trained caregivers → Training" && panels === 0 && eligRows === 3 && /tab=training/.test(pathOf(page)), `"${link}"; training panels ${panels}; eligibility rows ${eligRows}; → ${pathOf(page)}`);
+      rec("T4 Scheduling tab keeps shifts + eligibility (no training panel or retraining list) and links '3 trained caregivers → Training' to the Training tab",
+        link === "3 trained caregivers → Training" && panels === 0 && eligRows === 3 && /tab=training/.test(pathOf(page)), `"${link}"; training panels ${panels}; eligibility rows ${eligRows}; → ${pathOf(page)}`);
       // onboarding arrows
       await page.goto(`${base}/care-plans/${F.CX}?tab=onboarding`); await page.locator('[data-item="training"]').waitFor({ timeout: 30000 }); await settle(page);
       await page.locator('[data-item="training"]').getByRole("button", { name: /Go to Caregiver training/ }).click(); await page.locator('[data-testid="training-tab"]').waitFor({ timeout: 20000 });
