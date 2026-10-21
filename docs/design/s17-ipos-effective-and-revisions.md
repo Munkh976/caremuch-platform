@@ -123,3 +123,54 @@ and NB1.
   doesn't.
 - **"Shifts not blocked when expired"** depends on Bren's answer. If the answer is "block", that is an eligibility
   change and needs a separate approval and NB1 refresh.
+
+## 7. Pre-build findings (Oct 21, read-only: DEV function bodies, app code)
+
+Owner approval (Oct 21): build with `start_pending_plan_version` (renew_care_plan unchanged; UI action "Start new IPOS
+version (from ISK)"), revisions on the active version only (rev 0 at activation), ISK PDF via S4b. Before building, the
+owner asked for two checks. **Result: item 2 needs no design change; the expired-while-pending window does (stop).**
+
+### 7a. Authorizations and plan versions (owner item 2)
+- `service_authorizations` has **no plan link**: it belongs to the client and a service type, with its own dates.
+  `create_service_authorization` doesn't look at plans.
+- `review_progress_note` picks the authorization FIFO by client, service type and **the authorization's own dates**
+  (plus the per-period cap). `cp_projected_units` / `cp_authorization_projection` (eligibility, risk panel) likewise.
+- So a KARE authorization entered while v2 is pending is used for billing by its own dates while v1 is in effect.
+  CLS notes for those visits use v1's objectives (the active plan covering the visit date). **No change needed.**
+
+### 7b. The window "v1 expired, v2 still pending" — conflicts with today's rules
+Nothing ever sets `status = 'expired'` (DEV: 5 active, 1 superseded); an expired IPOS is an **active** row whose
+`expiration_date` has passed. Two existing functions pick "the active plan whose dates cover the visit date":
+- `create_progress_note_for_shift`: a CLS note is **refused** ("The client has no active plan on this date"), so those
+  visits can't be documented or billed;
+- `cp_shift_client_context` → `cp_eligibility_core`: "No active plan of service" is **advisory** with enforcement off but
+  a **hard block** with enforcement on.
+
+So "red warning, **no block**" (item 4) is not what happens today in that window. Options for the owner / Bren:
+- **(A) Keep today's rules:** after v1's expiration date, CLS notes are refused and (enforcement on) shifts are blocked
+  until v2 is activated. S17 then only adds the red warning. No change to these functions.
+- **(B) v1 keeps applying past its expiration date while a pending version exists** (warning only): change
+  `cp_shift_client_context` and `create_progress_note_for_shift` to fall back to the latest active version when a
+  pending one exists. These are existing functions in the eligibility path: needs approval and an NB1 baseline refresh.
+- **(C) Notes and eligibility switch to the pending v2 once v1 has expired**, which runs against "v2 isn't in effect
+  until its in-service and a session exist".
+
+### 7c. Readers of `care_plans` without `status = 'active'` (owner item 6)
+No views or policies reference `care_plans`; its only trigger is the row-scope check.
+- **By id only (a second row doesn't matter):** `cp_care_plan_in_scope`, `cp_care_plan_goal_in_scope`,
+  `cp_care_plan_objective_in_scope`, `cp_check_client_order_care_plan`, `would_bump_training_version`,
+  `cp_attachment_parent` (S4b), `upgrade_instance_template` (requires active).
+- **Every version (pending will appear):** `usePlans` → IPOS tab history (shows a "Pending" badge as is); version
+  numbering in `create_care_plan` / `renew_care_plan` (`max(version)`, correct with a pending row);
+  `list_templates_with_usage` (counts).
+- **`status = 'active'` (pending invisible, v1 keeps applying):** `cp_shift_client_context`,
+  `create_progress_note_for_shift`, `cp_client_onboarding`, `get_client_training_context`, `get_caregiver_compliance`,
+  `list_caregivers_needing_retraining`, `list_client_training_status`, `create_care_plan`'s guard; app: Care Plans list,
+  client page and IPOS tab (`plans.find(active)`).
+- **Writes that require `active` (refuse a pending plan today):** `update_care_plan_fields`, `upsert_care_plan_goals`,
+  `set_objective_measures`, **`set_care_plan_rows`** (IPOS child rows, *missing from §4's approval list*),
+  `record_inservice_form`, `record_training_form`, `add_training_attendees`, and S4b's `cp_attachment_parent`.
+- **Risk:** `renew_care_plan` stays callable while v2 is pending and would create v3 active, supersede v1 and orphan
+  v2. With renew unchanged, the guard has to sit in the new functions and the UI: `start_pending_plan_version` refuses
+  when a pending version exists; the IPOS tab hides Renew while one is pending; `cp_try_activate_plan` activates only
+  when the pending version is newer than the active one.
