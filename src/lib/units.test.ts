@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { leftEarly, notBilledReason, unitsToBill, unitsUnderRule } from "./units";
+import { leftEarly, notBilledReason, unitsRuleNote, unitsToBill, unitsUnderRule } from "./units";
 
 const at = (hhmm: string) => `2026-10-01T${hhmm}:00-04:00`;
 const v = (a: string | null, e: string | null) => unitsToBill({ scheduledStart: at("09:00"), scheduledEnd: at("10:00"), arrival: a && at(a), end: e && at(e) });
@@ -38,5 +38,22 @@ describe("units rules (S18): mirrors cp_units_for", () => {
   });
   it("nearest: served minutes / 15 rounded half up, never above scheduled", () => {
     expect([r("09:07", "11:00", "nearest"), r("09:08", "11:00", "nearest"), r("09:25", "10:59", "nearest"), r("09:00", "11:10", "nearest")]).toEqual([8, 7, 6, 8]);
+  });
+});
+
+describe("caregiver preview with the office rule (S18 follow-up)", () => {
+  const p = (a: string, rule: Parameters<typeof unitsToBill>[0]["rule"]) => unitsToBill({ scheduledStart: at("09:00"), scheduledEnd: at("10:00"), arrival: at(a), end: at("10:00"), rule });
+  it("no rule / full blocks = S12; grace and nearest follow the office; late flag unchanged", () => {
+    expect(p("09:07", null)).toEqual({ units: 3, scheduled: 4, late: true, early: false });
+    expect(p("09:07", { rule: "full_blocks", grace_minutes: 0 }).units).toBe(3);
+    expect(p("09:07", { rule: "grace", grace_minutes: 7 })).toEqual({ units: 4, scheduled: 4, late: true, early: false });
+    expect(p("09:08", { rule: "grace", grace_minutes: 7 }).units).toBe(3);
+    expect(p("09:07", { rule: "nearest", grace_minutes: 0 }).units).toBe(4);
+    expect(p("09:08", { rule: "nearest", grace_minutes: 0 }).units).toBe(3);
+  });
+  it("the explanation follows the rule", () => {
+    expect(unitsRuleNote(null)).toBe("only full 15-minute blocks are billed");
+    expect(unitsRuleNote({ rule: "grace", grace_minutes: 7 })).toMatch(/up to 7 minutes late/);
+    expect(unitsRuleNote({ rule: "nearest", grace_minutes: 0 })).toMatch(/nearest 15/);
   });
 });

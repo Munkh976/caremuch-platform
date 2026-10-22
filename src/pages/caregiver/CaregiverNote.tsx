@@ -20,7 +20,7 @@ import {
   clientShort, entryData, fmtDay, fmtTime, isEditable, isoToHhmm, missingAnswers, shiftTimeToIso, STATUS_LABEL,
   type Answer, type CaregiverNote as NotePayload, type CaregiverClock,
 } from "@/lib/caregiverNotes";
-import { notBilledReason, unitsToBill } from "@/lib/units";
+import { notBilledReason, unitsRuleNote, unitsToBill } from "@/lib/units";
 
 type EntryState = Record<string, { notes: string; answers: Record<string, Answer> }>;
 type SaveState = { kind: "idle" | "saving" | "saved" } | { kind: "error"; message: string };
@@ -199,11 +199,11 @@ export default function CaregiverNote() {
           {tz && (() => {
             const u = unitsToBill({ scheduledStart: n.scheduled_start, scheduledEnd: n.scheduled_end,
               arrival: arrival ? shiftTimeToIso(n.service_date, arrival, tz, n.scheduled_start, 60) : null,
-              end: end ? shiftTimeToIso(n.service_date, end, tz, n.scheduled_start, 0) : null });
+              end: end ? shiftTimeToIso(n.service_date, end, tz, n.scheduled_start, 0) : null, rule: n.units_rule });
             return (
               <p className="text-sm sm:col-span-2" data-testid="units-to-bill" data-units={u.units} data-scheduled={u.scheduled}>
                 <span className="font-medium">Units to bill: {u.units} of {u.scheduled}</span>
-                {u.units < u.scheduled && <span className="text-muted-foreground"> ({notBilledReason(u.late, u.early)}: only full 15-minute blocks are billed)</span>}
+                {u.units < u.scheduled && <span className="text-muted-foreground"> ({notBilledReason(u.late, u.early)}: {unitsRuleNote(n.units_rule)})</span>}
               </p>
             );
           })()}

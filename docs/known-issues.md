@@ -1504,15 +1504,14 @@ office's rows were agency-visible in the shared agency, so 5 comparisons differe
 - The staff note detail and print read the office's mode with a separate query (no change to
   `get_progress_note_for_staff`); in 'hidden' they omit the Location row only when the note has none.
 
-## OPEN (S18, Oct 22): billing units — decisions pending
+## OPEN (S18, Oct 22): billing units — notes
 
-- **Unit length:** `virtual_office.units_minutes` exists (1..60) but `set_office_units_rule` accepts 15 only. Scheduled
-  units, authorizations and the eligibility projection all count 15-minute units (`cp_shift_units`, unchanged); another
-  unit length needs those to follow the office setting (NB1 path) — owner decision.
-- **Caregiver preview:** the caregiver's live "Units to bill" on the note page always uses the default rule (full
-  15-minute blocks). Under 'grace' or 'nearest' the stored units (and the reviewer's view) are right, but the preview can
-  differ until `get_progress_note_for_caregiver` returns the office rule (one-line change to an existing reader:
-  owner approval). No office uses a non-default rule yet (DEV: 8/8 on the defaults).
+- **Unit length (owner, Oct 22): stays 15 minutes.** `virtual_office.units_minutes` exists (1..60) but
+  `set_office_units_rule` accepts 15 only; scheduled units, authorizations and the eligibility projection keep counting
+  15-minute units (`cp_shift_units`, unchanged). No change to the eligibility path.
+- **Caregiver preview — RESOLVED (20261031150000, owner-approved):** `get_progress_note_for_caregiver` returns
+  `note.units_rule` (the office's rule while draft / returned, the stored rule afterwards); the note page counts with it
+  and explains the rule.
 - Notes from before S18 keep NULL in `units_rule` / `units_minutes` / `units_grace_minutes` (= the rule of their time;
   no backfill). Their first adjustment stores their units at that moment as `units_calculated`.
 - An adjustment made while a note is submitted stays if the note is later returned to the caregiver (their edits then

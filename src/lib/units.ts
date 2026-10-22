@@ -10,12 +10,23 @@ const toMin = (iso: string) => Math.floor(Date.parse(iso) / MIN) * MIN;
 
 export interface UnitsPreview { units: number; scheduled: number; late: boolean; early: boolean }
 
-export function unitsToBill(p: { scheduledStart: string; scheduledEnd: string; unitsScheduled?: number | null; arrival?: string | null; end?: string | null }): UnitsPreview {
+export function unitsToBill(p: { scheduledStart: string; scheduledEnd: string; unitsScheduled?: number | null; arrival?: string | null; end?: string | null;
+  /** S18: the office rule the server will count with (get_progress_note_for_caregiver note.units_rule); default full blocks */
+  rule?: { rule: UnitsRule; grace_minutes?: number | null } | null }): UnitsPreview {
   const s = Date.parse(p.scheduledStart), e = Date.parse(p.scheduledEnd);
   const scheduled = p.unitsScheduled ?? Math.max(0, Math.floor((e - s) / BLOCK));
   const from = Math.max(p.arrival ? toMin(p.arrival) : s, s), to = Math.min(p.end ? toMin(p.end) : e, e);
-  const units = Math.min(Math.max(Math.floor((to - s) / BLOCK) - Math.ceil((from - s) / BLOCK), 0), scheduled);
+  const units = p.rule && p.rule.rule !== "full_blocks"
+    ? Math.min(unitsUnderRule({ scheduledStart: p.scheduledStart, scheduledEnd: p.scheduledEnd, arrival: p.arrival, end: p.end, rule: p.rule.rule, grace: p.rule.grace_minutes ?? 0 }), scheduled)
+    : Math.min(Math.max(Math.floor((to - s) / BLOCK) - Math.ceil((from - s) / BLOCK), 0), scheduled);
   return { units, scheduled, late: !!p.arrival && toMin(p.arrival) > s, early: !!p.end && toMin(p.end) < e };
+}
+
+/** S18: how the shortfall is counted under the office rule (shown after the reason). */
+export function unitsRuleNote(rule?: { rule: UnitsRule; grace_minutes?: number | null } | null): string {
+  if (rule?.rule === "nearest") return "minutes served are rounded to the nearest 15";
+  if (rule?.rule === "grace") return `only full 15-minute blocks are billed; up to ${rule.grace_minutes ?? 0} minutes late or early counts as on time`;
+  return "only full 15-minute blocks are billed";
 }
 
 /** "late arrival", "left early", or both (empty when nothing explains a shortfall). */

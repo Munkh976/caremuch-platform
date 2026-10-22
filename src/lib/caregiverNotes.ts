@@ -48,6 +48,8 @@ export interface CaregiverNote {
     staff_client_ratio: string | null; location: string | null; narrative_text: string | null;
     /** the office's Location setting (free / default = prefilled / hidden); absent before 20261031130000 */
     location_mode?: "free" | "default" | "hidden";
+    /** S18: the rule the server counts units with (office rule while draft / returned); absent before 20261031150000 */
+    units_rule?: { rule: "full_blocks" | "nearest" | "grace"; grace_minutes: number | null } | null;
     staff_signature_name: string | null; staff_signed_at: string | null; returned_reason: string | null;
     late_submitted: boolean; arrived_late: boolean; due_at: string; client_first_name: string | null; client_last_initial: string | null;
   };
