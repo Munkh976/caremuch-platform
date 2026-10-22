@@ -182,8 +182,8 @@ CREATE TABLE public.cp_attachments (
    how to take JPEG photos or upload a PDF. The bucket and the RPC don't accept HEIC.
 5. **`parent_kind = 'care_plan'`** exists now (managers / agency admins; active plan only); S17 attaches the ISK IPOS PDF.
 6. **Abandoned uploads:** pending rows older than 24 h are discarded (row + object) by the Edge Function's `cleanup`
-   action, callable only with a service-role token. **Scheduling it is an owner action** (a Supabase scheduled job calling
-   the function daily); until then it runs on demand.
+   action, callable only with a service-role token. The daily schedule (pg_cron, token in Vault) is approved; the migration
+   is in `docs/design/pending-migrations/20261030120000_schedule_daily_jobs.sql` for review before it is pushed.
 7. **S16 signature images will use their own table**, not `cp_attachments`.
 
 As built (differences from §3–§4):
@@ -191,9 +191,9 @@ As built (differences from §3–§4):
   checks its size and file signature (PDF `%PDF-`, JPEG, PNG, .docx = zip with `word/`), marks it checked
   (`cp_attachment_mark_checked`, service role only), and then calls `complete_attachment_upload` **as the user**. A failed
   check deletes the object and the pending row.
-- **Signed upload URL lifetime:** Supabase fixes it at 2 hours (not configurable), not 5 minutes. It is single-path, never
+- **Signed upload URL lifetime (accepted by the owner, Oct 21 decision 6):** Supabase fixes it at 2 hours (not configurable), not 5 minutes. It is single-path, never
   overwrites (no upsert), and an upload that isn't completed is discarded by the cleanup.
-- **PDF preview:** a plain `<iframe>` from the storage domain (cross-origin, so it can't reach the app); Chrome refuses to
+- **PDF preview (accepted by the owner, Oct 21 decision 6):** a plain `<iframe>` from the storage domain (cross-origin, so it can't reach the app); Chrome refuses to
   render PDFs inside a sandboxed frame. Images use `<img>`. `.docx` is download only.
 - **Reads** go through `list_attachments` (uploader's name, "waiting for HR", can-remove) and `open_attachment` (audited),
   besides the table's RLS and the bucket's read policy.

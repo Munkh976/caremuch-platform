@@ -1,6 +1,7 @@
 # S17 — IPOS effective date and revisions: design note
 
-Status: **PLAN ONLY** (2026-10-21). No code or migration. Waiting for owner approval.
+Status: **BUILT on DEV** (2026-10-21): migrations `20261029120000_s17_pending_status.sql` + `20261029120100_s17_ipos_versions.sql`,
+UI, tests. Owner approval and decisions of Oct 21 in §8; the plan below is kept as approved.
 
 ## 1. Today
 
@@ -174,3 +175,34 @@ No views or policies reference `care_plans`; its only trigger is the row-scope c
   v2. With renew unchanged, the guard has to sit in the new functions and the UI: `start_pending_plan_version` refuses
   when a pending version exists; the IPOS tab hides Renew while one is pending; `cp_try_activate_plan` activates only
   when the pending version is newer than the active one.
+
+## 8. Owner decisions (Oct 21 evening) and the build
+
+1. **IPOS expiry and scheduling** (replaces options A–C of §7b):
+   - **1a** creating or moving a visit after the ACTIVE IPOS's expiration date is refused for every writer, regardless of
+     the enforcement switch ("IPOS v1 expires on Nov 10, 2026: no visit can be scheduled after that date …"); recurring
+     series stop at the date and report the skipped visits; clients with no IPOS keep today's behaviour.
+   - **1b** notes and assignment eligibility unchanged (NB1 with function hashes identical to the fresh baseline).
+   - **1c** warnings: amber within 30 days, red within 14 days and after expiry, on the client page and the dashboard
+     ("IPOS v1 expires in N days; v2 is waiting for its in-service / training"), with the visits already scheduled after
+     the date and a link to Schedule.
+   - **1d** creating or moving a CLS / respite visit after the latest end date of the client's authorizations for that
+     service type is refused ("No authorization for CLS after Nov 5, 2026"); series stop and report. Units / caps unchanged.
+2. `set_care_plan_rows` accepts pending plans. 5. A second pending version is refused; "Start new IPOS version (from ISK)"
+   is hidden while one is pending; `renew_care_plan` unchanged.
+
+**Shift paths (reported before the change):** no database function creates or moves shifts. Every create / move is a
+direct insert / update under the staff RLS policy: the order wizard (`OrderWizardDialog`, recurring series), the client
+portal's booking (`OrdersManagement`; clients can't insert under RLS today), `import-data` (service role), test fixtures and
+seed-demo. Trades, pickups, release and assign never change a visit's date (assign re-writes the same times / care type).
+So 1a / 1d are a trigger on `shifts` (`cp_guard_shift_dates`: inserts, and updates that change the date, client, care
+type or office; cancelled visits and other updates pass), and the wizard reads `get_shift_creation_limits` to stop the
+series and list what it skipped. Choices made (confirm): a client with **no authorization** of that service type keeps
+today's behaviour (like no IPOS); the rules apply in offices using the care-plan module or enforcement.
+
+**As built:** pending → active when the signed in-service and one training session (with attendees) exist, effective today
+(or on a later entered date: `cp_activate_due_plans`, daily job pending approval); the old version superseded in the same
+transaction; a pending version older than the active one never activates. Revisions only of the active version (rev 0 at
+activation; a plan from before S17 gets a "baseline" at its first edit; a no-change save doesn't bump); training records
+store `plan_revision`. Tests: PGlite `s17.cjs` 16/16, rollback 4/4 (10 bodies md5 = DEV; the enum value stays), DEV before
+2/2 (fresh NB1 baseline) and after 8/8 (NB1 function hashes identical), browser round 13 8/8 (+ rounds 3, 4, 8, 11, 12).

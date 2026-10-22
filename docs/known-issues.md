@@ -1465,3 +1465,17 @@ office's rows were agency-visible in the shared agency, so 5 comparisons differe
   test yet (no fictitious HEIC sample in the repo). iPhone Safari usually sends JPEG anyway.
 - **Test tooling:** the DEV suites need `pg`, which is installed `--no-save` (not in `package.json`); any `npm install`
   removes it again (`npm install --no-save pg@8.13.1` restores it).
+
+## S17 IPOS versions: follow-ups (Oct 21)
+
+- `renew_care_plan` is unchanged and still callable outside the UI; used while a version is pending it creates a newer
+  active version and leaves the pending one stale (it then never activates). The UI only offers "Start new IPOS version".
+- The S17 rollback leaves the enum value `pending` in `care_plan_status` (PostgreSQL can't drop it in place).
+- A scheduled activation (`cp_activate_due_plans`) writes `care_plan_activated` with no actor (cron session).
+- The client portal's booking (`OrdersManagement`) doesn't pre-filter a series by the S17 limits; the database refuses
+  the whole request with the message (clients can't create visits under RLS today anyway).
+- `get_shift_creation_limits` / the wizard: a client with no authorization of a service type keeps today's behaviour
+  (owner to confirm).
+- **SECURITY (found in the auto-assign investigation, not yet fixed):** `match-caregiver` has no caller check; an
+  unauthenticated call with a shift id returns that office's caregivers with e-mail, phone and hourly rate. See
+  `docs/design/auto-assign-and-smart-scheduling.md` §C; fix pending the owner's decision.

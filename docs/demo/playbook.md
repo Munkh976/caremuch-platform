@@ -133,7 +133,9 @@ this module.
 ## Do not click / why it won't work
 
 - **IPOS v1 → View (read-only):** a superseded version has no edit controls by design.
-- **IPOS → Renew:** creates Zoe v3 and starts retraining for everyone. It can't be undone without a reset.
+- **IPOS → Start new IPOS version (from ISK)** (S17): creates Zoe v3 as **pending** (v2 stays in effect; the button is hidden
+  while v3 is pending). Recording v3's in-service and a session on the Training tab makes it effective and starts retraining
+  for everyone not trained on v3. It can't be undone without a reset.
 - **Form Templates → a shell → Edit (new draft):** it doesn't edit in place; it opens a new draft version ("Save draft vN" →
   "Publish vN"). Close it.
 - **A submitted note as Pat:** the reviewer can't edit it; only Mark reviewed / Return.
