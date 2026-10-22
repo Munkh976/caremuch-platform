@@ -12,7 +12,7 @@ import type { GoalRow, MeasureKind, Onboarding, PlanRow, ShellRow } from "@/lib/
 export const cpKey = (clientId: string, ...rest: unknown[]) => ["cp", clientId, ...rest];
 export function useRefreshClient(clientId: string) {
   const qc = useQueryClient();
-  return () => qc.invalidateQueries({ queryKey: ["cp", clientId] });
+  return () => Promise.all([qc.invalidateQueries({ queryKey: ["cp", clientId] }), qc.invalidateQueries({ queryKey: ["ipos-expiry"] })]);   // S17: the expiry warning too
 }
 
 export interface ClientHead { id: string; first_name: string | null; last_name: string | null; virtual_office_id: string | null; case_number: string | null }
@@ -41,7 +41,7 @@ export function useOnboarding(clientId: string, enabled = true) {
 }
 
 export interface PlanRowFull {
-  id: string; version: number; training_version: number; status: "active" | "superseded" | "expired"; plan_type: "initial" | "annual" | "addendum";
+  id: string; version: number; training_version: number; status: "active" | "superseded" | "expired" | "pending"; revision: number; plan_type: "initial" | "annual" | "addendum";
   meeting_date: string | null; effective_date: string | null; expiration_date: string | null; next_review_date: string | null; review_frequency: string | null;
   michicans_date: string | null; facilitator_name: string | null; recorder_name: string | null; discharge_criteria: string | null; signed_by: string | null;
   signed_date: string | null; template_id: string | null; template_version: number | null; field_snapshot: { fields?: TemplateField[] } | null;
@@ -51,7 +51,7 @@ export function usePlans(clientId: string) {
   return useQuery({
     queryKey: cpKey(clientId, "plans"),
     queryFn: async (): Promise<PlanRowFull[]> => {
-      const { data, error } = await supabase.from("care_plans").select("id, version, training_version, status, plan_type, meeting_date, effective_date, expiration_date, next_review_date, review_frequency, michicans_date, facilitator_name, recorder_name, discharge_criteria, signed_by, signed_date, template_id, template_version, field_snapshot, field_values, created_at")
+      const { data, error } = await supabase.from("care_plans").select("id, version, training_version, status, plan_type, meeting_date, effective_date, expiration_date, next_review_date, review_frequency, michicans_date, facilitator_name, recorder_name, discharge_criteria, signed_by, signed_date, template_id, template_version, field_snapshot, field_values, created_at, revision")
         .eq("client_id", clientId).order("version", { ascending: false });
       if (error) throw error;
       return (data ?? []) as unknown as PlanRowFull[];

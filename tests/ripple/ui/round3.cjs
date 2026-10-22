@@ -261,22 +261,25 @@ async function s4(base, F, browser) {
   const listOnb = await (async () => { await page.goto(`${base}/care-plans`); await page.locator(`[data-client-row="${F.CX}"]`).waitFor({ timeout: 20000 }); return page.locator(`[data-client-row="${F.CX}"] [data-onboarding]`).getAttribute("data-onboarding"); })();
   rec("S4-list-onboarded the list shows the client as onboarded", listOnb === "onboarded", `list badge ${listOnb}`);
 
-  // ---------- renewal: confirmation, then in-service / training expire ----------
+  // ---------- new IPOS version (S17: starts PENDING; v1 stays in effect until v2's in-service + a session) ----------
   await page.goto(`${base}/care-plans/${F.CX}?tab=ipos`); await page.locator('[data-testid="active-plan"]').waitFor({ timeout: 20000 });
-  await page.getByRole("button", { name: "Renew" }).click(); await pick(page, "#renew-type", "Annual");
+  await page.getByRole("button", { name: "Start new IPOS version (from ISK)" }).click(); await pick(page, "#renew-type", "Annual");
   await page.getByRole("button", { name: "Continue" }).click();
   await page.locator('[data-testid="renewal-confirm"]').waitFor({ timeout: 10000 }); await page.waitForTimeout(400);
   const confirmText = await page.locator('[data-testid="renewal-confirm"]').innerText();
   await shot(page, "s4-renewal-confirm-1440");
-  await page.getByRole("button", { name: "Renew and start retraining" }).click();
-  await page.getByText("Plan v2 active").waitFor({ timeout: 20000 });
+  await page.locator('[data-testid="confirm-start-version"]').click();
+  await page.locator('[data-testid="pending-plan"]').waitFor({ timeout: 20000 }); await page.waitForTimeout(800);
+  const startHidden = await page.getByRole("button", { name: "Start new IPOS version (from ISK)" }).count();
+  const headerPending = await page.locator('[data-testid="client-header"]').innerText();
   await tab(page, "Onboarding & Documents"); await page.waitForTimeout(800);
   const ins2 = await status(page, "inservice"), tr2 = await status(page, "training");
   const redo = await page.locator('[data-testid="onboarding"] li[data-item="training"]').innerText();
   const hist = (await admin.from("care_plans").select("version, status, training_version").eq("client_id", F.CX).order("version")).data;
-  rec("S4-renew the retraining confirmation appears before renewing; afterwards in-service and training read 'expired' (redo at version 2); v1 is superseded",
-    /Renewal starts retraining for all caregivers/.test(confirmText) && ins2 === "expired" && tr2 === "expired" && /Redo at version 2/.test(redo) && hist[0].status === "superseded" && hist[1].training_version === 2,
-    `confirm "${confirmText.replace(/\s+/g, " ").slice(0, 70)}"; inservice ${ins2}, training ${tr2}; ${hist.map((h) => `v${h.version} ${h.status}`).join(", ")}`);
+  rec("S4-renew (S17) 'Start new IPOS version (from ISK)': a confirmation first; v2 starts PENDING (training version 2) and v1 stays active, so in-service and training still read complete; the action is hidden while v2 is pending; the header shows 'Plan v1 active' + 'IPOS v2 · Pending'",
+    /trained on v2 before it takes effect/.test(confirmText) && ins2 === "complete" && tr2 === "complete" && hist[0].status === "active" && hist[1].status === "pending" && hist[1].training_version === 2
+      && startHidden === 0 && /Plan v1 active/.test(headerPending) && /IPOS v2 · Pending/.test(headerPending),
+    `confirm "${confirmText.replace(/\s+/g, " ").slice(0, 70)}"; inservice ${ins2}, training ${tr2}; ${hist.map((h) => `v${h.version} ${h.status}`).join(", ")}; redo "${redo.replace(/\s+/g, " ").slice(0, 40)}"`);
   await ctx.close();
 
   // ---------- 390 ----------
@@ -286,8 +289,7 @@ async function s4(base, F, browser) {
     await p.locator('[data-testid="active-plan"]').waitFor({ timeout: 30000 }); await p.waitForTimeout(1000);
     await shot(p, "s4-client-header-390"); await fits(p, "S4-390b client page (IPOS tab) fits at 390px", "IPOS");
     await p.locator('[data-testid="authorizations"]').scrollIntoViewIfNeeded(); await shot(p, "s4-authorization-table-390");
-    await p.getByRole("button", { name: "Renew" }).click(); await p.getByRole("button", { name: "Continue" }).click();
-    await p.locator('[data-testid="renewal-confirm"]').waitFor(); await p.waitForTimeout(400); await shot(p, "s4-renewal-confirm-390"); await closeDialogs(p);
+    await p.locator('[data-testid="pending-plan"]').scrollIntoViewIfNeeded(); await p.waitForTimeout(400); await shot(p, "s4-pending-version-390");
     await p.getByRole("button", { name: `Correct ZZ-COR-${RUN}` }).click(); await p.locator("#auth-units_authorized").fill("21"); await p.locator("#auth-reason").fill("x");
     await p.getByRole("button", { name: "Save correction" }).click(); await p.locator('[data-testid="correct-error"]').waitFor({ timeout: 15000 }); await p.waitForTimeout(400);
     await shot(p, "s4-correct-refusal-390"); await closeDialogs(p);

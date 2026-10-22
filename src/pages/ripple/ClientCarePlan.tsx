@@ -11,6 +11,9 @@ import { SchedulingTab } from "@/components/compliance/careplan/SchedulingTab";
 import { TrainingTab } from "@/components/compliance/training/TrainingTab";
 import { useRefreshTraining, useTrainingContext } from "@/components/compliance/training/useTrainingData";
 import { ClientNotesTab } from "@/components/compliance/notes/ClientNotesTab";
+import { IposExpiryBanner, PendingBadge } from "@/components/compliance/careplan/PlanVersions";
+import { FilterChip } from "@/components/compliance/FilterChip";
+import { ToggleGroup } from "@/components/ui/toggle-group";
 import { useClientHead, useOnboarding, usePlans, useRefreshClient, useShells } from "@/components/compliance/careplan/useCarePlanData";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -37,6 +40,9 @@ export default function ClientCarePlan() {
   const refresh = useRefreshClient(clientId);
   const [caseOpen, setCaseOpen] = useState(false);
   const active = plans.find((p) => p.status === "active") ?? null;
+  const pending = plans.find((p) => p.status === "pending") ?? null;
+  const [goalsOn, setGoalsOn] = useState<"active" | "pending">("active");
+  const goalsPlan = goalsOn === "pending" && pending ? pending : active;
   const shellName = active?.template_id ? shells.find((s) => s.id === active.template_id)?.name : null;
   useEffect(() => { document.title = "Client care plan · CareMuch"; }, []);
   const goTo = (t: CarePlanTab, anchor?: string) => {
@@ -68,12 +74,14 @@ export default function ClientCarePlan() {
                 <div className="flex flex-wrap items-center gap-2">
                   {active && shellName && active.template_version ? <ProvenanceBadge shellName={shellName} version={active.template_version} /> : null}
                   <Badge variant={active ? "default" : "secondary"} data-plan-status={active ? "active" : "none"}>{active ? `Plan v${active.version} active` : plans.length ? "No active plan" : "No plan yet"}</Badge>
+                  {pending && <PendingBadge clientId={clientId} plan={pending} />}
                   {onboarding.data && (onboarding.data.onboarded
                     ? <Badge variant="outline" className="border-success/40 bg-success/10">Onboarded</Badge>
                     : <Badge variant="outline">Onboarding {onboardedCount(onboarding.data)} of 8</Badge>)}
                 </div>
               </CardContent>
             </Card>
+            <IposExpiryBanner officeId={officeId} clientId={clientId} />
             <Tabs value={tab} onValueChange={(v) => setParams({ tab: v }, { replace: true })}>
               <div className="overflow-x-auto">
                 <TabsList>
@@ -86,7 +94,15 @@ export default function ClientCarePlan() {
                 </TabsList>
               </div>
               <TabsContent value="ipos" className="mt-4"><IposTab clientId={clientId} officeId={officeId} caseNumber={client.data?.case_number ?? null} onChanged={refresh} /></TabsContent>
-              <TabsContent value="goals" className="mt-4"><GoalsTab clientId={clientId} officeId={officeId} plan={active} onChanged={refresh} /></TabsContent>
+              <TabsContent value="goals" className="mt-4">
+                {pending && active && (
+                  <ToggleGroup type="single" value={goalsOn} onValueChange={(v) => v && setGoalsOn(v as "active" | "pending")} className="mb-3 justify-start" aria-label="Plan version" data-testid="goals-version">
+                    <FilterChip value="active">v{active.version} (in effect)</FilterChip>
+                    <FilterChip value="pending">v{pending.version} (pending)</FilterChip>
+                  </ToggleGroup>
+                )}
+                <GoalsTab clientId={clientId} officeId={officeId} plan={goalsPlan} onChanged={refresh} />
+              </TabsContent>
               <TabsContent value="notes" className="mt-4"><ClientNotesTab clientId={clientId} officeId={officeId} /></TabsContent>
               <TabsContent value="training" className="mt-4"><ClientTrainingTab clientId={clientId} /></TabsContent>
               <TabsContent value="scheduling" className="mt-4"><SchedulingTab clientId={clientId} officeId={officeId} goTo={goTo} /></TabsContent>

@@ -15,7 +15,7 @@ import { RowsFields } from "./RowsEditor";
 import { useVersionFields } from "@/components/compliance/templates/useVersionFields";
 import { diffFields, type TemplateField } from "@/lib/formTemplates";
 import {
-  cleanFieldValues, GOAL_ENTITIES, HEADER_LABEL, isDateHeader, PLAN_HEADER_COLUMNS, RENEWAL_TEXT, rowSectionFor, validateFieldValues, validateHeader, validateRows,
+  cleanFieldValues, GOAL_ENTITIES, HEADER_LABEL, isDateHeader, PLAN_HEADER_COLUMNS, rowSectionFor, validateFieldValues, validateHeader, validateRows,
   type FieldValues, type PlanHeaderColumn, type PlanRow, type ShellRow,
 } from "@/lib/carePlan";
 import { rpcErrorText } from "@/lib/rpcError";
@@ -183,16 +183,17 @@ export function RenewDialog({ open, onOpenChange, plan, onSaved }: { open: boole
   const next = () => { const p = validateHeader(header(), true); if (p) { toast.error(p); return; } setStep("confirm"); };
   const renew = async () => {
     setBusy(true);
-    const { error } = await supabase.rpc("renew_care_plan", { _care_plan_id: plan.id, _plan_type: planType as "annual", _header: header() });
+    // S17: the new version starts PENDING; v{n} stays in effect until v{n+1}'s in-service and one training session are recorded
+    const { error } = await supabase.rpc("start_pending_plan_version", { _care_plan_id: plan.id, _plan_type: planType as "annual", _header: header() });
     setBusy(false);
     if (error) { toast.error(rpcErrorText(error)); return; }
-    toast.success(`Renewed: plan v${plan.version + 1}`); onSaved(); onOpenChange(false);
+    toast.success(`IPOS v${plan.version + 1} started (pending)`); onSaved(); onOpenChange(false);
   };
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="grid-cols-[minmax(0,1fr)] sm:max-w-[520px]">
-        <DialogHeader><DialogTitle>Renew plan v{plan.version}</DialogTitle>
-          <DialogDescription>Creates plan v{plan.version + 1} from the current IPOS shell; goals, objectives, measures and other rows are copied forward. v{plan.version} becomes read-only.</DialogDescription></DialogHeader>
+        <DialogHeader><DialogTitle>Start new IPOS version (from ISK)</DialogTitle>
+          <DialogDescription>Creates IPOS v{plan.version + 1} as <strong>pending</strong>, from the current IPOS shell; goals, objectives, data questions and other rows are copied forward for you to update from the ISK IPOS. v{plan.version} stays in effect until v{plan.version + 1}'s in-service and one training session are recorded.</DialogDescription></DialogHeader>
         {step === "form" ? (
           <div className="space-y-3">
             <div className="space-y-1"><Label htmlFor="renew-type">Plan type</Label>
@@ -207,12 +208,12 @@ export function RenewDialog({ open, onOpenChange, plan, onSaved }: { open: boole
         ) : (
           <Alert variant="destructive" data-testid="renewal-confirm">
             <AlertTriangle className="h-4 w-4" />
-            <AlertDescription><span className="font-medium">{RENEWAL_TEXT}.</span> Every caregiver must sign the in-service and be trained again at version {plan.training_version + 1} before the client is fully onboarded.</AlertDescription>
+            <AlertDescription><span className="font-medium">Caregivers are trained on v{plan.version + 1} before it takes effect.</span> Record the in-service and the training sessions for v{plan.version + 1} on the Training tab; when the in-service and one session are recorded, v{plan.version + 1} replaces v{plan.version} and caregivers not trained on it need retraining.</AlertDescription>
           </Alert>
         )}
         <DialogFooter>
           <Button variant="outline" onClick={() => (step === "confirm" ? setStep("form") : onOpenChange(false))}>{step === "confirm" ? "Back" : "Cancel"}</Button>
-          {step === "form" ? <Button onClick={next}>Continue</Button> : <Button onClick={renew} disabled={busy}>Renew and start retraining</Button>}
+          {step === "form" ? <Button onClick={next}>Continue</Button> : <Button onClick={renew} disabled={busy} data-testid="confirm-start-version">Start v{plan.version + 1} (pending)</Button>}
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -64,7 +64,9 @@ export function GoalsTab({ clientId, officeId, plan, onChanged }: { clientId: st
   return (
     <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-muted-foreground">Training version {plan.training_version}. Goal, objective and Instructions-for-Staff changes may start retraining; measures never do.</p>
+        <p className="text-sm text-muted-foreground">{plan.status === "pending"
+          ? `Pending IPOS v${plan.version} (training version ${plan.training_version}): changes here don't start retraining and aren't revisions; caregivers are trained on this version before it takes effect.`
+          : `Training version ${plan.training_version}. Goal, objective and Instructions-for-Staff changes may start retraining; measures never do.`}</p>
         <Button size="sm" className="gap-1" onClick={() => setEditing(true)}><Pencil className="h-4 w-4" />Edit goals and objectives</Button>
       </div>
       <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">

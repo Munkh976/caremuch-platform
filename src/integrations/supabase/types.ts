@@ -505,6 +505,45 @@ export type Database = {
           },
         ]
       }
+      care_plan_revisions: {
+        Row: {
+          agency_id: string
+          care_plan_id: string
+          changed_at: string
+          changed_by: string | null
+          client_id: string
+          id: string
+          revision: number
+          snapshot: Json
+          summary: string | null
+          virtual_office_id: string | null
+        }
+        Insert: {
+          agency_id: string
+          care_plan_id: string
+          changed_at?: string
+          changed_by?: string | null
+          client_id: string
+          id?: string
+          revision: number
+          snapshot: Json
+          summary?: string | null
+          virtual_office_id?: string | null
+        }
+        Update: {
+          agency_id?: string
+          care_plan_id?: string
+          changed_at?: string
+          changed_by?: string | null
+          client_id?: string
+          id?: string
+          revision?: number
+          snapshot?: Json
+          summary?: string | null
+          virtual_office_id?: string | null
+        }
+        Relationships: []
+      }
       care_plan_treatment_needs: {
         Row: {
           care_plan_id: string
@@ -561,6 +600,7 @@ export type Database = {
           next_review_date: string | null
           plan_type: Database["public"]["Enums"]["care_plan_type"]
           recorder_name: string | null
+          revision: number
           review_frequency: string | null
           signed_by: string | null
           signed_date: string | null
@@ -588,6 +628,7 @@ export type Database = {
           next_review_date?: string | null
           plan_type?: Database["public"]["Enums"]["care_plan_type"]
           recorder_name?: string | null
+          revision?: number
           review_frequency?: string | null
           signed_by?: string | null
           signed_date?: string | null
@@ -615,6 +656,7 @@ export type Database = {
           next_review_date?: string | null
           plan_type?: Database["public"]["Enums"]["care_plan_type"]
           recorder_name?: string | null
+          revision?: number
           review_frequency?: string | null
           signed_by?: string | null
           signed_date?: string | null
@@ -5673,6 +5715,10 @@ export type Database = {
       }
       get_progress_note_for_staff: { Args: { _note_id: string }; Returns: Json }
       get_public_office: { Args: { p_slug: string }; Returns: Json }
+      get_shift_creation_limits: {
+        Args: { _client_id: string }
+        Returns: Json
+      }
       get_user_role: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
@@ -5727,6 +5773,10 @@ export type Database = {
       }
       list_my_notes_due: { Args: never; Returns: Json }
       list_notes_for_review: { Args: { _office_id: string }; Returns: Json }
+      list_ipos_expiry: {
+        Args: { _client_id?: string | null; _office_id: string }
+        Returns: Json
+      }
       list_overdue_notes: {
         Args: { _as_of?: string; _office_id: string }
         Returns: Json
@@ -5928,6 +5978,15 @@ export type Database = {
         Args: { _shift_id: string }
         Returns: string
       }
+      start_pending_plan_version: {
+        Args: {
+          _care_plan_id: string
+          _field_values?: Json
+          _header?: Json
+          _plan_type?: Database["public"]["Enums"]["care_plan_type"]
+        }
+        Returns: string
+      }
       submit_caregiver_registration: {
         Args: {
           p_address?: string
@@ -6032,7 +6091,7 @@ export type Database = {
         | "per_day"
       auth_source_type: "manual" | "doc" | "edi" | "connector"
       billing_batch_status: "open" | "reviewed" | "billed"
-      care_plan_status: "active" | "superseded" | "expired"
+      care_plan_status: "active" | "superseded" | "expired" | "pending"
       care_plan_type: "initial" | "annual" | "addendum"
       care_request_status:
         | "new"
@@ -6299,7 +6358,7 @@ export const Constants = {
       ],
       auth_source_type: ["manual", "doc", "edi", "connector"],
       billing_batch_status: ["open", "reviewed", "billed"],
-      care_plan_status: ["active", "superseded", "expired"],
+      care_plan_status: ["active", "superseded", "expired", "pending"],
       care_plan_type: ["initial", "annual", "addendum"],
       care_request_status: [
         "new",

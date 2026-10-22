@@ -14,6 +14,8 @@ import {
 import { AlertTriangle, CalendarDays, Loader2, Plus, Trash2 } from "lucide-react";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { format } from "date-fns";
+import { useQuery } from "@tanstack/react-query";
+import { splitByLimits, type ShiftLimits } from "@/lib/shiftLimits";
 import { useCareServices } from "@/hooks/useCareServices";
 import {
   DAY_NAMES, DURATION_OPTIONS, OrderFrequency, OrderServiceLine,
@@ -101,10 +103,18 @@ export function OrderWizardDialog({ open, onOpenChange, agencyId, clients, order
     [lines, byCode]
   );
 
-  const preview = useMemo(
+  const generated = useMemo(
     () => (startDate ? generateShifts(namedLines, startDate, endDate) : []),
     [namedLines, startDate, endDate]
   );
+  // S17 (1a / 1d): the series stops at the client's IPOS expiration and authorization end dates; the skipped visits are
+  // listed below. If the limits can't be read, nothing is filtered here and the database still refuses those dates.
+  const limits = useQuery({
+    queryKey: ["shift-creation-limits", clientId], enabled: open && !!clientId, retry: false,
+    queryFn: async () => { const { data, error } = await supabase.rpc("get_shift_creation_limits", { _client_id: clientId }); if (error) throw error; return data as unknown as ShiftLimits; },
+  });
+  const split = useMemo(() => splitByLimits(generated, limits.data), [generated, limits.data]);
+  const preview = split.keep;
   const conflicts = useMemo(() => findConflicts(preview), [preview]);
   const totalHours = useMemo(
     () => Math.round(preview.reduce((s, p) => s + p.duration_hours, 0) * 10) / 10,
@@ -458,6 +468,18 @@ export function OrderWizardDialog({ open, onOpenChange, agencyId, clients, order
                 <div key={i} className="rounded-md border p-3 text-sm">{summarizeLine(l)}</div>
               ))}
             </div>
+
+            {split.skipped.length > 0 && (
+              <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm" data-testid="skipped-visits">
+                <div className="flex items-center gap-2 font-medium text-destructive">
+                  <AlertTriangle className="h-4 w-4" />
+                  {split.skipped.reduce((n, s) => n + s.count, 0)} visit{split.skipped.reduce((n, s) => n + s.count, 0) === 1 ? "" : "s"} won't be created
+                </div>
+                <ul className="mt-1 list-disc pl-5 text-muted-foreground">
+                  {split.skipped.map((s) => <li key={s.reason}>{s.count} {s.reason}</li>)}
+                </ul>
+              </div>
+            )}
 
             {conflicts.length > 0 && (
               <div className="rounded-md border border-warning bg-warning/10 p-3 text-sm">

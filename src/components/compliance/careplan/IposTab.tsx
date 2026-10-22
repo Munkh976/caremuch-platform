@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { format } from "date-fns";
 import { ArrowUpCircle, History, Pencil, Plus, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -6,11 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { ExpiryPill } from "@/components/compliance/ExpiryPill";
+import { AttachmentsButton, useAttachmentCounts } from "@/components/compliance/attachments/Attachments";
 import { parseDateOnly } from "@/lib/dateOnly";
 import { humanize, type TemplateField } from "@/lib/formTemplates";
 import { fieldDisplay, HEADER_LABEL, isDateHeader, PLAN_HEADER_COLUMNS, resolveShell, ROW_SECTIONS, type RowSection } from "@/lib/carePlan";
 import { AuthorizationsSection } from "./AuthorizationsSection";
 import { PlanFormDialog, RenewDialog, UpgradeDialog } from "./PlanForm";
+import { PendingBadge, RevisionsDialog } from "./PlanVersions";
 import { RowsDialog } from "./RowsEditor";
 import { usePlanRows, usePlans, useShells, type PlanRowFull } from "./useCarePlanData";
 
@@ -59,13 +62,21 @@ function RowsCard({ clientId, plan, section, editable, onSaved }: { clientId: st
   );
 }
 
-/** IPOS tab (S4): create / renew / edit / upgrade, version history, child rows, authorizations. */
+/**
+ * IPOS tab (S4): create / edit / upgrade, version history, child rows, authorizations.
+ * S17: "Start new IPOS version (from ISK)" creates a PENDING version (hidden while one is pending); the pending version is
+ * edited here and becomes effective when its in-service and one training session are recorded; the version in effect shows
+ * its revision with "What changed"; the ISK IPOS PDF is attached to its version (Files).
+ */
 export function IposTab({ clientId, officeId, caseNumber = null, onChanged }: { clientId: string; officeId: string | null; caseNumber?: string | null; onChanged: () => void }) {
   const { data: plans = [], isLoading } = usePlans(clientId);
   const { data: shells = [] } = useShells();
-  const [dialog, setDialog] = useState<"create" | "edit" | "renew" | "upgrade" | null>(null);
+  const { data: files } = useAttachmentCounts("care_plan", plans.map((p) => p.id));
+  const [dialog, setDialog] = useState<"create" | "edit" | "edit-pending" | "renew" | "upgrade" | null>(null);
+  const [revisions, setRevisions] = useState(false);
   const [viewing, setViewing] = useState<PlanRowFull | null>(null);
   const active = plans.find((p) => p.status === "active") ?? null;
+  const pending = plans.find((p) => p.status === "pending") ?? null;
   const resolved = resolveShell(shells, "ipos", officeId);
   const planShell = active?.template_id ? shells.find((s) => s.id === active.template_id) ?? null : null;
   const canUpgrade = !!active && !!planShell && planShell.current_version !== null && planShell.current_version !== active.template_version;
@@ -88,14 +99,16 @@ export function IposTab({ clientId, officeId, caseNumber = null, onChanged }: { 
         <Card data-testid="active-plan">
           <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-2 space-y-0">
             <div className="space-y-1">
-              <CardTitle className="text-base">{humanize(active.plan_type)} plan · v{active.version}</CardTitle>
+              <CardTitle className="text-base">{humanize(active.plan_type)} plan · v{active.version} · rev {active.revision}{pending ? <span className="ml-2 text-sm font-normal text-muted-foreground">(in effect)</span> : null}</CardTitle>
               <p className="text-sm text-muted-foreground">Training version {active.training_version} · {fmt(active.effective_date)} – {fmt(active.expiration_date)}</p>
               <p className="text-sm text-muted-foreground" data-testid="ipos-case-number">Case number: <span className="text-foreground">{caseNumber ?? "not set"}</span></p>
               {active.expiration_date && <ExpiryPill expiry={active.expiration_date} />}
             </div>
             <div className="flex flex-wrap gap-2">
               <Button size="sm" variant="outline" className="gap-1" onClick={() => setDialog("edit")}><Pencil className="h-4 w-4" />Edit header and narrative</Button>
-              <Button size="sm" variant="outline" className="gap-1" onClick={() => setDialog("renew")}><RefreshCw className="h-4 w-4" />Renew</Button>
+              <Button size="sm" variant="outline" className="gap-1" onClick={() => setRevisions(true)} data-testid="what-changed-button"><History className="h-4 w-4" />What changed</Button>
+              <AttachmentsButton kind="care_plan" parentId={active.id} title={`IPOS v${active.version}`} count={files?.get(active.id)?.count} />
+              {!pending && <Button size="sm" variant="outline" className="gap-1" onClick={() => setDialog("renew")} data-testid="start-version"><RefreshCw className="h-4 w-4" />Start new IPOS version (from ISK)</Button>}
               {canUpgrade && <Button size="sm" variant="outline" className="gap-1" onClick={() => setDialog("upgrade")}><ArrowUpCircle className="h-4 w-4" />Upgrade to template v{planShell?.current_version}</Button>}
             </div>
           </CardHeader>
@@ -105,6 +118,29 @@ export function IposTab({ clientId, officeId, caseNumber = null, onChanged }: { 
             <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
               {sections.map((s) => <RowsCard key={s.entity} clientId={clientId} plan={active} section={s} editable onSaved={onChanged} />)}
               {extEditable && <RowsCard clientId={clientId} plan={active} section={ROW_SECTIONS.find((s) => s.entity === "care_plan_external_service")!} editable onSaved={onChanged} />}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {pending && (
+        <Card data-testid="pending-plan" className="border-warning/50">
+          <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-2 space-y-0">
+            <div className="space-y-1">
+              <CardTitle className="flex flex-wrap items-center gap-2 text-base">{humanize(pending.plan_type)} plan · v{pending.version} <PendingBadge clientId={clientId} plan={pending} /></CardTitle>
+              <p className="text-sm text-muted-foreground">Training version {pending.training_version} · {fmt(pending.effective_date)} – {fmt(pending.expiration_date)}</p>
+              <p className="text-sm">Becomes effective when its in-service and one training session are recorded (<Link to={`/care-plans/${clientId}?tab=training`} className="font-medium text-primary hover:underline">Training tab</Link>){active ? `; until then v${active.version} stays in effect` : ""}. Changes made now aren't revisions.</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="outline" className="gap-1" onClick={() => setDialog("edit-pending")}><Pencil className="h-4 w-4" />Edit header and narrative</Button>
+              <AttachmentsButton kind="care_plan" parentId={pending.id} title={`IPOS v${pending.version} (ISK)`} count={files?.get(pending.id)?.count} />
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <HeaderSummary plan={pending} />
+            <ValuesSummary plan={pending} />
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+              {ROW_SECTIONS.filter((s) => s.entity !== "care_plan_external_service").map((s) => <RowsCard key={s.entity} clientId={clientId} plan={pending} section={s} editable onSaved={onChanged} />)}
             </div>
           </CardContent>
         </Card>
@@ -121,8 +157,10 @@ export function IposTab({ clientId, officeId, caseNumber = null, onChanged }: { 
                 <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm" data-plan-version={p.version}>
                   <span><span className="font-medium">v{p.version}</span> · {humanize(p.plan_type)} · {fmt(p.effective_date)} – {fmt(p.expiration_date)} · training v{p.training_version}</span>
                   <span className="flex items-center gap-2">
-                    <Badge variant={p.status === "active" ? "default" : "secondary"}>{humanize(p.status)}</Badge>
-                    {p.status !== "active" && <Button size="sm" variant="ghost" onClick={() => setViewing(p)}>View (read-only)</Button>}
+                    <Badge variant={p.status === "active" ? "default" : "secondary"} className={p.status === "pending" ? "border-warning/50 bg-warning/15 text-foreground" : ""}>{humanize(p.status)}</Badge>
+                    {p.status === "superseded" || p.status === "expired" ? <>
+                      <AttachmentsButton kind="care_plan" parentId={p.id} title={`IPOS v${p.version}`} count={files?.get(p.id)?.count} readOnly />
+                      <Button size="sm" variant="ghost" onClick={() => setViewing(p)}>View (read-only)</Button></> : null}
                   </span>
                 </li>
               ))}
@@ -133,6 +171,8 @@ export function IposTab({ clientId, officeId, caseNumber = null, onChanged }: { 
 
       {dialog === "create" && <PlanFormDialog open onOpenChange={(o) => !o && setDialog(null)} mode="create" clientId={clientId} shell={resolved} onSaved={onChanged} />}
       {dialog === "edit" && active && <PlanFormDialog open onOpenChange={(o) => !o && setDialog(null)} mode="edit" clientId={clientId} shell={null} plan={active} onSaved={onChanged} />}
+      {dialog === "edit-pending" && pending && <PlanFormDialog open onOpenChange={(o) => !o && setDialog(null)} mode="edit" clientId={clientId} shell={null} plan={pending} onSaved={onChanged} />}
+      {revisions && active && <RevisionsDialog plan={active} onClose={() => setRevisions(false)} />}
       {dialog === "renew" && active && <RenewDialog open onOpenChange={(o) => !o && setDialog(null)} plan={active} onSaved={onChanged} />}
       {dialog === "upgrade" && active && planShell && <UpgradeDialog open onOpenChange={(o) => !o && setDialog(null)} plan={active} shell={planShell} onSaved={onChanged} />}
       <Sheet open={!!viewing} onOpenChange={(o) => !o && setViewing(null)}>

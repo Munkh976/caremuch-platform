@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { AlertTriangle, ClipboardList, GraduationCap, ShieldAlert, ShieldCheck, UserRoundCheck } from "lucide-react";
+import { AlertTriangle, ClipboardList, GraduationCap, ShieldAlert, ShieldCheck, UserRoundCheck, CalendarClock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,6 +15,7 @@ import { useCurrentProfile } from "@/hooks/useCurrentProfile";
 import { CARE_PLAN_TIER } from "@/lib/roleHome";
 import { serviceName, type Onboarding } from "@/lib/carePlan";
 import { parseDateOnly } from "@/lib/dateOnly";
+import { expiryText, type IposExpiry } from "@/lib/planVersions";
 import { cn } from "@/lib/utils";
 import {
   credentialRows, distinctCaregivers, pendingOnboarding, reasonList, REASON_LABEL, retrainingRows, TOP,
@@ -76,6 +77,7 @@ export function ComplianceSection() {
   const creds = useQuery({ queryKey: ["cs-creds", officeId], enabled: on, retry: false, queryFn: () => rpc<CredRow[]>("list_credential_expirations", { _office_id: officeId, _within_days: 60 }) });
   const risk = useQuery({ queryKey: ["cs-risk", officeId], enabled: on, retry: false, queryFn: () => rpc<RiskRow[]>("list_authorization_risk", { _office_id: officeId, _within_days: 60 }) });
   const retrain = useQuery({ queryKey: ["cs-retrain", officeId], enabled: on, retry: false, queryFn: () => rpc<RetrainShiftRow[]>("list_caregivers_needing_retraining", { _office_id: officeId }) });
+  const ipos = useQuery({ queryKey: ["ipos-expiry", officeId, null], enabled: on, retry: false, queryFn: () => rpc<IposExpiry[]>("list_ipos_expiry", { _office_id: officeId, _client_id: null }) });
   const ready = useQuery({ queryKey: ["cs-ready", officeId], enabled: on, retry: false, queryFn: () => rpc<Readiness>("get_enforcement_readiness", { _office_id: officeId, _days: 14 }) });
 
   if (!on) return null;
@@ -140,6 +142,24 @@ export function ComplianceSection() {
                   <span className={cn("text-sm", r.units_at_risk > 0 ? "font-medium" : "text-muted-foreground")}>{r.units_at_risk} units at risk</span>
                 </div>
                 <p className="text-xs text-muted-foreground">{serviceName(r.service_type)} · #{r.auth_number} · {r.days === 0 ? "expires today" : `expires in ${r.days} day${r.days === 1 ? "" : "s"}`}</p>
+              </li>
+            ))}
+          </ul>
+        </Panel>
+
+        <Panel id="ipos" title="IPOS expiring" icon={<CalendarClock className="h-4 w-4" aria-hidden="true" />} count={ipos.data?.length ?? null}
+          sub="Active IPOS versions expiring within 30 days (red within 14 or expired), with visits already scheduled after the date." all={{ to: "/care-plans", label: "Client Care Plans" }}>
+          {ipos.data?.length === 0 && <Empty>No IPOS expires in the next 30 days.</Empty>}
+          <ul className="divide-y">
+            {ipos.data?.slice(0, TOP).map((r) => (
+              <li key={r.care_plan_id} className="py-2" data-testid="cs-ipos-row" data-band={r.band === "none" ? "after" : r.band}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <Link to={`/care-plans/${r.client_id}?tab=ipos`} className="font-medium hover:underline">{r.client_name}</Link>
+                  <Badge variant="outline" className={cn(r.band === "red" ? "border-destructive/40 bg-destructive/10 text-destructive" : r.band === "amber" ? "border-warning/40 bg-warning/15" : "")}>
+                    {r.days_left < 0 ? "Expired" : `${r.days_left} day${r.days_left === 1 ? "" : "s"}`}</Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">{expiryText(r)}</p>
+                {r.shifts_after_count > 0 && <Link to={`/schedule?client=${r.client_id}`} className="text-xs font-medium text-primary hover:underline">{r.shifts_after_count} visit{r.shifts_after_count === 1 ? "" : "s"} after the expiration date → Schedule</Link>}
               </li>
             ))}
           </ul>

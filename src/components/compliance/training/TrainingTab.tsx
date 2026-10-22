@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { addDays, format } from "date-fns";
 import { ChevronDown, ChevronRight, Printer, UserPlus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -67,6 +68,11 @@ export function TrainingTab({ ctx, onChanged }: { ctx: TrainingContext; onChange
 
   return (
     <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4" data-testid="training-tab">
+      {plan.status === "pending" && (
+        <Alert className="border-warning/50 bg-warning/10" data-testid="pending-training">
+          <AlertDescription><span className="font-medium">IPOS v{plan.version} is pending.</span> It becomes effective when its in-service and one training session are recorded{ctx.in_effect ? `; until then IPOS v${ctx.in_effect.version} stays in effect and caregivers trained on it can keep working` : ""}. Sessions recorded here are for v{plan.version}.</AlertDescription>
+        </Alert>
+      )}
       <Card data-testid="training-summary">
         <CardContent className="space-y-1 py-4">
           <h3 className="text-lg font-semibold">IPOS v{plan.version} ({PLAN_TYPE_LABEL[plan.plan_type] ?? plan.plan_type}) training</h3>
@@ -128,7 +134,8 @@ export function TrainingTab({ ctx, onChanged }: { ctx: TrainingContext; onChange
                         <ul className="divide-y text-sm">{f.records.map((r) => (
                           <li key={r.caregiver_id} className="flex flex-wrap justify-between gap-2 py-1.5">
                             <span className="font-medium">{r.caregiver_name}</span>
-                            <span className="text-muted-foreground">signed {fmt(r.signed_date)}{r.training_method ? ` · ${METHOD_LABEL[r.training_method]}` : ""}{r.primary_clinician_name ? ` · clinician ${r.primary_clinician_name}` : ""}</span>
+                            <span className="text-muted-foreground">signed {fmt(r.signed_date)}{r.training_method ? ` · ${METHOD_LABEL[r.training_method]}` : ""}{r.primary_clinician_name ? ` · clinician ${r.primary_clinician_name}` : ""}
+                              {r.plan_revision != null && plan.status !== "pending" && f.training_version === tv ? ` · trained on v${plan.version} rev ${r.plan_revision}${plan.revision != null && plan.revision !== r.plan_revision ? ` (now rev ${plan.revision})` : ""}` : ""}</span>
                           </li>))}</ul>
                       </TableCell></TableRow>
                     )}
