@@ -191,7 +191,9 @@ async function offPhase(base, F, browser) {
   await p2.goto(`${base}/available-shifts`); await p2.waitForTimeout(4000);
   const card = p2.locator("div.rounded-lg, [class*='card']", { hasText: /Zoe/ }).filter({ has: p2.getByRole("button") }).first();
   const ctext = await card.innerText().catch(() => "");
-  rec("O4 enforcement OFF: on Available Shifts Zoe's shift is not 'Not bookable yet' (unchanged behaviour)", ctext !== "" && !/Not bookable yet/.test(ctext), ctext.replace(/\s+/g, " ").slice(0, 160));
+  // owner, Oct 22 (decision 3): in a care-plan office a caregiver sees only open visits she passes the 4a gate for — Ana isn't
+  // trained on Zoe's plan, so Zoe's visit is not listed for her (it used to be listed as bookable with enforcement off)
+  rec("O4 enforcement OFF, care-plan office: Zoe's visit that Ana fails the 4a gate for is not listed on her Available Shifts (decision 3)", ctext === "", ctext.replace(/\s+/g, " ").slice(0, 160) || "not listed");
   await c2.close();
 }
 
@@ -291,11 +293,13 @@ async function caregiverSide(base, F, browser) {
     const txt = await card.innerText().catch(() => "");
     const nb = (txt.match(/can't be booked yet/g) || []).length;
     await card.scrollIntoViewIfNeeded().catch(() => {}); await shot(p, `caregiver-not-bookable-${w}`);
-    res.push({ w, badge: /Not bookable yet/.test(txt), once: nb === 1, leak: /plan|authoriz|units|ISK-|training/i.test(txt), hs: w === 390 ? await noHScroll(p) : true });
+    const page = await p.locator("body").innerText();
+    res.push({ w, listed: txt !== "", badge: /Not bookable yet/.test(txt), once: nb === 1, leak: /authoriz|units|ISK-|training/i.test(page), hs: w === 390 ? await noHScroll(p) : true });
     await c.close();
   }
-  rec("G1 caregiver Available Shifts with enforcement ON: Zoe's shift reads 'Not bookable yet' with the generic line once, no plan / authorization / units detail (1440 and 390)",
-    res.every((r) => r.badge && r.once && !r.leak && r.hs), JSON.stringify(res));
+  // owner, Oct 22 (decision 3): such a visit is no longer listed at all in a care-plan office (was 'Not bookable yet')
+  rec("G1 caregiver Available Shifts with enforcement ON: Zoe's visit Ana fails the gate for is not listed; no authorization / units / training detail anywhere (1440 and 390)",
+    res.every((r) => !r.listed && !r.leak && r.hs), JSON.stringify(res));
 }
 
 async function kindCare(base, F, browser) {
