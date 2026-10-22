@@ -1,6 +1,6 @@
 # S18 — Billing flexibility: design note
 
-Status: **PLAN ONLY** (2026-10-21). No code or migration. Waiting for owner approval.
+Status: **BUILT** (Oct 22, owner-approved with smallint units_adjusted and the rule stored per note). Migration 20261031140000. Open: unit length other than 15 minutes; the caregiver preview under a non-default rule (see known-issues).
 
 ## 1. Today
 

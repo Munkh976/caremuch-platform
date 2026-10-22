@@ -15,8 +15,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useComplianceOffices } from "@/hooks/useComplianceOffices";
 import { clientShort, fmtDay, fmtTime, SERVICE_LABEL } from "@/lib/caregiverNotes";
 import {
-  addDays, approveBlockers, batchName, billingCsv, byClient, capText, csvFileName, fixLink, newestBatch, REASON_LABEL, weekLabel,
-  type BillBatch, type BillingWeek,
+  addDays, approveBlockers, batchName, billingCsv, billingDaysCsv, byClient, capText, csvDaysFileName, csvFileName, fixLink, newestBatch, REASON_LABEL, weekLabel,
+  type BillBatch, type BillingWeek, type BillingWeekDays, type DayBatch,
 } from "@/lib/billing";
 
 const STATUS: Record<string, string> = { open: "Built — not approved", approved: "Approved — not billed", billed: "Billed" };
@@ -35,13 +35,55 @@ function useBillingWeek(officeId: string | null, week: string | null) {
   });
 }
 
+/** S18: the same week by day of service (get_billing_week_days), fetched only when "By day" is shown. */
+function useBillingWeekDays(officeId: string | null, week: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: ["billing-week", "days", officeId, week],
+    enabled: enabled && !!officeId && !!week,
+    retry: false,
+    queryFn: async (): Promise<BillingWeekDays> => {
+      const { data, error } = await supabase.rpc("get_billing_week_days", { _office_id: officeId as string, _week_start: week as string });
+      if (error) throw error;
+      return data as unknown as BillingWeekDays;
+    },
+  });
+}
+
+/** S18: one bill by day of service: client, date, authorization, units; late / left early and reviewer adjustments marked. */
+function DayTable({ b, tag }: { b: DayBatch; tag: string }) {
+  const mark = (l: DayBatch["lines"][number]) => [l.late ? "late" : "", l.left_early ? "left early" : "", l.adjusted ? "adjusted" : ""].filter(Boolean).join(", ");
+  return (
+    <div className="overflow-x-auto" data-testid={`${tag}-days`}>
+      <Table>
+        <TableHeader><TableRow><TableHead>Date of service</TableHead><TableHead>Client</TableHead><TableHead>Authorization</TableHead>
+          <TableHead className="text-right">Scheduled</TableHead><TableHead className="text-right">Billed</TableHead><TableHead>Notes</TableHead></TableRow></TableHeader>
+        <TableBody>
+          {b.lines.map((l) => (
+            <TableRow key={`${l.client_id}-${l.authorization.id}-${l.service_date}`} data-day-line={l.service_date} data-adjusted={l.adjusted}>
+              <TableCell className="whitespace-nowrap">{fmtDay(l.service_date)}</TableCell>
+              <TableCell>{clientShort(l.client_first_name, l.client_last_initial)}{l.case_number ? <span className="text-muted-foreground"> · Case {l.case_number}</span> : null}</TableCell>
+              <TableCell className="text-sm">#{l.authorization.auth_number} · {SERVICE_LABEL[l.authorization.service_type] ?? l.authorization.service_type}</TableCell>
+              <TableCell className="text-right tabular-nums">{l.units_scheduled}</TableCell>
+              <TableCell className="text-right tabular-nums font-medium">{l.units_billed}</TableCell>
+              <TableCell className="text-xs">{l.notes.map((n, i) => <span key={n.note_id}>{i ? " · " : ""}<Link to={`/progress-notes/${n.note_id}`} className="text-primary hover:underline">{n.caregiver_name ?? "note"}</Link></span>)}
+                {mark(l) && <span className="text-muted-foreground"> ({mark(l)})</span>}</TableCell>
+            </TableRow>))}
+          <TableRow className="border-t-2" data-testid={`${tag}-days-total`}><TableCell colSpan={3} className="text-right font-semibold">Total ({b.totals.notes} note{Number(b.totals.notes) === 1 ? "" : "s"})</TableCell>
+            <TableCell className="text-right tabular-nums font-semibold">{b.totals.units_scheduled}</TableCell><TableCell className="text-right tabular-nums font-bold">{b.totals.units_billed}</TableCell><TableCell /></TableRow>
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
 /** One bill of the week (main or supplement): status, banners, the table with totals, and its own actions. */
-function BatchSection({ w, b, newest, busy, onApprove, onBill }: { w: BillingWeek; b: BillBatch; newest: boolean; busy: boolean; onApprove: () => void; onBill: () => void }) {
+function BatchSection({ w, b, newest, busy, onApprove, onBill, dayBatch }: { w: BillingWeek; b: BillBatch; newest: boolean; busy: boolean; onApprove: () => void; onBill: () => void; dayBatch?: DayBatch | null }) {
   const tz = w.office.timezone;
   const blockers = newest ? approveBlockers(w, b) : [];
-  const exportCsv = () => {
-    const url = URL.createObjectURL(new Blob([billingCsv(w, b)], { type: "text/csv;charset=utf-8" }));
-    const a = document.createElement("a"); a.href = url; a.download = csvFileName(w, b); document.body.appendChild(a); a.click(); a.remove();
+  const exportCsv = () => {   // the CSV follows the view shown (S18)
+    const csv = dayBatch ? billingDaysCsv(w, dayBatch) : billingCsv(w, b);
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a"); a.href = url; a.download = dayBatch ? csvDaysFileName(w, b) : csvFileName(w, b); document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
   const tag = `batch-${b.supplement}`;
@@ -66,7 +108,7 @@ function BatchSection({ w, b, newest, busy, onApprove, onBill }: { w: BillingWee
           {(b.status === "approved" || b.status === "billed") && <Button variant="outline" className={`gap-1 ${outline}`} data-testid={`${tag}-export`} onClick={exportCsv}><Download className="h-4 w-4" />Export CSV</Button>}
         </div>
         {b.status === "open" && newest && blockers.length > 0 && <ul className="list-disc pl-5 text-sm text-muted-foreground" data-testid={`${tag}-blockers`}>{blockers.map((x) => <li key={x}>{x}</li>)}</ul>}
-        {b.lines.length === 0 ? <p className="text-sm text-muted-foreground">No reviewed notes in this bill yet.</p> : (
+        {b.lines.length === 0 ? <p className="text-sm text-muted-foreground">No reviewed notes in this bill yet.</p> : dayBatch ? <DayTable b={dayBatch} tag={tag} /> : (
           <>
             <div className="hidden overflow-x-auto md:block" data-testid={`${tag}-table`}>
               <Table>
@@ -137,7 +179,9 @@ export default function WeeklyBilling() {
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState<{ kind: "approve" | "bill"; batch: BillBatch } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [view, setView] = useState<"auth" | "day">("auth");   // S18: By authorization (as before) / By day
   const w = q.data;
+  const days = useBillingWeekDays(officeId, w?.week_start ?? null, view === "day");
   const goWeek = (d: string) => { setError(null); setParams({ week: d }, { replace: true }); };
   const refresh = () => Promise.all([qc.invalidateQueries({ queryKey: ["billing-week"] }), qc.invalidateQueries({ queryKey: ["staff-notes"] }), qc.invalidateQueries({ queryKey: ["billing-week-status"] })]);
   const act = async (fn: string, args: Record<string, unknown>, ok: string) => {
@@ -182,11 +226,21 @@ export default function WeeklyBilling() {
               </div>
             )}
             {error && <Alert variant="destructive" data-testid="billing-error"><AlertDescription>{error}</AlertDescription></Alert>}
+            {w.batches.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Bill view" data-testid="bill-view">
+                {(["auth", "day"] as const).map((v) => (
+                  <Button key={v} size="sm" variant={view === v ? "default" : "outline"} className={view === v ? "" : outline} aria-pressed={view === v}
+                    onClick={() => setView(v)} data-testid={`bill-view-${v}`}>{v === "auth" ? "By authorization" : "By day"}</Button>))}
+                {view === "day" && days.isPending && <span className="text-sm text-muted-foreground">Loading…</span>}
+                {view === "day" && days.isError && <span className="text-sm text-destructive">The by-day view couldn't be loaded.</span>}
+              </div>
+            )}
 
             {w.batches.length === 0 ? (
               <Card><CardContent className="py-6 text-sm text-muted-foreground" data-testid="bill-empty">Not built yet. "Build week" gathers the week's reviewed notes.</CardContent></Card>
             ) : w.batches.map((b) => (
-              <BatchSection key={b.id} w={w} b={b} newest={b.id === newest?.id} busy={busy} onApprove={() => setConfirm({ kind: "approve", batch: b })} onBill={() => setConfirm({ kind: "bill", batch: b })} />
+              <BatchSection key={b.id} w={w} b={b} newest={b.id === newest?.id} busy={busy} onApprove={() => setConfirm({ kind: "approve", batch: b })} onBill={() => setConfirm({ kind: "bill", batch: b })}
+                dayBatch={view === "day" ? days.data?.batches.find((x) => x.id === b.id) ?? null : null} />
             ))}
 
             <Card>

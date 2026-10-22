@@ -95,3 +95,25 @@ export function billingCsv(w: BillingWeek, b: BillBatch): string {
 /** ripple-billing-<office-code>-<week-start>[-s<n>].csv (no client names). */
 export const csvFileName = (w: BillingWeek, b: BillBatch) =>
   `ripple-billing-${(w.office.code || "office").toLowerCase().replace(/[^a-z0-9-]+/g, "-")}-${w.week_start}${b.supplement > 0 ? `-s${b.supplement}` : ""}.csv`;
+
+/** S18: the week's bill by day of service (get_billing_week_days): one line per client x authorization x date. */
+export interface DayLine {
+  client_id: string; client_first_name: string | null; client_last_initial: string | null; case_number: string | null; service_date: string;
+  authorization: { id: string; auth_number: string; service_type: string; service_code: string | null };
+  units_scheduled: number; units_billed: number; late: boolean; left_early: boolean; adjusted: boolean;
+  notes: { note_id: string; scheduled_start: string; caregiver_name: string | null; units_scheduled: number; units_billed: number; adjusted: boolean }[];
+}
+export interface DayBatch { id: string; supplement: number; status: "open" | "approved" | "billed"; lines: DayLine[]; totals: { notes: number; units_scheduled: number; units_billed: number } }
+export interface BillingWeekDays { office_id: string; week_start: string; week_end: string; batches: DayBatch[] }
+/** The claim CSV by day of service: one row per client x authorization x date, a total row; units only. */
+export function billingDaysCsv(w: BillingWeek, b: DayBatch): string {
+  const head = ["Week start", "Week end", "Office", "Bill", "Date of service", "Client", "Case number", "Authorization #", "Service", "Service code", "Notes", "Units scheduled", "Units billed", "Adjusted by reviewer", "Late / left early"];
+  const bill = b.supplement === 0 ? "main" : `supplement ${b.supplement}`;
+  const rows = b.lines.map((l) => [w.week_start, w.week_end, w.office.name, bill, l.service_date, clientShort(l.client_first_name, l.client_last_initial), l.case_number ?? "",
+    l.authorization.auth_number, SERVICE_LABEL[l.authorization.service_type] ?? l.authorization.service_type, l.authorization.service_code ?? "",
+    l.notes.length, l.units_scheduled, l.units_billed, l.adjusted ? "yes" : "", [l.late ? "late" : "", l.left_early ? "left early" : ""].filter(Boolean).join(" / ")]);
+  const t = b.totals;
+  rows.push([w.week_start, w.week_end, w.office.name, bill, "", "TOTAL", "", "", "", "", t.notes, t.units_scheduled, t.units_billed, "", ""]);
+  return [head, ...rows].map((r) => r.map(cell).join(",")).join("\r\n") + "\r\n";
+}
+export const csvDaysFileName = (w: BillingWeek, b: { supplement: number }) => csvFileName(w, b as BillBatch).replace(/\.csv$/, "-by-day.csv");

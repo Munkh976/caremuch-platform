@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addDays, approveBlockers, batchName, billingCsv, byClient, csvFileName, newestBatch, type BillBatch, type BillingWeek, type BillLine } from "./billing";
+import { addDays, approveBlockers, batchName, billingCsv, billingDaysCsv, byClient, csvDaysFileName, csvFileName, newestBatch, type BillBatch, type BillingWeek, type BillLine, type DayBatch } from "./billing";
 
 const line = (client: string, first: string, auth: string, s: number, b: number, l: number): BillLine => ({
   client_id: client, client_first_name: first, client_last_initial: "N", case_number: "ISK-1",
@@ -51,5 +51,22 @@ describe("weekly billing helpers", () => {
   it("weeks step by 7 days across a month boundary", () => {
     expect(addDays("2026-09-28", 7)).toBe("2026-10-05");
     expect(addDays("2026-10-05", -7)).toBe("2026-09-28");
+  });
+});
+
+describe("bill by day of service (S18)", () => {
+  const dl = (date: string, s: number, b: number, adjusted = false, late = false) => ({ client_id: "c1", client_first_name: "Zoe", client_last_initial: "N", case_number: "ISK-1", service_date: date,
+    authorization: { id: "A-1", auth_number: "A-1", service_type: "cls", service_code: "H2015" }, units_scheduled: s, units_billed: b, late, left_early: false, adjusted, notes: [] });
+  const days: DayBatch = { id: "b0", supplement: 0, status: "approved", lines: [dl("2026-09-28", 4, 4), dl("2026-09-29", 4, 3, false, true), dl("2026-09-30", 4, 4, true)], totals: { notes: 3, units_scheduled: 12, units_billed: 11 } };
+  it("one row per day, a total row; adjusted and late marked; units only", () => {
+    const rows = billingDaysCsv(week({}), days).trim().split("\r\n");
+    expect(rows).toHaveLength(5);
+    expect(rows[2]).toContain("2026-09-29"); expect(rows[2]).toMatch(/,late$/);
+    expect(rows[3]).toMatch(/,4,4,yes,$/);
+    expect(rows[4]).toContain("TOTAL"); expect(rows[4]).toContain(",3,12,11,");
+    expect(rows.join()).not.toMatch(/\$|Nguyen/);
+  });
+  it("file name says by day", () => {
+    expect(csvDaysFileName(week({}), { supplement: 1 })).toBe("ripple-billing-re-port-2026-09-28-s1-by-day.csv");
   });
 });

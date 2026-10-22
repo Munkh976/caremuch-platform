@@ -4054,6 +4054,14 @@ export type Database = {
           template_id: string | null
           template_version: number | null
           training_version: number | null
+          units_adjust_reason: string | null
+          units_adjusted: number | null
+          units_adjusted_at: string | null
+          units_adjusted_by: string | null
+          units_calculated: number | null
+          units_grace_minutes: number | null
+          units_minutes: number | null
+          units_rule: string | null
           units_scheduled: number | null
           units_used: number
           virtual_office_id: string | null
@@ -4109,6 +4117,14 @@ export type Database = {
           template_id?: string | null
           template_version?: number | null
           training_version?: number | null
+          units_adjust_reason?: string | null
+          units_adjusted?: number | null
+          units_adjusted_at?: string | null
+          units_adjusted_by?: string | null
+          units_calculated?: number | null
+          units_grace_minutes?: number | null
+          units_minutes?: number | null
+          units_rule?: string | null
           units_scheduled?: number | null
           units_used?: number
           virtual_office_id?: string | null
@@ -4164,6 +4180,14 @@ export type Database = {
           template_id?: string | null
           template_version?: number | null
           training_version?: number | null
+          units_adjust_reason?: string | null
+          units_adjusted?: number | null
+          units_adjusted_at?: string | null
+          units_adjusted_by?: string | null
+          units_calculated?: number | null
+          units_grace_minutes?: number | null
+          units_minutes?: number | null
+          units_rule?: string | null
           units_scheduled?: number | null
           units_used?: number
           virtual_office_id?: string | null
@@ -5179,6 +5203,9 @@ export type Database = {
           state: string | null
           timezone: string
           travel_buffer_minutes: number | null
+          units_grace_minutes: number
+          units_minutes: number
+          units_rule: string
           updated_at: string
           zip_code: string | null
         }
@@ -5215,6 +5242,9 @@ export type Database = {
           state?: string | null
           timezone?: string
           travel_buffer_minutes?: number | null
+          units_grace_minutes?: number
+          units_minutes?: number
+          units_rule?: string
           updated_at?: string
           zip_code?: string | null
         }
@@ -5251,6 +5281,9 @@ export type Database = {
           state?: string | null
           timezone?: string
           travel_buffer_minutes?: number | null
+          units_grace_minutes?: number
+          units_minutes?: number
+          units_rule?: string
           updated_at?: string
           zip_code?: string | null
         }
@@ -5298,6 +5331,10 @@ export type Database = {
       add_training_attendees: {
         Args: { _records: Json; _training_form_id: string }
         Returns: number
+      }
+      adjust_note_units: {
+        Args: { _note_id: string; _reason: string; _units: number }
+        Returns: Json
       }
       approve_batch_notes: {
         Args: { _batch_id: string; _note_ids: string[] }
@@ -5660,6 +5697,18 @@ export type Database = {
         Args: { _from: string; _office_id: string; _to: string; _today: string }
         Returns: string[]
       }
+      cp_units_for: {
+        Args: {
+          _arrived: string
+          _ended: string
+          _grace: number
+          _minutes: number
+          _rule: string
+          _sched_end: string
+          _sched_start: string
+        }
+        Returns: number
+      }
       cp_valid_match_weights: { Args: { _w: Json }; Returns: boolean }
       cp_validate_answer: {
         Args: { _a: Json; _final: boolean; _m: Json }
@@ -5800,6 +5849,10 @@ export type Database = {
       generate_order_number: { Args: never; Returns: string }
       get_billing_batch: { Args: { _batch_id: string }; Returns: Json }
       get_billing_week: {
+        Args: { _office_id: string; _week_start?: string }
+        Returns: Json
+      }
+      get_billing_week_days: {
         Args: { _office_id: string; _week_start?: string }
         Returns: Json
       }
@@ -6191,6 +6244,15 @@ export type Database = {
       }
       set_office_note_location: {
         Args: { _default: string; _mode: string; _office_id: string }
+        Returns: Json
+      }
+      set_office_units_rule: {
+        Args: {
+          _grace_minutes?: number
+          _minutes?: number
+          _office_id: string
+          _rule: string
+        }
         Returns: Json
       }
       set_shift_group_session: {

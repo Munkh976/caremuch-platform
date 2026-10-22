@@ -13,6 +13,7 @@ import { OperatingHoursCard } from "@/components/virtual-office/OperatingHoursCa
 import { ContactCard, ContactValues } from "@/components/virtual-office/ContactCard";
 import { ComplianceCard } from "@/components/virtual-office/ComplianceCard";
 import { NoteLocationCard } from "@/components/virtual-office/NoteLocationCard";
+import { UnitsRuleCard } from "@/components/virtual-office/UnitsRuleCard";
 import {
   SchedulingOverridesCard,
   AgencyDefaults,
@@ -244,6 +245,7 @@ const VirtualOfficeConfig = () => {
           <TabsContent value="compliance">
             <div className="space-y-6">
               <ComplianceCard officeId={vo.id} officeName={vo.name} canManage={canManage} />
+              <UnitsRuleCard officeId={vo.id} canManage={isAgencyAdmin} />
               <NoteLocationCard officeId={vo.id} canManage={isAgencyAdmin} />
             </div>
           </TabsContent>

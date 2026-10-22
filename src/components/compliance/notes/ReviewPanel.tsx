@@ -14,6 +14,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { fmtTime } from "@/lib/caregiverNotes";
 import { REVIEW_ACK, undoReviewBlocked, type StaffNote } from "@/lib/staffNotes";
 import { ReturnNoteDialog } from "./ReturnNoteDialog";
+import { NoteUnits } from "./AdjustUnits";
 
 const outline = "min-h-10 gap-1 hover:bg-muted hover:text-foreground";
 
@@ -56,6 +57,7 @@ export function ReviewPanel({ d, onDone }: { d: StaffNote; onDone: () => void })
     <Card data-testid="review-panel" data-mode={n.status}>
       <CardHeader className="pb-2"><CardTitle className="text-base">Review</CardTitle></CardHeader>
       <CardContent className="space-y-3">
+        <NoteUnits d={d} onDone={onDone} />
         {n.status === "submitted" ? (
           <>
             <div className="flex items-start gap-3 rounded-md border p-3">

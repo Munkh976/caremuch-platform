@@ -12,6 +12,8 @@ export interface QueueRow {
   scheduled_start: string; scheduled_end: string; arrived_late: boolean | null; units_scheduled: number | null; units_to_bill: number | null;
   status: QueueStatus; overdue: boolean; due_at: string; submitted_at: string | null; reviewed_at: string | null;
   returned_count: number; in_batch: boolean; group_session: boolean;
+  /** S18: a reviewer adjusted the units to bill */
+  units_adjusted?: boolean | null;
 }
 export interface Queue { as_of: string; today: string; timezone: string; billing_week_start: number; rows: QueueRow[] }
 
@@ -45,7 +47,9 @@ export interface StaffEntry {
   entry_id: string; goal_seq: number; goal_text: string | null; objective_letter: string | null; objective_text: string | null; service_type: string | null;
   staff_instructions: string | null; notes_text: string | null; answers: Record<string, Answer> | null; questions_as_asked: boolean; measures: NoteMeasure[];
 }
-export interface StaffHistory { event: string; at: string; by: string | null; resubmission: boolean | null; billable: boolean | null; reason: string | null }
+export interface StaffHistory { event: string; at: string; by: string | null; resubmission: boolean | null; billable: boolean | null; reason: string | null;
+  /** S18 progress_note_units_adjusted */
+  units_before?: number | null; units_after?: number | null }
 export interface StaffNote {
   note: {
     id: string; shift_id: string; client_id: string; status: "draft" | "submitted" | "returned" | "reviewed" | "billed"; note_kind: "cls" | "respite"; service_type: string;
@@ -55,6 +59,9 @@ export interface StaffNote {
     late_submitted: boolean; due_at: string; overdue: boolean; returned_reason: string | null; returned_at: string | null; returned_count: number;
     reviewed_at: string | null; reviewed_by_name: string | null; in_batch: boolean; biller_name: string | null; billed_at: string | null;
     template_name: string | null; template_version: number | null;
+    /** S18: the calculation (rule stored on the note), a reviewer's adjustment and why; NULL on notes from before S18 */
+    units_calculated?: number | null; units_adjusted?: number | null; units_adjust_reason?: string | null; units_adjusted_at?: string | null;
+    units_adjusted_by_name?: string | null; units_rule?: UnitsRule | null; units_minutes?: number | null; units_grace_minutes?: number | null;
   };
   client: { first_name: string | null; last_initial: string | null; case_number: string | null };
   caregiver_name: string | null;
@@ -64,6 +71,9 @@ export interface StaffNote {
   entries: StaffEntry[];
   history: StaffHistory[];
 }
+export type UnitsRule = "full_blocks" | "nearest" | "grace";
+/** S18: a units adjustment needs a reason of at least this many characters (enforced by the server too). */
+export const ADJUST_MIN = 10;
 export const RETURN_MIN = 10;
 /** The reviewer's statement in the Review panel; Mark reviewed stays disabled until it is ticked (demo UX, Oct 19). */
 export const REVIEW_ACK = "I have read this note and it matches the client's plan";

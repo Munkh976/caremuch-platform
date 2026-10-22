@@ -15,7 +15,7 @@ const StatusBadge = ({ r }: { r: QueueRow }) => (
   </span>
 );
 const Units = ({ r }: { r: QueueRow }) => r.units_scheduled === null ? <span className="text-muted-foreground">—</span>
-  : <span className="tabular-nums">{r.units_scheduled} → {r.units_to_bill}</span>;
+  : <span className="tabular-nums">{r.units_scheduled} → {r.units_to_bill}{r.units_adjusted && <span className="ml-1 text-xs text-muted-foreground" title="Units adjusted by a reviewer" data-testid="queue-units-adjusted">(adjusted)</span>}</span>;
 
 /**
  * Review queue rows (S8): table at md and up, cards below. Ids only in links. A visit with no note yet
