@@ -115,6 +115,12 @@ this module.
   → **Save correction**. **Add authorization** adds a new one.
 - **Case number:** client header → pencil **Edit case number** → **Save**.
 - **Intake documents:** tab **Onboarding & Documents** → pencil **Update <document>** → status → **Save** (adds a new version).
+- **Auto-assign (Oct 22):** Schedule → **Unassigned** → **Auto-assign…** → Day / Week / Month → **Preview** (proposed visits with
+  score and reasons; "Can't be filled" with reasons) → untick any → **Assign N selected**. Only caregivers who pass every check
+  (as with enforcement on) are proposed; **Smart assign** on a visit uses the same ranking. The demo office ranks by
+  availability, reliability, performance and continuity (Virtual Offices → **Scheduling** → *Smart match weights*, Sam only).
+- **IPOS expiry (S17):** the client page and the dashboard warn amber at 30 days and red at 14 days and after expiry; visits
+  can't be scheduled after the active IPOS's expiration date or the last authorization's end date.
 - **Files (S4b):** the **Files** button on an intake document, an in-service or a training session (Training tab), or a credential
   (Caregivers → Credentials & Training) → **Add files** (PDF, JPEG, PNG, HEIC photo, Word; up to 20 MB; photos are compressed).
   **Add other document** (under the intake table) adds a custom-named document. A caregiver adds a scan of their own credential
