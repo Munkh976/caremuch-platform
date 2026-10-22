@@ -1,3 +1,4 @@
+import { VisitActionsMenu } from "@/components/schedule/VisitActions";
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -169,9 +170,12 @@ export const LiveOpsView = ({ agencyId, onAssign }: Props) => {
                       </CardDescription>
                     </div>
                     {assignment ? (
-                      <Badge variant="outline" className={statusClass(assignment.status)}>
-                        {assignment.status.replace(/_/g, " ")}
-                      </Badge>
+                      <span className="flex items-center gap-1">
+                        <Badge variant="outline" className={statusClass(assignment.status)}>
+                          {assignment.status.replace(/_/g, " ")}
+                        </Badge>
+                        {shift.caregiver_id && <VisitActionsMenu shift={shift} />}
+                      </span>
                     ) : (
                       <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20">
                         UNASSIGNED

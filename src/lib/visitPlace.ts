@@ -6,6 +6,8 @@
 export interface OfficePlace {
   id: string; name: string; visit_location: string | null; note_location_default: string | null;
   address: string | null; city: string | null; state: string | null; zip_code: string | null;
+  /** care-plan module on (pickup gate, owner Oct 22 decision 3) */
+  care_plan_module_enabled?: boolean | null;
 }
 export interface PlaceClient { address?: string | null; city?: string | null; state?: string | null; zip_code?: string | null }
 export interface VisitPlace {

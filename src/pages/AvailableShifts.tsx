@@ -1,3 +1,5 @@
+import { useOfficePlaces } from "@/hooks/useOfficePlaces";
+import { passesAutoAssignGate } from "@/lib/autoAssignGate";
 import { VisitPlaceLine } from "@/components/schedule/VisitPlaceLine";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -172,16 +174,20 @@ const AvailableShifts = () => {
 
   // Eligible-now first within each section; Trade also separates out needs-approval
   // before not-eligible. Open has no middle tier -- soft issues no longer block pickup.
+  // owner, Oct 22 (decision 3): in care-plan offices only visits the caregiver passes the Auto-assign gate for are shown
+  // (the server refuses the others at pickup, including a client not onboarded yet); other offices: as before
+  const offices = useOfficePlaces();
   const filteredOpen = useMemo(() => {
     return openShifts
       .filter((s) => matchesFilters(s.clients, s.care_type_code, s.shift_date))
+      .filter((s) => !(s.virtual_office_id && offices.get(s.virtual_office_id)?.care_plan_module_enabled) || passesAutoAssignGate(eligibility.get(s.id)))
       .sort((a, b) => {
         const ea = eligibility.get(a.id)?.eligible !== false;
         const eb = eligibility.get(b.id)?.eligible !== false;
         return ea === eb ? 0 : ea ? -1 : 1;
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openShifts, eligibility, searchTerm, filterDate]);
+  }, [openShifts, eligibility, searchTerm, filterDate, offices]);
 
   const filteredTrade = useMemo(() => {
     const rank = (shiftId: string) => {

@@ -49,6 +49,40 @@ function useBillingWeekDays(officeId: string | null, week: string | null, enable
   });
 }
 
+/** Owner, Oct 22 (B): the week's client no-shows (never billed; they don't count against the caregiver). */
+interface NoShow { shift_id: string; shift_date: string; start_time: string; end_time: string; client_first_name: string | null; client_last_initial: string | null;
+  caregiver_name: string | null; recorded_at: string | null; recorded_by_name: string | null }
+function NoShowsCard({ officeId, from, to }: { officeId: string; from: string; to: string }) {
+  const q = useQuery({
+    queryKey: ["billing-week", "no-shows", officeId, from],
+    retry: false,
+    queryFn: async (): Promise<NoShow[]> => {
+      const { data, error } = await supabase.rpc("list_client_no_shows", { _office_id: officeId, _from: from, _to: to });
+      if (error) throw error;
+      return (data as unknown as NoShow[]) ?? [];
+    },
+  });
+  const rows = q.data ?? [];
+  return (
+    <Card data-testid="no-shows">
+      <CardHeader className="pb-2"><CardTitle className="text-base">Client no-shows ({rows.length})</CardTitle></CardHeader>
+      <CardContent>
+        {q.isError ? <p className="text-sm text-muted-foreground">The no-shows couldn't be loaded.</p> : rows.length === 0
+          ? <p className="text-sm text-muted-foreground">No client no-shows this week. They are never billed.</p> : (
+          <ul className="divide-y" data-testid="no-show-list">
+            {rows.map((r) => (
+              <li key={r.shift_id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm" data-no-show={r.shift_id}>
+                <span><span className="font-medium">{clientShort(r.client_first_name, r.client_last_initial)}</span>
+                  <span className="text-muted-foreground"> · {fmtDay(r.shift_date)}, {r.start_time.slice(0, 5)}–{r.end_time.slice(0, 5)} · {r.caregiver_name ?? "—"}</span></span>
+                <span className="text-xs text-muted-foreground">Recorded by {r.recorded_by_name ?? "—"}</span>
+              </li>))}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 /** S18: one bill by day of service: client, date, authorization, units; late / left early and reviewer adjustments marked. */
 function DayTable({ b, tag }: { b: DayBatch; tag: string }) {
   const mark = (l: DayBatch["lines"][number]) => [l.late ? "late" : "", l.left_early ? "left early" : "", l.adjusted ? "adjusted" : ""].filter(Boolean).join(", ");
@@ -258,6 +292,8 @@ export default function WeeklyBilling() {
                 )}
               </CardContent>
             </Card>
+
+            <NoShowsCard officeId={w.office.id} from={w.week_start} to={w.week_end} />
 
             <Dialog open={confirm !== null} onOpenChange={(o) => !o && setConfirm(null)}>
               {c && <DialogContent data-testid={confirm?.kind === "bill" ? "bill-confirm" : "approve-confirm"}>

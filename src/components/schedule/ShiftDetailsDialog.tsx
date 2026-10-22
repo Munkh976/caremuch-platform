@@ -1,3 +1,4 @@
+import { VisitActionsMenu } from "@/components/schedule/VisitActions";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -154,18 +155,22 @@ export const ShiftDetailsDialog = ({ shift, open, onOpenChange, onAssign }: Shif
           {/* Quick Assign Button for Unassigned Shifts -- staff-only, so it also needs an onAssign
               handler. Caregiver callers pass none and don't embed shift_assignments, so their own
               assigned shift would otherwise read as unassigned and show a no-op button. */}
-          {isUnassigned && onAssign && (
-            <div className="mt-6 pt-6 border-t">
-              <Button
-                className="w-full gap-2"
-                onClick={() => {
-                  onAssign(shift);
-                  onOpenChange(false);
-                }}
-              >
-                <Zap className="h-4 w-4" />
-                Assign Caregiver
-              </Button>
+          {onAssign && (
+            <div className="mt-6 flex items-center gap-2 border-t pt-6" data-testid="shift-detail-actions">
+              {isUnassigned && (
+                <Button
+                  className="flex-1 gap-2"
+                  onClick={() => {
+                    onAssign(shift);
+                    onOpenChange(false);
+                  }}
+                >
+                  <Zap className="h-4 w-4" />
+                  Assign Caregiver
+                </Button>
+              )}
+              {/* owner, Oct 22 (B): Unassign / Cancel visit / Client no-show (staff tiers; the server decides) */}
+              <VisitActionsMenu shift={{ ...shift, caregiver_id: isUnassigned ? null : shift.caregiver_id }} size="sm" onDone={() => onOpenChange(false)} />
             </div>
           )}
         </div>

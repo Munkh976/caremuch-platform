@@ -13,7 +13,7 @@ export function useOfficePlaces() {
     staleTime: 5 * 60_000,
     queryFn: async (): Promise<Map<string, OfficePlace>> => {
       const { data, error } = await supabase.from("virtual_office")
-        .select("id, name, visit_location, note_location_default, address, city, state, zip_code");
+        .select("id, name, visit_location, note_location_default, address, city, state, zip_code, care_plan_module_enabled");
       if (error) throw error;
       return new Map((data ?? []).map((o) => [o.id, o as OfficePlace]));
     },

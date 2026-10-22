@@ -1,3 +1,4 @@
+import { VisitActionsMenu } from "@/components/schedule/VisitActions";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -19,7 +20,8 @@ import type { CarePlanTab } from "@/lib/carePlan";
 import { evaluateEligibilityBulk } from "@/lib/shiftEligibility";
 import { useAuthorizations } from "./useCarePlanData";
 
-interface ShiftRow { id: string; shift_date: string; start_time: string | null; end_time: string | null; status: string | null; caregiver_id: string | null; care_type_code: string | null }
+interface ShiftRow { id: string; shift_date: string; start_time: string | null; end_time: string | null; status: string | null; caregiver_id: string | null; care_type_code: string | null;
+  group_session_id: string | null; visit_outcome: string | null }
 const hm = (t: string | null) => (t ? t.slice(0, 5) : "");
 
 /**
@@ -38,7 +40,7 @@ export function SchedulingTab({ clientId, goTo }: { clientId: string; officeId: 
     enabled: !!ctx.data,
     queryFn: async (): Promise<ShiftRow[]> => {
       const from = format(addDays(parseDateOnly(today), -14), "yyyy-MM-dd"), to = format(addDays(parseDateOnly(today), 45), "yyyy-MM-dd");
-      const { data, error } = await supabase.from("shifts").select("id, shift_date, start_time, end_time, status, caregiver_id, care_type_code")
+      const { data, error } = await supabase.from("shifts").select("id, shift_date, start_time, end_time, status, caregiver_id, care_type_code, group_session_id, visit_outcome")
         .eq("client_id", clientId).gte("shift_date", from).lte("shift_date", to).order("shift_date").order("start_time");
       if (error) throw error;
       return data ?? [];
@@ -76,7 +78,8 @@ export function SchedulingTab({ clientId, goTo }: { clientId: string; officeId: 
                   <li key={s.id} className={cn("flex flex-wrap items-center justify-between gap-2 py-2", s.shift_date < today && "text-muted-foreground")} data-shift={s.id}>
                     <span className="whitespace-nowrap">{format(parseDateOnly(s.shift_date), "EEE MMM d")} · {hm(s.start_time)}–{hm(s.end_time)}</span>
                     <span className="flex items-center gap-2">{s.caregiver_id ? names.get(s.caregiver_id) ?? "Assigned" : <Badge variant="outline" className="border-warning/40 bg-warning/15">Unassigned</Badge>}
-                      {s.status === "cancelled" && <Badge variant="secondary">Cancelled</Badge>}</span>
+                      {s.status === "cancelled" && <Badge variant="secondary">{s.visit_outcome === "client_no_show" ? "Client no-show" : "Cancelled"}</Badge>}
+                      {s.caregiver_id && <VisitActionsMenu shift={s} />}</span>
                   </li>))}
               </ul>
             )}

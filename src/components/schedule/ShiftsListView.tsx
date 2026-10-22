@@ -1,3 +1,4 @@
+import { VisitActionsMenu } from "@/components/schedule/VisitActions";
 import { useMemo, useState } from "react";
 import { format, isSameDay, parseISO } from "date-fns";
 import { Badge } from "@/components/ui/badge";
@@ -126,6 +127,7 @@ export const ShiftsListView = ({
           </Badge>
         </TableCell>
         <TableCell className="text-right">
+          {caregiver && <VisitActionsMenu shift={shift} />}
           {!caregiver && (
             <Button
               size="sm"

@@ -1,3 +1,4 @@
+import { GATE_ADVISORY } from "@/lib/autoAssignGate";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchCaregiverPerformance, shortRatingLabel } from "@/lib/caregiverPerformance";
@@ -37,9 +38,6 @@ import { fetchGroupShifts, groupClients, groupRatioIssue } from "@/lib/groupRati
 import { useQuery } from "@tanstack/react-query";
 import { useComplianceOffices } from "@/hooks/useComplianceOffices";
 import { VisitPlaceLine } from "@/components/schedule/VisitPlaceLine";
-
-/** Care-plan advisory codes the enforcement switch would turn into blocks (same list as the database gate). */
-const GATE_ADVISORY = ["credential_missing", "training_missing", "authorization_missing", "authorization_expired", "units_short", "units_short_period"];
 
 interface AssignShiftDialogProps {
   open: boolean;

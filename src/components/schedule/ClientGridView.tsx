@@ -1,3 +1,4 @@
+import { VisitActionsMenu } from "@/components/schedule/VisitActions";
 import { useMemo, useState } from "react";
 import { format, parseISO } from "date-fns";
 import { Badge } from "@/components/ui/badge";
@@ -142,9 +143,9 @@ export const ClientGridView = ({
                       {items.slice(0, 4).map((s) => {
                         const cg = getAssignedCaregiver(s);
                         return (
-                          <li key={s.id}>
+                          <li key={s.id} className="flex items-start gap-1">
                             <button
-                              className="w-full text-left rounded-md border px-2.5 py-1.5 text-sm hover:bg-muted/50 transition-colors"
+                              className="min-w-0 flex-1 text-left rounded-md border px-2.5 py-1.5 text-sm hover:bg-muted/50 transition-colors"
                               onClick={() => onSelectShift(s)}
                             >
                               <span className="font-medium">
@@ -160,6 +161,7 @@ export const ClientGridView = ({
                                 · {s.care_types?.name || s.order_title || "—"}
                               </span>
                             </button>
+                            {s.caregiver_id && <VisitActionsMenu shift={s} />}
                           </li>
                         );
                       })}
