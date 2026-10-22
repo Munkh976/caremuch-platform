@@ -17,6 +17,7 @@ import {
   AgencyDefaults,
   OverrideValues,
 } from "@/components/virtual-office/SchedulingOverridesCard";
+import { MatchWeightsCard } from "@/components/virtual-office/MatchWeightsCard";
 import {
   Branding,
   OperatingHours,
@@ -34,6 +35,7 @@ const VirtualOfficeConfig = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [canManage, setCanManage] = useState(false);
+  const [isAgencyAdmin, setIsAgencyAdmin] = useState(false);
   const [vo, setVo] = useState<VirtualOfficeRow | null>(null);
   const [defaults, setDefaults] = useState<AgencyDefaults>({
     max_weekly_hours: null,
@@ -62,8 +64,6 @@ const VirtualOfficeConfig = () => {
     late_trade_hours: null,
     smart_match_weights: null,
   });
-  const [weightsText, setWeightsText] = useState("");
-  const [weightsError, setWeightsError] = useState<string | null>(null);
 
   useEffect(() => {
     init();
@@ -83,6 +83,7 @@ const VirtualOfficeConfig = () => {
       return;
     }
     setCanManage(role === "system_admin" || role === "agency_admin");
+    setIsAgencyAdmin(role === "agency_admin");
 
     const { data, error } = await supabase
       .from("virtual_office")
@@ -118,7 +119,6 @@ const VirtualOfficeConfig = () => {
       late_trade_hours: row.late_trade_hours,
       smart_match_weights: row.smart_match_weights,
     });
-    setWeightsText(row.smart_match_weights ? JSON.stringify(row.smart_match_weights, null, 2) : "");
 
     const { data: agency } = await supabase
       .from("agency")
@@ -132,20 +132,6 @@ const VirtualOfficeConfig = () => {
 
   const handleSave = async () => {
     if (!vo) return;
-
-    let weights: any = null;
-    if (weightsText.trim()) {
-      try {
-        weights = JSON.parse(weightsText);
-        setWeightsError(null);
-      } catch {
-        setWeightsError("Invalid JSON — fix or clear the field to inherit the agency default.");
-        toast.error("Smart match weights must be valid JSON");
-        return;
-      }
-    } else {
-      setWeightsError(null);
-    }
 
     setSaving(true);
     try {
@@ -167,7 +153,7 @@ const VirtualOfficeConfig = () => {
           max_weekly_hours: overrides.max_weekly_hours,
           travel_buffer_minutes: overrides.travel_buffer_minutes,
           late_trade_hours: overrides.late_trade_hours,
-          smart_match_weights: weights,
+          // smart_match_weights: saved separately through set_office_match_weights (agency admin, audited)
         })
         .eq("id", vo.id);
 
@@ -222,7 +208,7 @@ const VirtualOfficeConfig = () => {
             <TabsTrigger value="area">Service Area</TabsTrigger>
             <TabsTrigger value="hours">Operating Hours</TabsTrigger>
             <TabsTrigger value="contact">Contact</TabsTrigger>
-            <TabsTrigger value="overrides">Scheduling Overrides</TabsTrigger>
+            <TabsTrigger value="overrides">Scheduling</TabsTrigger>
             <TabsTrigger value="compliance" data-testid="tab-compliance">Compliance</TabsTrigger>
           </TabsList>
 
@@ -248,14 +234,11 @@ const VirtualOfficeConfig = () => {
             <ContactCard value={contact} onChange={setContact} />
           </TabsContent>
           <TabsContent value="overrides">
-            <SchedulingOverridesCard
-              value={overrides}
-              defaults={defaults}
-              weightsText={weightsText}
-              weightsError={weightsError}
-              onChange={setOverrides}
-              onWeightsTextChange={setWeightsText}
-            />
+            <div className="space-y-6">
+              <SchedulingOverridesCard value={overrides} defaults={defaults} onChange={setOverrides} />
+              <MatchWeightsCard officeId={vo.id} officeWeights={overrides.smart_match_weights} agencyWeights={defaults.smart_match_weights}
+                canManage={isAgencyAdmin} onSaved={init} />
+            </div>
           </TabsContent>
           <TabsContent value="compliance">
             <ComplianceCard officeId={vo.id} officeName={vo.name} canManage={canManage} />

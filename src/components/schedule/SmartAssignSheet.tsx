@@ -31,17 +31,21 @@ const scoreClass = (score: number) => {
 
 export const SmartAssignSheet = ({ open, onOpenChange, shift, onAssigned }: Props) => {
   const [matches, setMatches] = useState<any[]>([]);
+  const [notEligible, setNotEligible] = useState(0);
+  const [clientBlocked, setClientBlocked] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [pending, setPending] = useState<any | null>(null);
 
   const fetchMatches = useCallback(async (shiftId: string) => {
     try {
       setLoading(true);
-      const { data, error } = await supabase.functions.invoke("match-caregiver", {
-        body: { shiftId },
-      });
+      // Auto-assign (owner 4a/4b/4f): the same gate and per-office scoring as Auto-assign, in the database
+      const { data, error } = await supabase.rpc("suggest_caregivers", { _shift_id: shiftId });
       if (error) throw error;
-      setMatches(data?.matches || []);
+      const r = data as unknown as { matches: typeof matches; not_eligible: number; client_blocked: string | null };
+      setMatches(r?.matches || []);
+      setNotEligible(Number(r?.not_eligible ?? 0));
+      setClientBlocked(r?.client_blocked ?? null);
     } catch (e) {
       console.error(e);
       toast.error("Failed to fetch caregiver matches");
@@ -56,6 +60,8 @@ export const SmartAssignSheet = ({ open, onOpenChange, shift, onAssigned }: Prop
     if (!open) {
       setMatches([]);
       setPending(null);
+      setNotEligible(0);
+      setClientBlocked(null);
     }
   }, [open, shift?.id, fetchMatches]);
 
@@ -85,11 +91,15 @@ export const SmartAssignSheet = ({ open, onOpenChange, shift, onAssigned }: Prop
                 <p className="text-muted-foreground text-sm">Ranking caregivers...</p>
               </div>
             ) : matches.length === 0 ? (
-              <p className="py-16 text-center text-sm text-muted-foreground">
-                No matching caregivers found for this shift.
-              </p>
+              <div className="py-16 text-center text-sm text-muted-foreground" data-testid="smart-empty">
+                <p>No matching caregivers found for this shift.</p>
+                {clientBlocked && <p className="mt-1">{clientBlocked}.</p>}
+                {notEligible > 0 && <p className="mt-1">{notEligible} caregiver{notEligible === 1 ? " isn't" : "s aren't"} eligible with all care-plan checks on; Assign shows them with the reasons.</p>}
+              </div>
             ) : (
-              matches.map((match, index) => (
+              <>
+              {notEligible > 0 && <p className="text-xs text-muted-foreground" data-testid="smart-not-eligible">Only caregivers who pass every check (as with enforcement on) are suggested; {notEligible} more can be assigned manually with Assign.</p>}
+              {matches.map((match, index) => (
                 <Card key={match.caregiver_id}>
                   <CardContent className="p-4 space-y-3">
                     <div className="flex items-start justify-between gap-3">
@@ -151,7 +161,8 @@ export const SmartAssignSheet = ({ open, onOpenChange, shift, onAssigned }: Prop
                     </Button>
                   </CardContent>
                 </Card>
-              ))
+              ))}
+              </>
             )}
           </div>
         </SheetContent>

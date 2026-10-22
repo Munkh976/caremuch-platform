@@ -152,3 +152,31 @@ with enforcement ON: no hard issue, no soft issue, no care-plan advisory issue, 
 **"Show all (N not eligible)"** that shows the rest with today's advisory / blocked lines (manual assignment stays possible).
 The other entry points reach that same dialog, so one change covers them; Shift Trades' local fallback would be removed
 (server only). Smart Assign and Auto-assign use the same gate.
+
+## F. Built (Oct 22, branch `auto-assign`; owner decision 4a–4f approved; 4g waiting)
+
+- **Migrations (DEV):** `20261030130000_auto_assign.sql` (md5 7d734257…) + two rule-16 fixes of its own functions:
+  `20261030130100` (commit writes `shift_assigned` per assignment; the existing assign path writes none) and
+  `20261030130200` (propose failed when a client wasn't onboarded; found by the browser round).
+- **Gate (4a):** proposals only for caregivers with no hard / soft issue and none of the care-plan issues the switch would
+  block (credential, training on the current IPOS, authorization / units), client onboarded in care-plan offices. Manual
+  assignment unchanged.
+- **Weights (4b):** `virtual_office.smart_match_weights` (else the agency's, else 40/25/15/10/10/0). With the defaults the
+  score, key factors and warnings equal match-caregiver's (PGlite: a port of its code; DEV: the deployed function on the
+  same shift). Virtual Offices → **Scheduling** → *Smart match weights* (agency admin, `office_match_weights_changed`); the
+  raw JSON field and the direct table write are gone. Demo office: 0 / 0 / 30 / 20 / 20 / 30 (seed-demo).
+- **Continuity (4c):** visits to this client in the last 60 days (count up to 6 and recency) + preferred caregiver; a
+  weight-0 factor isn't shown in the reasons.
+- **Running totals (4d):** propose assigns each pick tentatively through `assign_caregiver_to_shift` inside a block that
+  is always rolled back, so the unchanged engine counts units / period caps, group ratio, weekly hours and same-date
+  overlaps over the whole set (tests: same-day overlap, weekly cap, per-week units cap; group ratio uses the same
+  mechanism but has no separate test).
+- **RPCs (4e):** `propose_auto_assignments` (read-only, hardest first, reasons), `commit_auto_assignments` (re-check,
+  existing path, `auto_assign_run` + `shift_assigned` each), `suggest_caregivers` (Smart Assign), `set_office_match_weights`.
+  Scheduler / manager / agency admin of the office. `match-caregiver` is no longer used by the UI (kept deployed, hotfixed).
+- **UI (4f):** Unassigned → **Auto-assign…** (always visible; own Day / Week / Month picker and office choice; preview →
+  checkboxes → Assign; "changed since the preview" list). Smart Assign uses the same scoring and gate. The old Auto-fill
+  dialog is removed. The Schedule tab bar now scrolls inside its frame, so the page (and dialogs) fit at 390.
+- **Tests:** PGlite `auto-assign.cjs` 13/13, `rollback-auto-assign.cjs` 6/6; DEV `auto-assign.cjs` before (fresh NB1
+  baseline) + after 7/7 (NB1 with function hashes identical); browser round 14 5/5; round 8 18/18 (Smart / Auto-assign
+  expectations updated to 4a).

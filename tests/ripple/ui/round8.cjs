@@ -183,7 +183,7 @@ async function offPhase(base, F, browser) {
       && (await dlg.locator('[data-testid="elig-line-group_ratio_preferred"][data-blocked="false"]').count()) === 1, gtext.replace(/\s+/g, " "));
   await closeAll(page);
   const sm = await smartNames(page, "Zoe"); await shot(page, "smart-off-1440");
-  rec("O3 enforcement OFF: Smart assign keeps Ana (advisory checks don't filter)", /Ana Rivera/.test(sm.text), sm.text.replace(/\s+/g, " ").slice(0, 160));
+  rec("O3 enforcement OFF (owner 4a): Smart assign leaves Ana out (she wouldn't pass with enforcement on) and says the others can be assigned manually", !/Ana Rivera/.test(sm.text) && /assigned manually|eligible with all care-plan checks/.test(sm.text), sm.text.replace(/\s+/g, " ").slice(0, 200));
   await closeAll(page);
   await ctx.close();
   // caregiver side, OFF: Zoe's shift is bookable (advisories aren't shown to caregivers)
@@ -211,7 +211,7 @@ async function switchOn(base, F, browser) {
   const ctext = await p.locator('[data-testid="compliance-confirm-changes"]').innerText();
   await shot(p, "switch-confirm-1440");
   rec("C2 agency admin: turning enforcement on asks to confirm and states what changes (block new assignments, Smart / Auto-fill leave out, caregivers 'Not bookable yet', already-assigned stay, audited); nothing changes before Confirm",
-    /block/i.test(ctext) && /Smart assign and Auto-fill/.test(ctext) && /Not bookable yet/.test(ctext) && /already assigned stay assigned/.test(ctext) && /audited/.test(ctext) && (await flag(F.RX)) === false, ctext.replace(/\s+/g, " ").slice(0, 220));
+    /block/i.test(ctext) && /Smart Assign and Auto-assign already leave out/.test(ctext) && /Not bookable yet/.test(ctext) && /already assigned stay assigned/.test(ctext) && /audited/.test(ctext) && (await flag(F.RX)) === false, ctext.replace(/\s+/g, " ").slice(0, 220));
   const t0 = new Date().toISOString();
   await p.locator('[data-testid="compliance-confirm-ok"]').click(); await p.waitForFunction(() => document.querySelector('[data-testid="enforcement-status"]')?.textContent === "Enforced", null, { timeout: 20000 });
   await p.waitForTimeout(800); await shot(p, "compliance-card-on-1440");
@@ -249,13 +249,17 @@ async function onPhase(base, F, browser) {
   const sm = await smartNames(page, "Zoe"); await shot(page, "smart-on-1440");
   rec("B2 enforcement ON: Smart assign omits Ana", !/Ana Rivera/.test(sm.text), sm.text.replace(/\s+/g, " ").slice(0, 160));
   await closeAll(page);
-  await page.getByRole("button", { name: /Auto-fill this period/ }).click(); const af = page.locator('[role="dialog"]').last(); await af.waitFor();
-  await page.waitForTimeout(1500); await page.waitForFunction(() => !/Analy[sz]ing|%/.test(document.querySelector('[role="dialog"]:last-of-type')?.innerText || "") || true, null, { timeout: 60000 });
-  await page.waitForTimeout(6000);
+  await page.locator('[data-testid="auto-assign-button"]').click(); const af = page.locator('[data-testid="auto-assign-dialog"]'); await af.waitFor();
+  page.on("response", async (r) => { if (/propose_auto_assignments/.test(r.url())) log(`  propose: HTTP ${r.status()} ${(await r.text().catch(() => "")).slice(0, 300)}`); });
+  await af.locator('[data-testid="aa-preview"]').click();
+  await page.waitForFunction(() => !!document.querySelector('[data-testid="aa-proposals"], [data-testid="aa-blocked"], [data-testid="aa-empty"]'), null, { timeout: 90000 })
+    .catch(async () => { log("  auto-assign dialog:", (await af.innerText()).replace(/\s+/g, " ").slice(0, 300), "| toasts:", (await page.locator("[data-sonner-toast]").allInnerTexts()).join(" / ")); });
+  await page.waitForTimeout(800);
   const afText = await af.innerText(); await shot(page, "autofill-on-1440");
   const zoeLine = afText.split("\n").filter((l) => /Zoe/.test(l)).join(" ");
-  rec("B3 enforcement ON: Auto-fill doesn't propose Ana for Zoe's visit (it takes Smart's best match); nothing committed", !/Ana Rivera/.test(afText.slice(afText.indexOf("Zoe"), afText.indexOf("Zoe") + 200)) && (await admin.from("shift_assignments").select("id").eq("shift_id", F.SZ)).data.length === 0,
-    zoeLine.slice(0, 160) || afText.replace(/\s+/g, " ").slice(0, 160));
+  rec("B3 enforcement ON: Auto-assign (preview) doesn't propose Ana for Zoe's visit; nothing committed",
+    /Zoe/.test(afText) && !afText.split("\n").some((l, k, all) => /Zoe/.test(l) && /Ana Rivera/.test(l + (all[k + 1] || ""))) && (await admin.from("shift_assignments").select("id").eq("shift_id", F.SZ)).data.length === 0,
+    zoeLine.slice(0, 200) || afText.replace(/\s+/g, " ").slice(0, 200));
   await closeAll(page);
   // Fix → links land on the right page / tab
   const land = {};

@@ -104,13 +104,13 @@ export function ComplianceCard({ officeId, officeName, canManage }: { officeId: 
                 {confirm === "on" && (
                   <ul className="list-disc space-y-1 pl-5" data-testid="compliance-confirm-changes">
                     <li>Care-plan checks (training on the client's current plan, required credentials, authorization and units, group size) stop being advisory and <strong>block</strong> new assignments: the assign dialog shows Blocked and Confirm is disabled.</li>
-                    <li>Smart assign and Auto-fill leave out caregivers who don't pass.</li>
+                    <li>Smart Assign and Auto-assign already leave out caregivers who don't pass (with the switch on or off).</li>
                     <li>Caregivers see such shifts as "Not bookable yet" and can't pick them up.</li>
                     <li>Shifts already assigned stay assigned. Offices without the module are not affected.</li>
                     <li>This change is audited (who and when).</li>
                   </ul>
                 )}
-                {confirm === "off" && <p>Care-plan checks become advisory again: they still show in the assign dialog, but Confirm is enabled and Smart, Auto-fill and caregiver pick-up work as before. This change is audited.</p>}
+                {confirm === "off" && <p>Care-plan checks become advisory again: they still show in the assign dialog, but Confirm is enabled and caregiver pick-up works as before. Smart Assign and Auto-assign still propose only caregivers who pass. This change is audited.</p>}
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>

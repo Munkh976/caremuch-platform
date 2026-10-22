@@ -68,10 +68,11 @@ export const UnassignedShiftsView = ({
           <AlertTriangle className="h-3.5 w-3.5" />
           {results.length} unassigned
         </Badge>
-        {onAutoFill && shifts.length > 0 && (
-          <Button variant="outline" className="gap-2 ml-auto" onClick={onAutoFill}>
+        {onAutoFill && (
+          // always visible (owner 4f); the dialog has its own Day / Week / Month picker and says when a period is empty
+          <Button variant="outline" className="gap-2 ml-auto" onClick={onAutoFill} data-testid="auto-assign-button">
             <Sparkles className="h-4 w-4" />
-            Auto-fill this period
+            Auto-assign…
           </Button>
         )}
       </div>

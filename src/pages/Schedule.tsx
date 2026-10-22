@@ -51,7 +51,7 @@ import { ClientGridView } from "@/components/schedule/ClientGridView";
 import { PickShiftDialog } from "@/components/schedule/PickShiftDialog";
 import { LiveOpsView } from "@/components/schedule/LiveOpsView";
 import { SmartAssignSheet } from "@/components/schedule/SmartAssignSheet";
-import { AutoFillDialog } from "@/components/schedule/AutoFillDialog";
+import { AutoAssignDialog } from "@/components/schedule/AutoAssignDialog";
 import { useCareServices } from "@/hooks/useCareServices";
 
 const CATEGORY_COLORS = [
@@ -406,6 +406,8 @@ const Schedule = () => {
           <div className="py-20 text-center text-muted-foreground">Loading schedule...</div>
         ) : (
           <Tabs value={tab} onValueChange={changeTab}>
+            {/* the tab bar scrolls inside its own frame on a phone (it was wider than the screen and widened the whole page) */}
+            <div className="max-w-full overflow-x-auto">
             <TabsList>
               <TabsTrigger value="today" className="gap-2">
                 <Radio className="h-4 w-4" />
@@ -433,6 +435,7 @@ const Schedule = () => {
                 By Client
               </TabsTrigger>
             </TabsList>
+            </div>
 
             <TabsContent value="today" className="mt-6">
               <LiveOpsView agencyId={agencyId} onAssign={(shift) => setSmartAssignShift(shift)} />
@@ -518,11 +521,11 @@ const Schedule = () => {
         }}
       />
 
-      <AutoFillDialog
+      <AutoAssignDialog
         open={autoFillOpen}
         onOpenChange={setAutoFillOpen}
-        shifts={unassignedShifts}
-        rangeLabel={rangeLabel}
+        initialDate={currentDate}
+        initialMode={rangeMode}
         onCommitted={refresh}
       />
 

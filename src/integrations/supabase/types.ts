@@ -5217,6 +5217,10 @@ export type Database = {
           shift_id: string
         }[]
       }
+      commit_auto_assignments: {
+        Args: { _assignments: Json; _from: string; _office_id: string; _to: string }
+        Returns: Json
+      }
       complete_attachment_upload: {
         Args: { _id: string }
         Returns: string
@@ -5836,6 +5840,10 @@ export type Database = {
         Returns: undefined
       }
       publish_flow_draft: { Args: { p_draft_id: string }; Returns: string }
+      propose_auto_assignments: {
+        Args: { _from: string; _office_id: string; _to: string }
+        Returns: Json
+      }
       publish_template_version: {
         Args: { _template_id: string }
         Returns: string
@@ -5966,6 +5974,10 @@ export type Database = {
         Args: { _measures: Json; _objective_id: string }
         Returns: number
       }
+      set_office_match_weights: {
+        Args: { _office_id: string; _weights: Json | null }
+        Returns: Json
+      }
       set_shift_group_session: {
         Args: { _group_session_id: string; _shift_id: string }
         Returns: undefined
@@ -6010,6 +6022,10 @@ export type Database = {
         Returns: Json
       }
       undo_progress_note_review: { Args: { _note_id: string }; Returns: Json }
+      suggest_caregivers: {
+        Args: { _shift_id: string }
+        Returns: Json
+      }
       update_care_plan_fields: {
         Args: { _care_plan_id: string; _field_values?: Json; _header?: Json }
         Returns: undefined

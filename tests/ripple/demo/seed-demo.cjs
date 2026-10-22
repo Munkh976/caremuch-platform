@@ -149,6 +149,9 @@ async function seed(C) {
 
   // ---- Flow 1: office setup (module on, shells, credential catalog) ----
   await must(sam.c, "seed_office_care_plan_defaults", { _office_id: OFF });
+  // Smart Assign / Auto-assign ranking (owner 4b): training is the gate and every service is at the center, so skills and
+  // service area don't rank; availability, reliability, performance and continuity do (agency admin, audited)
+  await must(sam.c, "set_office_match_weights", { _office_id: OFF, _weights: { skills: 0, service_area: 0, availability: 30, reliability: 20, performance: 20, continuity: 30 } });
   // go-live date before the demo history (no RPC sets it; the server stamps "now" when the module is turned on)
   await admin.from("virtual_office").update({ care_plan_module_enabled_at: `${await day(-28)}T08:00:00-04:00` }).eq("id", OFF);
   const shell = async (kind, name, fields, extra = {}) => {

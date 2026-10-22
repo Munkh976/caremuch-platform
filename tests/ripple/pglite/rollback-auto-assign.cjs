@@ -30,5 +30,11 @@ const DEV_EVENTS = process.argv[2] || "8509d41e5a1980bbd73df19e7a9e4a6a";   // m
   await H.applyRollback(db, "auto_assign_commit_events_rollback.sql"); const back = await md5c(); const s4 = await H.snap(db);
   rec("RB4 the commit fix changes only that body; its rollback restores the body pushed on DEV (md5 5c35a9b9…) and the catalog",
     pushed === "5c35a9b942e24daf5db14b6316de1aca" && fixed !== pushed && back === pushed && diff(s3, s4).length === 0, `pushed ${pushed}; fixed ${fixed}; back ${back}`);
+  // the rule-16 fix 20261030130200 (propose_auto_assignments): its rollback restores the pushed body byte-identically
+  const md5p = async () => (await db.query(`SELECT md5(prosrc) h FROM pg_proc WHERE proname = 'propose_auto_assignments'`)).rows[0].h;
+  const p0 = await md5p();
+  await H.applyFiles(db, ["20261030130200_auto_assign_propose_fix.sql"]); const p1 = await md5p();
+  await H.applyRollback(db, "auto_assign_propose_fix_rollback.sql"); const p2 = await md5p();
+  rec("RB5 the propose fix's rollback restores the body pushed on DEV (md5 9e18f5f2…)", p0 === "9e18f5f2bc6bb5cf0408b906740886e7" && p1 !== p0 && p2 === p0, `pushed ${p0}; fixed ${p1}; back ${p2}`);
   done();
 })().catch((e) => { console.error(e); process.exit(1); });

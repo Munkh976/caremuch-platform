@@ -1,7 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 
 export interface OverrideValues {
   max_weekly_hours: number | null;
@@ -20,10 +19,7 @@ export interface AgencyDefaults {
 interface Props {
   value: OverrideValues;
   defaults: AgencyDefaults;
-  weightsText: string;
-  weightsError: string | null;
   onChange: (next: OverrideValues) => void;
-  onWeightsTextChange: (text: string) => void;
 }
 
 const NUM_FIELDS: { key: keyof OverrideValues; label: string }[] = [
@@ -35,10 +31,7 @@ const NUM_FIELDS: { key: keyof OverrideValues; label: string }[] = [
 export const SchedulingOverridesCard = ({
   value,
   defaults,
-  weightsText,
-  weightsError,
   onChange,
-  onWeightsTextChange,
 }: Props) => {
   return (
     <Card>
@@ -77,22 +70,6 @@ export const SchedulingOverridesCard = ({
           ))}
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="smart_match_weights">Smart Match Weights (JSON)</Label>
-          <Textarea
-            id="smart_match_weights"
-            value={weightsText}
-            onChange={(e) => onWeightsTextChange(e.target.value)}
-            placeholder="Inherit"
-            className="font-mono text-xs"
-            rows={5}
-          />
-          {weightsError && <p className="text-xs text-destructive">{weightsError}</p>}
-          <p className="text-xs text-muted-foreground">
-            Override agency default (blank = inherit) — agency:{" "}
-            {defaults.smart_match_weights ? JSON.stringify(defaults.smart_match_weights) : "—"}
-          </p>
-        </div>
       </CardContent>
     </Card>
   );

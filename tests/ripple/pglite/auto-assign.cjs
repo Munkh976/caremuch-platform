@@ -5,7 +5,7 @@
 // (re-check, auto_assigned, one auto_assign_run), roles.
 // Usage: node tests/ripple/pglite/auto-assign.cjs   (local, no network)
 const H = require("./harness.cjs");
-const MIG = "20261030130000_auto_assign.sql", FIX = "20261030130100_auto_assign_commit_events.sql";
+const MIG = "20261030130000_auto_assign.sql", FIX = "20261030130100_auto_assign_commit_events.sql", FIX2 = "20261030130200_auto_assign_propose_fix.sql";
 let seq = 0; const sid = () => H.U(9900 + ++seq);
 
 // ---- reference: match-caregiver's scoring (supabase/functions/match-caregiver/index.ts), unchanged logic ----
@@ -46,7 +46,7 @@ function reference(shift, client, needs, careTypeNames, c, skills, avail, perf) 
   const at = async (k) => (await q(`SELECT ((now() AT TIME ZONE '${TZ}')::date + $1::int)::text d`, [k]))[0].d;
   const evVals = async () => [...(await q(`SELECT pg_get_constraintdef(oid) d FROM pg_constraint WHERE conname='events_event_type_check'`))[0].d.matchAll(/'([a-z_]+)'::text/g)].map((m) => m[1]);
   const before = await H.snap(db), ev0 = await evVals();
-  await H.applyFiles(db, [MIG, FIX]);
+  await H.applyFiles(db, [MIG, FIX, FIX2]);
   const after = await H.snap(db), ev1 = await evVals();
   const removed = before.filter((x) => !after.includes(x));
   rec("F0 catalog: additive (only the events CHECK replaced: 57 values kept + auto_assign_run, office_match_weights_changed)",
@@ -123,6 +123,10 @@ function reference(shift, client, needs, careTypeNames, c, skills, avail, perf) 
   const blockedClient = (await call("mgrX", "SELECT suggest_caregivers($1)", [await shift(6, "09:00", "10:00", { client: CX, office: OX })])).v;
   rec("G1 the gate drops care-plan advisory issues (training) and soft issues (weekly hours) but keeps other advisories (overtime risk, preferred caregiver); in a care-plan office a client not onboarded blocks every proposal",
     g1 === 1 && g2 === 1 && g3 === 0 && /^Client not onboarded \(\d+ of \d+\)$/.test(blockedClient.client_blocked || "") && blockedClient.matches.length === 0, `${g1}/${g2}/${g3}; ${blockedClient.client_blocked}`);
+
+  const pb0 = await call("mgrX", "SELECT propose_auto_assignments($1,$2::date,$3::date)", [OX, await at(6), await at(6)]);
+  rec("G2 propose in a care-plan office whose client isn't onboarded: the visit is listed as blocked with that reason (no error)",
+    !pb0.err && (pb0.v.proposals || []).length === 0 && (pb0.v.blocked || []).some((b) => /^Client not onboarded/.test(b.reasons[0])), pb0.err || JSON.stringify(pb0.v.blocked).slice(0, 160));
 
   // ---- propose: running totals in office Y (weekly cap 3 h for the test) ----
   await db.query(`UPDATE agency SET max_weekly_hours = 3 WHERE id = $1`, [A]);
