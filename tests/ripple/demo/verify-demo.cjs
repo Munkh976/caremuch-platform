@@ -40,8 +40,15 @@ const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
         demoDay: await q(`SELECT cl.first_name c, g.first_name g, s.start_time::text st, s.care_type_code code, EXISTS (SELECT 1 FROM public.progress_notes n WHERE n.shift_id = s.id AND NOT n.voided) has_note
           FROM public.shifts s JOIN public.clients cl ON cl.id = s.client_id LEFT JOIN public.caregivers g ON g.id = s.caregiver_id
           WHERE s.virtual_office_id = $1 AND s.shift_date = $2::date AND s.status IS DISTINCT FROM 'cancelled'`, [off.id, asOf]),
-        unassigned: await q(`SELECT cl.first_name c, s.shift_date::text d, extract(isodow FROM s.shift_date)::int dow FROM public.shifts s JOIN public.clients cl ON cl.id = s.client_id
-          WHERE s.virtual_office_id = $1 AND s.caregiver_id IS NULL AND s.status IS DISTINCT FROM 'cancelled'`, [off.id]),
+        unassigned: await q(`SELECT cl.first_name c, s.shift_date::text d, extract(isodow FROM s.shift_date)::int dow, s.start_time::text st,
+            -- inside the client's IPOS (active or pending version) and an authorization of the visit's service on that date
+            EXISTS (SELECT 1 FROM public.care_plans p WHERE p.client_id = s.client_id AND p.status IN ('active', 'pending')
+                      AND p.effective_date <= s.shift_date AND p.expiration_date >= s.shift_date) ipos,
+            EXISTS (SELECT 1 FROM public.service_authorizations sa JOIN public.office_service_types ost ON ost.virtual_office_id = s.virtual_office_id
+                      AND ost.care_type_code = s.care_type_code AND ost.service_type = sa.service_type
+                     WHERE sa.client_id = s.client_id AND sa.voided_at IS NULL AND sa.effective_date <= s.shift_date AND sa.expiration_date >= s.shift_date) auth
+          FROM public.shifts s JOIN public.clients cl ON cl.id = s.client_id
+          WHERE s.virtual_office_id = $1 AND s.caregiver_id IS NULL AND s.status IS DISTINCT FROM 'cancelled' ORDER BY s.shift_date, s.start_time, cl.first_name`, [off.id]),
         overdueRows: await q(`SELECT x.status k, g.first_name g, cl.first_name c, x.service_date::text d FROM public.cp_office_note_queue($1) x
           JOIN public.caregivers g ON g.id = x.caregiver_id JOIN public.clients cl ON cl.id = x.client_id WHERE x.overdue ORDER BY x.service_date`, [off.id]),
         groups: await q(`SELECT gs.session_date::text d, gs.staff_client_ratio r, string_agg(cl.first_name, ',' ORDER BY cl.first_name) clients,
@@ -149,7 +156,16 @@ const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   rec("T1 retraining: exactly 1 visit — Mia on Zoe v2 (Ana and Ben retrained)", r.retrain.length === 1 && name.get(r.retrain[0].client_id) === "Zoe Nguyen" && r.retrain[0].training_version === 2,
     `${r.retrain.length} row(s): ${r.retrain.map((x) => `${name.get(x.client_id)} ${x.shift_date} cg ${cgName(x.caregiver_id).slice(0, 8)}`).join(", ")}`);
   const thu = new Date(`${W.w0}T12:00:00Z`); thu.setUTCDate(thu.getUTCDate() + 11);
-  rec("S1 exactly 1 unassigned visit: Zoe, next week's Thursday", r.unassigned.length === 1 && r.unassigned[0].c === "Zoe" && r.unassigned[0].d === thu.toISOString().slice(0, 10), JSON.stringify(r.unassigned));
+  // owner A (Oct 22): 28 open visits over the three weeks after the demo week (Zoe 8 incl. next Thursday, Max 6, Noah 7,
+  // Ella 7, none for Lily), each inside the client's IPOS and an authorization; Zoe's first open visit is next Thursday
+  const plus = (n) => { const x = new Date(`${W.w0}T12:00:00Z`); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
+  const per = {}; for (const u of r.unassigned) per[u.c] = (per[u.c] || 0) + 1;
+  const inWindow = r.unassigned.every((u) => u.d >= plus(7) && u.d <= plus(27));
+  const zoe1 = r.unassigned.find((u) => u.c === "Zoe");
+  rec("S1 28 unassigned visits in the three weeks after the demo week: Zoe 8 (first: next Thursday), Max 6, Noah 7, Ella 7, Lily 0; all inside the IPOS and an authorization",
+    r.unassigned.length === 28 && eq(Object.fromEntries(Object.entries(per).sort()), { Ella: 7, Max: 6, Noah: 7, Zoe: 8 }) && inWindow && zoe1 && zoe1.d === thu.toISOString().slice(0, 10)
+      && r.unassigned.every((u) => u.ipos && u.auth),
+    `${r.unassigned.length}: ${JSON.stringify(per)}; window ${plus(7)}..${plus(27)} ${inWindow}; outside IPOS / auth: ${r.unassigned.filter((u) => !u.ipos || !u.auth).map((u) => `${u.c} ${u.d}`).join(", ") || "none"}`);
   rec("S2 readiness: enforcement off and upcoming visits it would block (Mia)", r.readiness.would_block > 0 && !r.readiness.enforcement, `${r.readiness.would_block} of ${r.readiness.shifts_checked}; ${JSON.stringify(r.readiness.by_reason)}`);
   rec("F1 setup: active plans use ≥ 6 of the 8 measure types", r.kinds.n >= 6, `${r.kinds.n}`);
   const m = r.menus;

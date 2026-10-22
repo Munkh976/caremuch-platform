@@ -63,6 +63,21 @@ function pattern(k) {
   if (dow === 1 || dow === 3) out.push({ c: ELLA, s: "11:00", e: "13:00", code: RESP, who: "ivy" });
   return out.map((v) => ({ ...v, k }));
 }
+// Owner, Oct 22 (A): unassigned visits for the three weeks after the demo week (k 7..27, Sun-Sat) so Bren can try
+// Auto-assign and manual scheduling: Zoe, Max, Noah, Ella (none for Lily: not onboarded). Inside each client's IPOS and
+// authorization dates; units checked by the Auto-assign preview at the end of the seed (every open visit proposed).
+// Zoe's extra visits in next week come after Thursday, so "Zoe · Thu" stays the first Zoe row (playbook 3.1); her
+// Tuesday Nov 3 visit is the last day of authorization A. Max's respite stays within its 120 units.
+const OPEN = [
+  [ZOE, 12, "13:00", "14:00", CLS], [ZOE, 13, "10:00", "11:00", CLS], [ZOE, 16, "09:00", "10:00", CLS], [ZOE, 18, "09:00", "10:00", CLS],
+  [ZOE, 22, "09:00", "10:00", CLS], [ZOE, 24, "09:00", "10:00", CLS], [ZOE, 26, "09:00", "10:00", CLS],
+  [MAX, 8, "14:00", "16:00", RESP], [MAX, 13, "14:00", "16:00", RESP], [MAX, 15, "14:00", "16:00", RESP], [MAX, 19, "14:00", "16:00", RESP],
+  [MAX, 23, "14:00", "16:00", RESP], [MAX, 25, "14:00", "16:00", RESP],
+  [NOAH, 8, "13:00", "14:00", CLS], [NOAH, 10, "13:00", "14:00", CLS], [NOAH, 15, "13:00", "14:00", CLS], [NOAH, 17, "13:00", "14:00", CLS],
+  [NOAH, 22, "13:00", "14:00", CLS], [NOAH, 24, "13:00", "14:00", CLS], [NOAH, 26, "13:00", "14:00", CLS],
+  [ELLA, 9, "11:00", "13:00", RESP], [ELLA, 11, "11:00", "13:00", RESP], [ELLA, 16, "11:00", "13:00", RESP], [ELLA, 18, "11:00", "13:00", RESP],
+  [ELLA, 22, "11:00", "13:00", RESP], [ELLA, 24, "11:00", "13:00", RESP], [ELLA, 26, "11:00", "13:00", RESP],
+].map(([c, k, s, e, code]) => ({ c, k, s, e, code, who: null, note: "none", week: "future", open: true }));
 function visits(dOff) {   // dOff = the demo day's offset from W0 (0..6)
   const v = [...WEEK_BEFORE, ...LAST_WEEK];
   for (let k = 0; k < dOff; k++) for (const x of pattern(k)) v.push({ ...x, note: "reviewed", week: "this" });
@@ -70,7 +85,7 @@ function visits(dOff) {   // dOff = the demo day's offset from W0 (0..6)
   for (let k = dOff + 1; k <= 20; k++) for (const x of pattern(k)) v.push({ ...x, note: "none", week: "future" });
   // next Tuesday: a CLS group session 1:2 with Ana (Zoe + Noah)
   for (const c of [ZOE, NOAH]) v.push({ c, k: 9, s: "10:00", e: "11:00", code: CLS, who: "ana", note: "none", week: "future", group: "next" });
-  return v;
+  return v.concat(OPEN);
 }
 
 async function dates() {
@@ -391,6 +406,14 @@ async function seed(C) {
   await attach(jordan, "training_form", zSession, "IPOS v2 sign-in sheet", pdf("IPOS Proof of Training - sign-in sheet", ["Plan: IPOS v2 (annual)", "Trainer: Pat Morgan",
     "Attendees: Ana Brooks, Ben Carter (demo staff)", `Date: ${TODAY}`]));
 
+  // the open visits fit (owner A): the Auto-assign preview (read only: its tentative assignments are rolled back) over
+  // the three weeks proposes every open visit, so none is blocked by units, caps, dates or the client gate
+  const pv = await must(pat.c, "propose_auto_assignments", { _office_id: OFF, _from: await day(7), _to: await day(27) });
+  const openIds = new Set(sorted.filter((v) => !v.who).map((v) => v.id));
+  const proposed = new Set((pv.proposals || []).map((x) => x.shift_id));
+  const missing = [...openIds].filter((id) => !proposed.has(id));
+  log(`open visits ${openIds.size}: Auto-assign preview proposes ${proposed.size}, blocked ${(pv.blocked || []).length}${missing.length ? ` — NOT PROPOSED: ${(pv.blocked || []).map((b) => `${b.shift_date} ${String(b.start_time).slice(0, 5)} ${(b.reasons || []).join("; ")}`).join(" | ").slice(0, 600)}` : ""}`);
+  if (missing.length || (pv.blocked || []).length) { log("CHECK FAIL: open visits that don't fit"); process.exitCode = 1; }
   // enforcement stays OFF so the demo can switch it on live
   log(await D.lockPasswords(Object.values(U).map((u) => u.id)));
   log(`office ${D.OFFICE_NAME}: module on, enforcement off; ${sorted.length} visits, ${noted.length} notes; the week before billed (${wsB}); last week not built; Ana's visit on ${DAY} 08:00 has no note`);
