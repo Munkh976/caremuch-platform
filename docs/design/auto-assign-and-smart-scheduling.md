@@ -126,3 +126,29 @@ events CHECK value, the `match-caregiver` caller check / error fix, removing or 
 2. Continuity window: served this client in the last 60 days? Any minimum number of visits?
 3. Should the scheduler role run it, or managers / agency admins only?
 4. Fix the `match-caregiver` caller check now, as a security fix, independent of the restore? Recommended: yes.
+
+## E. Assign entry points (owner item 4g, report before changing)
+
+| Entry point | Opens | Caregiver list / proposal from | Write |
+|---|---|---|---|
+| Schedule → **Shifts** list → Quick assign | `AssignShiftDialog` | `check_assignment_eligibility_bulk` (as the user) | `assign_caregiver_to_shift` |
+| Schedule → **Unassigned** → Assign | `AssignShiftDialog` | same | same |
+| Schedule → Unassigned → **Smart assign** | `SmartAssignSheet` → (Assign) `AssignShiftDialog` prefilled | `match-caregiver` (hard-blocked removed by the same bulk check, run as the user since the hotfix) | same |
+| Schedule → Unassigned → **Auto-fill this period** | `AutoFillDialog` | `match-caregiver` per shift | same (`method = auto_assigned`) |
+| Schedule → **Today** (live ops) → assign | `SmartAssignSheet` | `match-caregiver` | same |
+| Schedule → **By Caregiver** → Assign shift | `PickShiftDialog` (unassigned shifts, no eligibility shown) → `AssignShiftDialog` prefilled caregiver | bulk check | same |
+| Schedule → **By Client** → a shift → shift details → Assign | `ShiftDetailsDialog` → `AssignShiftDialog` | bulk check | same (`ClientGridView` gets an `onAssign` prop it never uses) |
+| **Shift Trades** → approve coverage | inline | `check_assignment_eligibility` (single); on a server error it falls back to the old client-side rules (`evaluateEligibilityLocal`, display only) | same |
+| **Client Scheduling tab** | read-only (no assign); "Open full Schedule →" | bulk check for the next unassigned shift | — |
+| Caregiver Available Shifts / Trade Board | pickup | `check_caregiver_shifts_eligibility` → the same engine | `caregiver_pick_up_shift` / `caregiver_pickup_trade_shift` |
+
+**One engine:** every list and every write uses `cp_eligibility_core` (through `check_assignment_eligibility(_bulk)`), and
+every staff write goes through `assign_caregiver_to_shift`, which re-checks; nothing assigns by a direct table write.
+`AssignShiftDialog` already lists **hard-eligible** caregivers by default (typing a name shows everyone); advisory
+care-plan lines (enforcement off) are shown but don't hide anyone.
+
+**Proposed change (waiting for the owner's OK):** in `AssignShiftDialog` the default list becomes the 4a gate (eligible
+with enforcement ON: no hard issue, no soft issue, no care-plan advisory issue, client onboarded) with a toggle
+**"Show all (N not eligible)"** that shows the rest with today's advisory / blocked lines (manual assignment stays possible).
+The other entry points reach that same dialog, so one change covers them; Shift Trades' local fallback would be removed
+(server only). Smart Assign and Auto-assign use the same gate.
