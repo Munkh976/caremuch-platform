@@ -1,3 +1,4 @@
+import { VisitPlaceLine } from "@/components/schedule/VisitPlaceLine";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -28,6 +29,7 @@ const notBookable = (e: EligibilityResult | undefined) => !!e && e.blockers.some
 
 interface OpenShift {
   id: string;
+  virtual_office_id?: string | null;
   client_id: string;
   shift_date: string;
   start_time: string;
@@ -408,12 +410,7 @@ const AvailableShifts = () => {
                           <Clock className="w-4 h-4 text-muted-foreground" />
                           <span>{shift.start_time.slice(0, 5)} - {shift.end_time.slice(0, 5)}</span>
                         </div>
-                        {shift.clients?.city && (
-                          <div className="flex items-center gap-2 text-sm">
-                            <MapPin className="w-4 h-4 text-muted-foreground" />
-                            <span>{shift.clients.city}</span>
-                          </div>
-                        )}
+                        <VisitPlaceLine officeId={shift.virtual_office_id} client={shift.clients} className="gap-2 text-sm" iconClassName="w-4 h-4 text-muted-foreground" />
                         {shift.pay_rate && (
                           <div className="flex items-center gap-2 text-sm font-medium text-green-600">
                             <DollarSign className="w-4 h-4" />

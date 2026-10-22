@@ -5207,6 +5207,7 @@ export type Database = {
           units_minutes: number
           units_rule: string
           updated_at: string
+          visit_location: string
           zip_code: string | null
         }
         Insert: {
@@ -5246,6 +5247,7 @@ export type Database = {
           units_minutes?: number
           units_rule?: string
           updated_at?: string
+          visit_location?: string
           zip_code?: string | null
         }
         Update: {
@@ -5285,6 +5287,7 @@ export type Database = {
           units_minutes?: number
           units_rule?: string
           updated_at?: string
+          visit_location?: string
           zip_code?: string | null
         }
         Relationships: [
@@ -6253,6 +6256,10 @@ export type Database = {
           _office_id: string
           _rule: string
         }
+        Returns: Json
+      }
+      set_office_visit_location: {
+        Args: { _mode: string; _office_id: string }
         Returns: Json
       }
       set_shift_group_session: {

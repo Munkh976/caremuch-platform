@@ -2,6 +2,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Calendar, Clock, MapPin, User, Briefcase, FileText, Zap } from "lucide-react";
+import { VisitPlaceLine } from "@/components/schedule/VisitPlaceLine";
 interface ShiftDetailsDialogProps {
   shift: any;
   open: boolean;
@@ -54,19 +55,14 @@ export const ShiftDetailsDialog = ({ shift, open, onOpenChange, onAssign }: Shif
           </div>
 
           {/* Location */}
-          {client?.address && (
+          {(client?.address || shift.virtual_office_id) && (
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-muted-foreground text-sm font-semibold">
                 <MapPin className="h-4 w-4" />
                 Location
               </div>
               <div className="ml-6">
-                <p className="text-sm">
-                  {client.address}
-                  {client.city && `, ${client.city}`}
-                  {client.state && `, ${client.state}`}
-                  {client.zip_code && ` ${client.zip_code}`}
-                </p>
+                <VisitPlaceLine officeId={shift.virtual_office_id} client={client} variant="full" className="text-sm" iconClassName="hidden" />
               </div>
             </div>
           )}

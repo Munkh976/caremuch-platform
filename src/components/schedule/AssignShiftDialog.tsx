@@ -36,6 +36,7 @@ import { complianceLines } from "@/lib/eligibilityCompliance";
 import { fetchGroupShifts, groupClients, groupRatioIssue } from "@/lib/groupRatio";
 import { useQuery } from "@tanstack/react-query";
 import { useComplianceOffices } from "@/hooks/useComplianceOffices";
+import { VisitPlaceLine } from "@/components/schedule/VisitPlaceLine";
 
 /** Care-plan advisory codes the enforcement switch would turn into blocks (same list as the database gate). */
 const GATE_ADVISORY = ["credential_missing", "training_missing", "authorization_missing", "authorization_expired", "units_short", "units_short_period"];
@@ -306,13 +307,7 @@ export const AssignShiftDialog = ({
                 ? format(parseISO(shift.shift_date), "EEEE, MMMM d, yyyy")
                 : "—"}
             </div>
-            {client?.city && (
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <MapPin className="h-4 w-4" />
-                {client.city}
-                {client.state ? `, ${client.state}` : ""}
-              </div>
-            )}
+            <VisitPlaceLine officeId={shift.virtual_office_id} client={client} className="gap-2 text-muted-foreground" iconClassName="h-4 w-4" />
           </div>
 
           {matchContext && (

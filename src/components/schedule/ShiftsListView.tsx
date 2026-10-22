@@ -13,6 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { AlertTriangle, Search, Zap, Clock, MapPin } from "lucide-react";
+import { VisitPlaceLine } from "@/components/schedule/VisitPlaceLine";
 
 interface ShiftsListViewProps {
   shifts: any[];
@@ -95,13 +96,7 @@ export const ShiftsListView = ({
           <div className="font-medium">
             {shift.clients?.first_name} {shift.clients?.last_name}
           </div>
-          {shift.clients?.city && (
-            <div className="text-xs text-muted-foreground flex items-center gap-1">
-              <MapPin className="h-3 w-3" />
-              {shift.clients.city}
-              {shift.clients.state ? `, ${shift.clients.state}` : ""}
-            </div>
-          )}
+          <VisitPlaceLine officeId={shift.virtual_office_id} client={shift.clients} className="text-xs text-muted-foreground" />
         </TableCell>
         <TableCell>
           <span

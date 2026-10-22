@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { AlertCircle, CheckCircle, Clock, MapPin, Phone } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import { VisitPlaceLine } from "@/components/schedule/VisitPlaceLine";
 
 interface Props {
   agencyId: string | null;
@@ -163,12 +164,7 @@ export const LiveOpsView = ({ agencyId, onAssign }: Props) => {
                           <Clock className="h-3.5 w-3.5" />
                           {shift.start_time?.slice(0, 5)} - {shift.end_time?.slice(0, 5)}
                         </span>
-                        {shift.clients?.address && (
-                          <span className="flex items-center gap-1">
-                            <MapPin className="h-3.5 w-3.5" />
-                            {shift.clients.address}, {shift.clients.city}
-                          </span>
-                        )}
+                        <VisitPlaceLine officeId={shift.virtual_office_id} client={shift.clients} variant="full" iconClassName="h-3.5 w-3.5" />
                         <span>{shift.care_types?.name || shift.order_title}</span>
                       </CardDescription>
                     </div>

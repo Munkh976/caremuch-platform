@@ -1,3 +1,4 @@
+import { VisitPlaceLine } from "@/components/schedule/VisitPlaceLine";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -120,12 +121,7 @@ const UpcomingShifts = () => {
                       <Clock className="h-3 w-3" />
                       {format(new Date(shift.shift_date), "MMM dd")} • {shift.start_time.slice(0, 5)} - {shift.end_time.slice(0, 5)}
                     </span>
-                    {shift.clients?.city && (
-                      <span className="flex items-center gap-1">
-                        <MapPin className="h-3 w-3" />
-                        {shift.clients.city}
-                      </span>
-                    )}
+                    <VisitPlaceLine officeId={shift.virtual_office_id} client={shift.clients} />
                   </div>
                   {shift.shift_assignments?.find((a: any) => a?.status !== "cancelled")?.caregivers && (
                     <div className="flex items-center gap-1 text-sm text-muted-foreground">

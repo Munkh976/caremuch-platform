@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -72,7 +73,54 @@ export function NoteLocationCard({ officeId, canManage }: { officeId: string; ca
         {canManage && (
           <Button onClick={save} disabled={busy || !dirty} data-testid="note-location-save">Save</Button>
         )}
+        <VisitLocationSection officeId={officeId} canManage={canManage} />
       </CardContent>
     </Card>
+  );
+}
+
+type VisitMode = "client_home" | "office";
+/**
+ * "Visits take place at" (owner, Oct 22, A): the client's home (default) or the office. In office mode the visit screens
+ * show the office (note location name, else its name) and the office address. set_office_visit_location: agency admin,
+ * audited; 'office' needs the office's street address (Contact tab).
+ */
+function VisitLocationSection({ officeId, canManage }: { officeId: string; canManage: boolean }) {
+  const qc = useQueryClient();
+  const [saved, setSaved] = useState<VisitMode | null>(null);
+  const [mode, setMode] = useState<VisitMode>("client_home");
+  const [addr, setAddr] = useState<string>("");
+  const [busy, setBusy] = useState(false);
+  const load = useCallback(async () => {
+    const { data } = await supabase.from("virtual_office").select("visit_location, address, city, state, zip_code").eq("id", officeId).maybeSingle();
+    if (!data) return;
+    const m = (data.visit_location as VisitMode) ?? "client_home";
+    setSaved(m); setMode(m);
+    setAddr([data.address, [data.city, data.state].filter(Boolean).join(", "), data.zip_code].filter(Boolean).join(", "));
+  }, [officeId]);
+  useEffect(() => { load(); }, [load]);
+  const save = async () => {
+    setBusy(true);
+    const { error } = await supabase.rpc("set_office_visit_location", { _office_id: officeId, _mode: mode });
+    setBusy(false);
+    if (error) { toast.error(rpcErrorText(error)); return; }
+    toast.success("Visit location saved"); await load(); qc.invalidateQueries({ queryKey: ["office-places"] });
+  };
+  if (!saved) return null;
+  return (
+    <div className="space-y-3 border-t pt-4" data-testid="visit-location">
+      <p className="font-medium">Visits take place at</p>
+      <RadioGroup value={mode} onValueChange={(v) => setMode(v as VisitMode)} disabled={!canManage} className="space-y-2">
+        <div className="flex items-start gap-2">
+          <RadioGroupItem value="client_home" id="visit-at-home" className="mt-1" data-testid="visit-at-client_home" />
+          <Label htmlFor="visit-at-home" className="font-normal"><span className="font-medium">The client's home</span> <span className="text-muted-foreground">— visit screens show the client's address (as today).</span></Label>
+        </div>
+        <div className="flex items-start gap-2">
+          <RadioGroupItem value="office" id="visit-at-office" className="mt-1" data-testid="visit-at-office" />
+          <Label htmlFor="visit-at-office" className="font-normal"><span className="font-medium">The office</span> <span className="text-muted-foreground">— visit screens show the office{addr ? `: ${addr}` : " (add its street address on the Contact tab first)"}.</span></Label>
+        </div>
+      </RadioGroup>
+      {canManage && <Button onClick={save} disabled={busy || mode === saved} data-testid="visit-location-save">Save</Button>}
+    </div>
   );
 }

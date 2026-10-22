@@ -1,3 +1,4 @@
+import { VisitPlaceLine } from "@/components/schedule/VisitPlaceLine";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Calendar, Clock, MapPin } from "lucide-react";
@@ -14,6 +15,7 @@ interface Shift {
     start_time: string;
     end_time: string;
     care_type_code: string;
+    virtual_office_id?: string | null;
     duration_hours: number;
     clients: {
       first_name: string;
@@ -102,10 +104,7 @@ export const ShiftList = ({
                     <Clock className="w-4 h-4" />
                     <span>{assignment.shifts?.start_time.slice(0, 5)} - {assignment.shifts?.end_time.slice(0, 5)}</span>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <MapPin className="w-4 h-4" />
-                    <span>{assignment.shifts?.clients?.city}</span>
-                  </div>
+                  <VisitPlaceLine officeId={assignment.shifts?.virtual_office_id} client={assignment.shifts?.clients} iconClassName="w-4 h-4" />
                 </div>
               </div>
             </div>

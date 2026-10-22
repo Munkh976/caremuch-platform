@@ -1,3 +1,4 @@
+import { VisitPlaceLine } from "@/components/schedule/VisitPlaceLine";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -28,6 +29,7 @@ interface Assignment {
     start_time: string;
     end_time: string;
     care_type_code: string;
+    virtual_office_id?: string | null;
     duration_hours: number;
     clients: {
       first_name: string;
@@ -478,10 +480,7 @@ const CaregiverDashboard = () => {
                                   {client?.first_name} {client?.last_name}
                                 </h3>
                                 
-                                <div className="flex items-center gap-2 text-muted-foreground mb-3">
-                                  <Clock className="w-4 h-4" />
-                                  <span>{client?.address}, {client?.city}</span>
-                                </div>
+                                <VisitPlaceLine officeId={shift?.virtual_office_id} client={client} variant="full" className="gap-2 text-muted-foreground mb-3" iconClassName="w-4 h-4" />
 
                                 <div className="flex flex-wrap gap-2">
                                   <Badge variant="secondary" className="bg-blue-500/10 text-blue-600">

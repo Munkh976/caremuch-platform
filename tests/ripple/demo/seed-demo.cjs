@@ -146,7 +146,7 @@ async function seed(C) {
   // ---- the demo agency (no RPC creates an agency; the test fixtures insert it the same way) + office + users ----
   const A = await one("agency", { agency_name: D.AGENCY_NAME, city: "Portage", state: "MI", is_active: true });
   // Ripple's billing week is Sunday–Saturday (Q11): the existing per-office setting, ISO day 7 = Sunday
-  const OFF = await one("virtual_office", { agency_id: A, name: D.OFFICE_NAME, code: D.OFFICE_CODE, timezone: TZ, city: "Portage", state: "MI", billing_week_start: 7, is_demo: true });
+  const OFF = await one("virtual_office", { agency_id: A, name: D.OFFICE_NAME, code: D.OFFICE_CODE, timezone: TZ, address: "200 Demo Center Drive", city: "Portage", state: "MI", zip_code: "49002", billing_week_start: 7, is_demo: true });   // fictitious address
   const U = {};
   for (const u of D.USERS) {
     const mail = D.email(D.slug(u));
@@ -169,6 +169,8 @@ async function seed(C) {
   await must(sam.c, "set_office_match_weights", { _office_id: OFF, _weights: { skills: 0, service_area: 0, availability: 30, reliability: 20, performance: 20, continuity: 30 } });
   // progress note Location (owner, Oct 22): new notes start with the center; the seeded history keeps its own values
   await must(sam.c, "set_office_note_location", { _office_id: OFF, _mode: "default", _default: "Ripple Effects Community Inclusion Center" });
+  // visits take place at the center (owner, Oct 22, A): visit screens show the office, not the client's home
+  await must(sam.c, "set_office_visit_location", { _office_id: OFF, _mode: "office" });
   // go-live date before the demo history (no RPC sets it; the server stamps "now" when the module is turned on)
   await admin.from("virtual_office").update({ care_plan_module_enabled_at: `${await day(-28)}T08:00:00-04:00` }).eq("id", OFF);
   const shell = async (kind, name, fields, extra = {}) => {

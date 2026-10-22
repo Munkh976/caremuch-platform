@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Clock, MapPin, User } from "lucide-react";
 import { format } from "date-fns";
+import { VisitPlaceLine } from "@/components/schedule/VisitPlaceLine";
 
 interface ShiftCardProps {
   shift: any;
@@ -73,12 +74,7 @@ export const ShiftCard = ({
               </span>
             </div>
 
-            {shift.clients?.city && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <MapPin className="h-4 w-4" />
-                <span>{shift.clients.city}, {shift.clients.state}</span>
-              </div>
-            )}
+            <VisitPlaceLine officeId={shift.virtual_office_id} client={shift.clients} className="gap-2 text-sm text-muted-foreground" iconClassName="h-4 w-4" />
           </div>
 
           <div className="flex flex-col gap-2">

@@ -1,3 +1,4 @@
+import { VisitPlaceLine } from "@/components/schedule/VisitPlaceLine";
 import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -12,7 +13,7 @@ import { fetchCaregiverOpenShiftIds, fetchCaregiverShiftsEligibility, fetchCareg
 import { fetchCaregiverVisibleClients } from "@/lib/caregiverVisibleClients";
 import { clientShort, isOpen, STATUS_LABEL, zonedToIso, type CaregiverClock } from "@/lib/caregiverNotes";
 
-interface WeekShift { assignment_id: string; shift_id: string; shift_date: string; start_time: string; end_time: string; duration_hours: number; care_type_code: string; client_id: string }
+interface WeekShift { assignment_id: string; shift_id: string; shift_date: string; start_time: string; end_time: string; duration_hours: number; care_type_code: string; client_id: string; virtual_office_id: string | null }
 
 const greeting = (iso: string, tz: string) => {
   const h = Number(new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "numeric", hourCycle: "h23" }).format(new Date(iso)));
@@ -27,12 +28,12 @@ function useWeekShifts(caregiverId: string | undefined, clock: CaregiverClock | 
     enabled: !!caregiverId && !!clock,
     queryFn: async (): Promise<WeekShift[]> => {
       const { data, error } = await supabase.from("shift_assignments")
-        .select("id, status, shifts!inner(id, shift_date, start_time, end_time, duration_hours, care_type_code, client_id)")
+        .select("id, status, shifts!inner(id, shift_date, start_time, end_time, duration_hours, care_type_code, client_id, virtual_office_id)")
         .eq("caregiver_id", caregiverId as string).neq("status", "cancelled")
         .gte("shifts.shift_date", clock!.week_start).lte("shifts.shift_date", clock!.week_end);
       if (error) throw error;
       return (data ?? []).map((a) => { const s = a.shifts as unknown as Omit<WeekShift, "assignment_id" | "shift_id"> & { id: string };
-        return { assignment_id: a.id, shift_id: s.id, shift_date: s.shift_date, start_time: s.start_time, end_time: s.end_time, duration_hours: Number(s.duration_hours) || 0, care_type_code: s.care_type_code, client_id: s.client_id }; });
+        return { assignment_id: a.id, shift_id: s.id, shift_date: s.shift_date, start_time: s.start_time, end_time: s.end_time, duration_hours: Number(s.duration_hours) || 0, care_type_code: s.care_type_code, client_id: s.client_id, virtual_office_id: s.virtual_office_id }; });
     },
   });
 }
@@ -132,7 +133,8 @@ export default function CaregiverToday() {
                         <span className="text-xs font-medium text-muted-foreground">{s.care_type_code}</span>
                       </div>
                       <p className="text-lg font-bold tabular-nums">{hm(s.start_time)} – {hm(s.end_time)}</p>
-                      <p className="font-medium">{cl ? clientShort(cl.first_name, cl.last_name?.slice(0, 1) ?? null) : "Client"}{cl?.city ? <span className="font-normal text-muted-foreground"> · {cl.city}</span> : null}</p>
+                      <p className="font-medium">{cl ? clientShort(cl.first_name, cl.last_name?.slice(0, 1) ?? null) : "Client"}</p>
+                      <VisitPlaceLine officeId={s.virtual_office_id} client={cl} className="text-sm text-muted-foreground" />
                       {n && (
                         <Button asChild className={isOpen(n.note_status) ? "min-h-11 w-full gap-2" : "min-h-11 w-full gap-2 hover:bg-muted hover:text-foreground"} variant={isOpen(n.note_status) ? "default" : "outline"}>
                           <Link to={`/caregiver/notes/${s.shift_id}`}><FileText className="h-4 w-4" />{isOpen(n.note_status) ? (n.note_status === "not_started" ? "Write progress note" : `Progress note · ${STATUS_LABEL[n.note_status]}`) : "View progress note"}</Link>
