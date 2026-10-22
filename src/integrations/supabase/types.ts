@@ -4721,6 +4721,11 @@ export type Database = {
       shifts: {
         Row: {
           agency_id: string
+          cancel_reason_code: string | null
+          cancel_reason_text: string | null
+          cancel_requested_by: string | null
+          cancelled_at: string | null
+          cancelled_by: string | null
           care_request_id: string | null
           care_type_code: string
           caregiver_id: string | null
@@ -4732,6 +4737,7 @@ export type Database = {
           id: string
           is_demo: boolean
           is_recurring: boolean | null
+          late_cancel: boolean | null
           order_id: string | null
           order_service_id: string | null
           order_title: string
@@ -4745,9 +4751,15 @@ export type Database = {
           status: Database["public"]["Enums"]["shift_status"] | null
           updated_at: string | null
           virtual_office_id: string | null
+          visit_outcome: string | null
         }
         Insert: {
           agency_id: string
+          cancel_reason_code?: string | null
+          cancel_reason_text?: string | null
+          cancel_requested_by?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
           care_request_id?: string | null
           care_type_code: string
           caregiver_id?: string | null
@@ -4759,6 +4771,7 @@ export type Database = {
           id?: string
           is_demo?: boolean
           is_recurring?: boolean | null
+          late_cancel?: boolean | null
           order_id?: string | null
           order_service_id?: string | null
           order_title?: string
@@ -4772,9 +4785,15 @@ export type Database = {
           status?: Database["public"]["Enums"]["shift_status"] | null
           updated_at?: string | null
           virtual_office_id?: string | null
+          visit_outcome?: string | null
         }
         Update: {
           agency_id?: string
+          cancel_reason_code?: string | null
+          cancel_reason_text?: string | null
+          cancel_requested_by?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
           care_request_id?: string | null
           care_type_code?: string
           caregiver_id?: string | null
@@ -4786,6 +4805,7 @@ export type Database = {
           id?: string
           is_demo?: boolean
           is_recurring?: boolean | null
+          late_cancel?: boolean | null
           order_id?: string | null
           order_service_id?: string | null
           order_title?: string
@@ -4799,6 +4819,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["shift_status"] | null
           updated_at?: string | null
           virtual_office_id?: string | null
+          visit_outcome?: string | null
         }
         Relationships: [
           {
@@ -5373,6 +5394,17 @@ export type Database = {
         Args: { _office_id: string; _week_start: string }
         Returns: Json
       }
+      cancel_visit: {
+        Args: {
+          _following?: boolean
+          _reason_code: string
+          _reason_text?: string
+          _requested_by: string
+          _shift_id: string
+          _whole_group?: boolean
+        }
+        Returns: Json
+      }
       caregiver_agency_id: { Args: { _caregiver_id: string }; Returns: string }
       caregiver_pick_up_shift: { Args: { _shift_id: string }; Returns: Json }
       caregiver_pickup_trade_shift: {
@@ -5591,6 +5623,10 @@ export type Database = {
         }
         Returns: unknown
       }
+      cp_pickup_gate: {
+        Args: { _result: Json; _shift_id: string }
+        Returns: string
+      }
       cp_plan_row_spec: { Args: { _entity: string }; Returns: Json }
       cp_plan_snapshot: { Args: { _care_plan_id: string }; Returns: Json }
       cp_progress_note_in_scope: {
@@ -5736,6 +5772,29 @@ export type Database = {
           _note_layout: Json
         }
         Returns: undefined
+      }
+      cp_visit_action_blocker: {
+        Args: { _action: string; _shift_id: string }
+        Returns: string
+      }
+      cp_visit_action_prepare: {
+        Args: {
+          _action: string
+          _following: boolean
+          _reason_code: string
+          _reason_text: string
+          _shift_id: string
+          _whole_group: boolean
+        }
+        Returns: string[]
+      }
+      cp_visit_outbox: {
+        Args: { _caregiver_id: string; _kind: string; _shift_id: string }
+        Returns: undefined
+      }
+      cp_visit_targets: {
+        Args: { _following: boolean; _shift_id: string; _whole_group: boolean }
+        Returns: string[]
       }
       create_care_plan: {
         Args: {
@@ -6035,6 +6094,10 @@ export type Database = {
         Args: { _office_id: string }
         Returns: Json
       }
+      list_client_no_shows: {
+        Args: { _from: string; _office_id: string; _to: string }
+        Returns: Json
+      }
       list_client_training_status: {
         Args: { _office_id: string }
         Returns: Json
@@ -6106,6 +6169,15 @@ export type Database = {
         }
         Returns: undefined
       }
+      preview_visit_action: {
+        Args: {
+          _action: string
+          _following?: boolean
+          _shift_id: string
+          _whole_group?: boolean
+        }
+        Returns: Json
+      }
       propose_auto_assignments: {
         Args: { _from: string; _office_id: string; _to: string }
         Returns: Json
@@ -6117,6 +6189,14 @@ export type Database = {
       }
       purge_demo_data: { Args: never; Returns: Json }
       purge_demo_data_dry_run: { Args: never; Returns: Json }
+      record_client_no_show: {
+        Args: {
+          _reason_text: string
+          _shift_id: string
+          _whole_group?: boolean
+        }
+        Returns: Json
+      }
       record_inservice_form: {
         Args: {
           _care_plan_id: string
@@ -6306,6 +6386,16 @@ export type Database = {
         Returns: Json
       }
       suggest_caregivers: { Args: { _shift_id: string }; Returns: Json }
+      unassign_visit: {
+        Args: {
+          _following?: boolean
+          _reason_code: string
+          _reason_text?: string
+          _shift_id: string
+          _whole_group?: boolean
+        }
+        Returns: Json
+      }
       undo_progress_note_review: { Args: { _note_id: string }; Returns: Json }
       update_care_plan_fields: {
         Args: { _care_plan_id: string; _field_values?: Json; _header?: Json }
