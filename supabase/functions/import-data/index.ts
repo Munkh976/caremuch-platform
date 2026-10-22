@@ -40,7 +40,8 @@ serve(async (req) => {
       _user_id: user.id,
     });
 
-    if (roleError || !["system_admin", "agency_admin"].includes(roleData)) {
+    // Security hotfix (Oct 21): platform-wide (every agency, every auth user) -> system_admin only, never agency_admin
+    if (roleError || roleData !== "system_admin") {
       throw new Error("Insufficient permissions");
     }
 

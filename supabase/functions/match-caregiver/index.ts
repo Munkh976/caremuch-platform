@@ -21,8 +21,23 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const json = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   try {
+    // Security hotfix (Oct 21): before, this function used the service role for everything and never checked the
+    // caller, so the public anon key and any shift id returned that office's caregivers with e-mail and phone.
+    // Now: a signed-in user, authorized IN THE DATABASE as that user (match_caregiver_scope: manager / scheduler /
+    // agency_admin in scope of the shift's office), before any service-role read; eligibility also runs as the user.
+    const authHeader = req.headers.get('Authorization') ?? '';
+    if (!authHeader.startsWith('Bearer ')) return json({ error: 'Unauthorized' }, 401);
+    const userClient = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      { global: { headers: { Authorization: authHeader } }, auth: { autoRefreshToken: false, persistSession: false } });
+    const { data: { user: caller }, error: authError } = await userClient.auth.getUser(authHeader.slice(7));
+    if (authError || !caller) return json({ error: 'Unauthorized' }, 401);
+
     const { shiftId } = await req.json();
+    const { error: scopeError } = await userClient.rpc('match_caregiver_scope', { _shift_id: shiftId });
+    if (scopeError) return json({ error: 'Not found or not allowed' }, 403);
 
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -69,7 +84,7 @@ serve(async (req) => {
     let caregiverQuery = supabaseClient
       .from('caregivers')
       .select(`
-        id, first_name, last_name, email, phone, city, hourly_rate, service_zipcodes, reliability_score,
+        id, first_name, last_name, service_zipcodes, reliability_score,
         caregiver_skills ( care_type_code ),
         caregiver_availability ( day_of_week, start_time, end_time, is_available )
       `)
@@ -86,7 +101,7 @@ serve(async (req) => {
     // single source of truth; this never re-implements its rules, only excludes
     // anyone check_assignment_eligibility marks hard-blocked. Soft/advisory issues
     // stay visible as warnings below, unchanged.
-    const { data: eligibilityRows, error: eligibilityError } = await supabaseClient
+    const { data: eligibilityRows, error: eligibilityError } = await userClient
       .rpc('check_assignment_eligibility_bulk', {
         _shift_id: shiftId,
         _caregiver_ids: (caregivers || []).map((c: any) => c.id),
@@ -185,18 +200,14 @@ serve(async (req) => {
         match_score,
         key_factors: keyFactors,
         warnings,
+        // Only what Smart Assign / Auto-fill show (name, rating); e-mail, phone, city, hourly rate and the
+        // completion / on-time rates (already in key_factors) are no longer returned.
         caregiver: {
           id: c.id,
           first_name: c.first_name,
           last_name: c.last_name,
-          email: c.email,
-          phone: c.phone,
-          city: c.city,
           avg_rating: perf?.avg_rating ?? null,
           rating_count: perf?.rating_count ?? 0,
-          completion_rate: perf?.completion_rate ?? null,
-          on_time_rate: perf?.on_time_rate ?? null,
-          hourly_rate: c.hourly_rate,
         },
       };
     }).sort((a, b) => b.match_score - a.match_score);
@@ -208,9 +219,9 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Error in match-caregiver:', error);
-    return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    // a Supabase / PostgREST error is a plain object with `message`, not an Error: return its message
+    // (was "Unknown error", which hid the cause of the intermittent 500s)
+    const message = (error as { message?: string } | null)?.message ?? 'Request failed';
+    return json({ error: message }, 500);
   }
 });

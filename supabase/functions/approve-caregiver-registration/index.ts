@@ -56,7 +56,7 @@ serve(async (req) => {
     }
 
     const { data: callerProfile } = await admin
-      .from('profiles').select('agency_id').eq('id', caller.id).single();
+      .from('profiles').select('agency_id, virtual_office_id, office_restricted').eq('id', caller.id).single();
     if (!callerProfile?.agency_id) return json({ error: 'Your profile is missing an agency' }, 400);
 
     const agencyId = callerProfile.agency_id as string;
@@ -90,6 +90,10 @@ serve(async (req) => {
     }
     if (reg.agency_id !== agencyId) {
       return json({ error: 'This registration belongs to another agency' }, 403);
+    }
+    // Security hotfix (Oct 21): an office-restricted reviewer only reviews registrations of its own office
+    if (callerProfile.office_restricted && reg.virtual_office_id !== callerProfile.virtual_office_id) {
+      return json({ error: 'This registration belongs to another office' }, 403);
     }
 
     const reviewStamp = { reviewed_by: caller.id, reviewed_at: new Date().toISOString() };

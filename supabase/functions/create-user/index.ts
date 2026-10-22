@@ -197,6 +197,17 @@ serve(async (req) => {
     // Wait a moment for the profile trigger to complete
     await new Promise(resolve => setTimeout(resolve, 500));
 
+    // Security hotfix (Oct 21): a staff user created by an office-restricted caller is restricted to the caller's
+    // office too; before, the new scheduler / hr_staff profile was agency-wide (privilege escalation).
+    if (userType === 'staff' && callerProfile?.office_restricted && !isSystemAdmin) {
+      const { error: offErr } = await supabaseClient.from('profiles')
+        .update({ office_restricted: true, virtual_office_id: callerProfile.virtual_office_id }).eq('id', authData.user.id);
+      if (offErr) {
+        await supabaseClient.auth.admin.deleteUser(authData.user.id);
+        return new Response(JSON.stringify({ error: 'Failed to set the new user\'s office' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+    }
+
     // Update profile with phone
     if (phone) {
       await supabaseClient
