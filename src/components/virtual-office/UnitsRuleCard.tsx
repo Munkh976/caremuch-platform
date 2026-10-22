@@ -68,8 +68,8 @@ export function UnitsRuleCard({ officeId, canManage }: { officeId: string; canMa
         </RadioGroup>
         {rule === "grace" && (
           <div className="max-w-[220px] space-y-1">
-            <Label htmlFor="units-grace">Grace period (minutes)</Label>
-            <Input id="units-grace" type="number" min={1} max={14} step={1} value={grace} disabled={!canManage}
+            <Label htmlFor="units-grace-minutes">Grace period (minutes)</Label>
+            <Input id="units-grace-minutes" type="number" min={1} max={14} step={1} value={grace} disabled={!canManage}
               onChange={(e) => setGrace(e.target.value === "" ? 0 : Math.round(Number(e.target.value)))} data-testid="units-grace" />
             {!graceOk && <p className="text-xs text-destructive">1 to 14 minutes</p>}
           </div>

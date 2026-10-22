@@ -26,7 +26,7 @@ export function NoteUnits({ d, onDone }: { d: StaffNote; onDone: () => void }) {
   const adjusted = n.units_adjusted != null;
   const rule = UNITS_RULES.find((r) => r.value === n.units_rule)?.label;
   return (
-    <div className="space-y-1 rounded-md border p-3" data-testid="note-units" data-adjusted={adjusted}>
+    <div className="space-y-1 rounded-md border p-3" data-testid="review-units" data-adjusted={adjusted}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm">
           <span className="font-medium">Units to bill: {n.units_to_bill} of {n.units_scheduled}</span>

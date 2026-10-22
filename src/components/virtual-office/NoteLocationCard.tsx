@@ -64,9 +64,9 @@ export function NoteLocationCard({ officeId, canManage }: { officeId: string; ca
         </RadioGroup>
         {mode === "default" && (
           <div className="space-y-1">
-            <Label htmlFor="loc-default">Location to prefill</Label>
-            <Input id="loc-default" value={value} maxLength={200} disabled={!canManage} onChange={(e) => setValue(e.target.value)}
-              placeholder="e.g. the program's community center" data-testid="note-location-default" />
+            <Label htmlFor="loc-default-value">Location to prefill</Label>
+            <Input id="loc-default-value" value={value} maxLength={200} disabled={!canManage} onChange={(e) => setValue(e.target.value)}
+              placeholder="e.g. the program's community center" data-testid="note-location-value" />
           </div>
         )}
         {canManage && (
