@@ -119,6 +119,17 @@ this module.
   score and reasons; "Can't be filled" with reasons) → untick any → **Assign N selected**. Only caregivers who pass every check
   (as with enforcement on) are proposed; **Smart assign** on a visit uses the same ranking. The demo office ranks by
   availability, reliability, performance and continuity (Virtual Offices → **Scheduling** → *Smart match weights*, Sam only).
+- **Open visits for Bren (Oct 22):** 28 unassigned visits from Oct 25 to Nov 14 (Zoe 8 incl. Thu Oct 29, Max 6, Noah 7, Ella 7;
+  none for Lily, not onboarded), all inside the IPOS and authorizations: try **Auto-assign…** over a week or a month, or **Assign**
+  one by one. Caregivers see only the open visits they meet every requirement for (Ana won't see Ella's: only Ivy is trained).
+- **Visit actions (Oct 22):** any visit with a caregiver → **⋯** (Today, Shifts, By Caregiver, By Client, the client's
+  Scheduling tab) or the visit's detail → **More**: **Unassign caregiver** (back to Unassigned), **Cancel visit** (who asked +
+  reason; never billed; late if < 24 h before), **Client no-show** (from the start time until the end of the next day; listed on
+  Weekly Billing → *Client no-shows*). This visit, this and the following visits of the series, or the whole group. Refused
+  once a note is submitted; a draft note must be voided first. The caregiver gets a Notification Outbox message.
+- **Visits at the center (Oct 22):** the demo office's visits take place at the office, so visit screens show
+  *Ripple Effects Community Inclusion Center · Portage, MI* instead of the client's home (Virtual Offices → **Compliance** →
+  Location card → *Visits take place at*).
 - **IPOS expiry (S17):** the client page and the dashboard warn amber at 30 days and red at 14 days and after expiry; visits
   can't be scheduled after the active IPOS's expiration date or the last authorization's end date.
 - **Files (S4b):** the **Files** button on an intake document, an in-service or a training session (Training tab), or a credential

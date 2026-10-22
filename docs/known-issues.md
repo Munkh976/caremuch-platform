@@ -1516,3 +1516,17 @@ office's rows were agency-visible in the shared agency, so 5 comparisons differe
   no backfill). Their first adjustment stores their units at that moment as `units_calculated`.
 - An adjustment made while a note is submitted stays if the note is later returned to the caregiver (their edits then
   don't change the units until a reviewer clears it in the Review panel).
+
+## OPEN (Oct 22): visit actions, pickup gate, visit location — notes
+
+- **Pickup gate (care-plan offices):** Available Shifts hides open visits the caregiver fails the 4a gate for, from the
+  caregiver-safe eligibility; it can't see the client's onboarding, so a visit of a client not yet onboarded is still listed
+  and refused at pickup with the gate message. The database visibility policy is unchanged (owner, Oct 22). The Trade Board
+  list isn't filtered (the trade pickup refuses the same way).
+- **Direct table writes:** staff can still set `shifts.status = 'cancelled'` directly under the existing "Agency staff manage
+  shifts" policy; that path logs the trigger's `shift_cancelled` without a reason or outcome. The UI uses `cancel_visit` only.
+  Close together with the other direct-update items before production.
+- `release_shift_assignments` (time-off approval) is unchanged: agency-wide, no event, no Outbox row.
+- Outbox rows (`visit_unassigned`, `visit_cancelled`) are written only; delivery is S19. No row for a no-show.
+- "This and following" without an order line matches the same client, service, weekday and times (seeded / single visits).
+- Visit location is display only: the match service-area factor and eligibility still use the client's zip.
