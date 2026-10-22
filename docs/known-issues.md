@@ -1519,10 +1519,9 @@ office's rows were agency-visible in the shared agency, so 5 comparisons differe
 
 ## OPEN (Oct 22): visit actions, pickup gate, visit location — notes
 
-- **Pickup gate (care-plan offices):** Available Shifts hides open visits the caregiver fails the 4a gate for, from the
-  caregiver-safe eligibility; it can't see the client's onboarding, so a visit of a client not yet onboarded is still listed
-  and refused at pickup with the gate message. The database visibility policy is unchanged (owner, Oct 22). The Trade Board
-  list isn't filtered (the trade pickup refuses the same way).
+- **Pickup gate (care-plan offices) — RESOLVED (20261031180000, Oct 22 evening):** Available Shifts filters open visits and
+  the Trade Board with `caregiver_pickable_shifts` (caregiver-safe: shift id + pickable only), which includes the client
+  being onboarded. The database visibility policy is unchanged (owner, Oct 22).
 - **Direct table writes:** staff can still set `shifts.status = 'cancelled'` directly under the existing "Agency staff manage
   shifts" policy; that path logs the trigger's `shift_cancelled` without a reason or outcome. The UI uses `cancel_visit` only.
   Close together with the other direct-update items before production.

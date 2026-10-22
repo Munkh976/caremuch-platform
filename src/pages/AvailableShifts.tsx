@@ -59,6 +59,9 @@ const AvailableShifts = () => {
   const [tradeShifts, setTradeShifts] = useState<(CaregiverTradeShift & { clients: CaregiverVisibleClient | null })[]>([]);
   const [myTradeRequests, setMyTradeRequests] = useState<MyTradeRequest[]>([]);
   const [eligibility, setEligibility] = useState<Map<string, EligibilityResult>>(new Map());
+  // follow-ups a / c (owner, Oct 22 evening): the server's caregiver-safe "can I pick this up" flag (pickup gate incl. the
+  // client being onboarded) for care-plan offices; null = not loaded (fall back to the eligibility codes)
+  const [pickable, setPickable] = useState<Map<string, boolean> | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterDate, setFilterDate] = useState("");
@@ -120,7 +123,10 @@ const AvailableShifts = () => {
       setMyTradeRequests(myRequests);
 
       const allShiftIds = [...mergedOpen.map((s) => s.id), ...mergedTrade.map((t) => t.shift_id)];
-      setEligibility(await fetchCaregiverShiftsEligibility(allShiftIds));
+      const [elig, pk] = await Promise.all([fetchCaregiverShiftsEligibility(allShiftIds),
+        supabase.rpc("caregiver_pickable_shifts", { _shift_ids: allShiftIds })]);
+      setEligibility(elig);
+      setPickable(pk.error ? null : new Map((pk.data ?? []).map((x: { shift_id: string; pickable: boolean }) => [x.shift_id, x.pickable])));
     } catch (error) {
       console.error("Error:", error);
       toast.error("Failed to load shifts");
@@ -177,17 +183,22 @@ const AvailableShifts = () => {
   // owner, Oct 22 (decision 3): in care-plan offices only visits the caregiver passes the Auto-assign gate for are shown
   // (the server refuses the others at pickup, including a client not onboarded yet); other offices: as before
   const offices = useOfficePlaces();
+  const canPick = (shiftId: string, officeId: string | null | undefined) => {
+    if (!(officeId && offices.get(officeId)?.care_plan_module_enabled)) return true;   // other offices: as before
+    const p = pickable?.get(shiftId);
+    return p !== undefined ? p : passesAutoAssignGate(eligibility.get(shiftId));
+  };
   const filteredOpen = useMemo(() => {
     return openShifts
       .filter((s) => matchesFilters(s.clients, s.care_type_code, s.shift_date))
-      .filter((s) => !(s.virtual_office_id && offices.get(s.virtual_office_id)?.care_plan_module_enabled) || passesAutoAssignGate(eligibility.get(s.id)))
+      .filter((s) => canPick(s.id, s.virtual_office_id))
       .sort((a, b) => {
         const ea = eligibility.get(a.id)?.eligible !== false;
         const eb = eligibility.get(b.id)?.eligible !== false;
         return ea === eb ? 0 : ea ? -1 : 1;
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openShifts, eligibility, searchTerm, filterDate, offices]);
+  }, [openShifts, eligibility, searchTerm, filterDate, offices, pickable]);
 
   const filteredTrade = useMemo(() => {
     const rank = (shiftId: string) => {
@@ -197,9 +208,10 @@ const AvailableShifts = () => {
     };
     return tradeShifts
       .filter((t) => matchesFilters(t.clients, t.care_type_code, t.shift_date))
+      .filter((t) => pickable?.get(t.shift_id) !== false)   // c: the Trade Board uses the pickup gate (the server flag is true outside care-plan offices)
       .sort((a, b) => rank(a.shift_id) - rank(b.shift_id));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tradeShifts, eligibility, searchTerm, filterDate]);
+  }, [tradeShifts, eligibility, searchTerm, filterDate, offices, pickable]);
 
   if (loading) {
     return (

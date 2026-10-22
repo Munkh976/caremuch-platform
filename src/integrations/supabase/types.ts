@@ -5407,6 +5407,13 @@ export type Database = {
       }
       caregiver_agency_id: { Args: { _caregiver_id: string }; Returns: string }
       caregiver_pick_up_shift: { Args: { _shift_id: string }; Returns: Json }
+      caregiver_pickable_shifts: {
+        Args: { _shift_ids: string[] }
+        Returns: {
+          pickable: boolean
+          shift_id: string
+        }[]
+      }
       caregiver_pickup_trade_shift: {
         Args: { _trade_id: string }
         Returns: Json
