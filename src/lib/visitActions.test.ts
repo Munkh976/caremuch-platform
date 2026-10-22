@@ -35,6 +35,7 @@ describe("visit actions (owner, Oct 22, B)", () => {
     expect(passesAutoAssignGate(r({ overridable: [{ code: "availability", label: "x" }] }))).toBe(false);
     expect(passesAutoAssignGate(r({ flags: [{ code: "training_missing", label: "x" }] }))).toBe(false);
     expect(passesAutoAssignGate(r({ flags: [{ code: "no_shows", label: "x" }] }))).toBe(true);
+    expect(passesAutoAssignGate(r({ flags: [{ code: "not_bookable", label: "x" }] }))).toBe(false);   // caregiver-safe form
     expect(passesAutoAssignGate(undefined)).toBe(false);
   });
 });

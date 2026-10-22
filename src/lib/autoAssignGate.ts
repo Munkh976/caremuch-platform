@@ -8,4 +8,6 @@ export const GATE_ADVISORY = ["credential_missing", "training_missing", "authori
  * the care-plan advisories above. The client-onboarded part is checked by the server (callers may not see it).
  */
 export const passesAutoAssignGate = (r: EligibilityResult | null | undefined) =>
-  !!r && r.eligible && r.overridable.length === 0 && !r.flags.some((f) => GATE_ADVISORY.includes(f.code));
+  !!r && r.eligible && r.overridable.length === 0 && !r.flags.some((f) => GATE_ADVISORY.includes(f.code) || f.code === CAREGIVER_SAFE_GATE_CODE);
+/** The caregiver-safe eligibility (cp_caregiver_safe_eligibility, Phase C R6) folds the care-plan codes into this one. */
+export const CAREGIVER_SAFE_GATE_CODE = "not_bookable";
