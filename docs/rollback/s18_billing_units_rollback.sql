@@ -116,7 +116,9 @@ BEGIN
                               'progress_note_review_undone')), '[]'::jsonb));
 END $function$;
 
-CREATE OR REPLACE FUNCTION public.list_notes_for_review(_office_id uuid)
+-- list_notes_for_review on DEV has CRLF line ends inside its body (an older push from a CRLF working copy); the repo
+-- stores this file with LF (.gitattributes), so the carriage returns are rebuilt here to restore it byte-identically.
+DO $rb$ BEGIN EXECUTE replace($q$CREATE OR REPLACE FUNCTION public.list_notes_for_review(_office_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
  STABLE SECURITY DEFINER
@@ -139,7 +141,7 @@ BEGIN
       FROM cp_office_note_queue(o.id) q
       LEFT JOIN public.clients cl ON cl.id = q.client_id
       LEFT JOIN public.caregivers g ON g.id = q.caregiver_id), '[]'::jsonb));
-END $function$;
+END $function$$q$, chr(10), chr(13) || chr(10)); END $rb$;
 
 ALTER TABLE public.events
   DROP CONSTRAINT events_event_type_check,

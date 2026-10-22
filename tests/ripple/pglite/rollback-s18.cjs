@@ -1,6 +1,7 @@
 // Rollback proof for 20261031140000 (S18 billing units): s18_billing_units_rollback.sql stops while S18 events exist,
 // then restores the catalog before the migration; the three existing functions come back byte-identical to DEV before
-// the push (md5 of pg_get_functiondef; list_notes_for_review keeps its CRLF line ends); re-apply = first apply.
+// the push (md5 of pg_get_functiondef). list_notes_for_review has CRLF line ends on DEV: the rollback rebuilds them;
+// RB1 / RB2 assume this machine's CRLF working copy of 20261019120000 (as DEV got it). Re-apply = first apply.
 // Usage: node tests/ripple/pglite/rollback-s18.cjs   (local, no network)
 const H = require("./harness.cjs");
 const MIG = "20261031140000_s18_billing_units.sql", RB = "s18_billing_units_rollback.sql";
