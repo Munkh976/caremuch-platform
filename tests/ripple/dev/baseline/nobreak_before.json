@@ -1,5 +1,5 @@
 {
- "eligibility_fn": "assign_caregiver_to_shift:ae47d3ec6d0e6b103888700a7c0a3244 check_assignment_eligibility:6de817a8e37b5957f0c16beb0e6d913d check_assignment_eligibility_bulk:1e3e7a769fa42fec9bd0a4f55f951f35 check_caregiver_shifts_eligibility:cbef8a8240a8487f959204aa3e2a70ca",
+ "eligibility_fn": "assign_caregiver_to_shift:ae47d3ec6d0e6b103888700a7c0a3244 check_assignment_eligibility:eb15c9ea0f8158a45d980360e3d52894 check_assignment_eligibility_bulk:ba788725f935b4b3b98e379aab7f2c61 check_caregiver_shifts_eligibility:cbef8a8240a8487f959204aa3e2a70ca",
  "single": "eligible=true hard=[] soft=[] advisory=[]",
  "bulk": "143 chars",
  "caregiver_side": "1 rows",
