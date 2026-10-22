@@ -37,6 +37,9 @@ import { fetchGroupShifts, groupClients, groupRatioIssue } from "@/lib/groupRati
 import { useQuery } from "@tanstack/react-query";
 import { useComplianceOffices } from "@/hooks/useComplianceOffices";
 
+/** Care-plan advisory codes the enforcement switch would turn into blocks (same list as the database gate). */
+const GATE_ADVISORY = ["credential_missing", "training_missing", "authorization_missing", "authorization_expired", "units_short", "units_short_period"];
+
 interface AssignShiftDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -67,6 +70,11 @@ export const AssignShiftDialog = ({
   const [endTime, setEndTime] = useState("");
   const [notes, setNotes] = useState("");
   const [search, setSearch] = useState("");
+  // 4g (owner, Oct 22): the default list = the Auto-assign gate (passes every check as with enforcement on);
+  // "Show all" lists the others with today's advisory / blocked lines. null = gate unknown (fall back to the codes).
+  const [gateIds, setGateIds] = useState<Set<string> | null>(null);
+  const [clientBlocked, setClientBlocked] = useState<string | null>(null);
+  const [showAll, setShowAll] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [conflicts, setConflicts] = useState<string[]>([]);
@@ -89,6 +97,9 @@ export const AssignShiftDialog = ({
     setNotes("");
     setConflicts([]);
     setSearch("");
+    setShowAll(false);
+    setGateIds(null);
+    setClientBlocked(null);
 
     const load = async () => {
       setLoading(true);
@@ -129,6 +140,14 @@ export const AssignShiftDialog = ({
       // same as before this change; the server-side RPC still enforces at submit time.
       const eligMap = await evaluateEligibilityBulk(shift.id, (cgs || []).map((c: any) => c.id));
       setEligibility(eligMap);
+      // the same gate as Smart Assign / Auto-assign (suggest_caregivers: scheduler, manager, agency admin);
+      // other staff (HR, system admin): the same issue codes from the bulk check, without the client-onboarded part
+      const { data: sug, error: sugErr } = await supabase.rpc("suggest_caregivers", { _shift_id: shift.id });
+      if (!sugErr && sug) {
+        const r = sug as unknown as { matches: { caregiver_id: string }[]; client_blocked: string | null };
+        setGateIds(new Set((r.matches || []).map((m) => m.caregiver_id)));
+        setClientBlocked(r.client_blocked ?? null);
+      }
     };
     load();
   }, [open, shift, defaultCaregiverId]);
@@ -160,6 +179,13 @@ export const AssignShiftDialog = ({
   }, [open, shift, caregiverId, startTime, endTime, hours]);
 
   const isEligible = (c: any) => eligibility.get(c.id)?.eligible !== false;
+  const passesGate = (c: { id: string }) => {
+    if (gateIds) return gateIds.has(c.id);
+    const r = eligibility.get(c.id);
+    if (!r) return true;   // eligibility unknown: don't filter (the server still decides at assign)
+    return r.eligible && r.overridable.length === 0 && !r.flags.some((f) => GATE_ADVISORY.includes(f.code));
+  };
+  const notEligibleCount = caregivers.filter((c) => !passesGate(c)).length;
 
   /**
    * Default (no search text): only hard-eligible caregivers -- matches
@@ -173,7 +199,7 @@ export const AssignShiftDialog = ({
     const q = search.trim().toLowerCase();
     const base = q
       ? caregivers.filter((c) => `${c.first_name} ${c.last_name}`.toLowerCase().includes(q))
-      : caregivers.filter(isEligible);
+      : showAll ? caregivers : caregivers.filter(passesGate);
     // Always keep the currently-selected caregiver visible even if it would
     // otherwise be filtered out (e.g. a pre-filled AI suggestion or a blocked
     // pick found via search, then the search box is cleared).
@@ -182,7 +208,7 @@ export const AssignShiftDialog = ({
       if (selected) return [selected, ...base];
     }
     return base;
-  }, [caregivers, search, eligibility, caregiverId]);
+  }, [caregivers, search, eligibility, caregiverId, showAll, gateIds]);
 
   const selectedResult = caregiverId ? eligibility.get(caregiverId) ?? null : null;
   const hardBlocked = !!selectedResult && !selectedResult.eligible;
@@ -323,10 +349,11 @@ export const AssignShiftDialog = ({
                 ) : (
                   filteredCaregivers.map((c) => {
                     const blocked = !isEligible(c);
+                    const advisoryOnly = !blocked && !passesGate(c);
                     return (
                       <SelectItem key={c.id} value={c.id}>
                         {c.first_name} {c.last_name}
-                        {blocked ? " • Not eligible" : ` • ${shortRatingLabel(c.performance)}`}
+                        {blocked ? " • Not eligible" : advisoryOnly ? " • Check advisory lines" : ` • ${shortRatingLabel(c.performance)}`}
                       </SelectItem>
                     );
                   })
@@ -334,9 +361,15 @@ export const AssignShiftDialog = ({
               </SelectContent>
             </Select>
             {!search.trim() && (
-              <p className="text-xs text-muted-foreground">
-                Showing only caregivers eligible for this shift. Search to find anyone else.
-              </p>
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground" data-testid="assign-list-mode">
+                <span>{showAll ? "Showing everyone; pick a caregiver to see the advisory or blocking lines."
+                  : clientBlocked ? `${clientBlocked}: nobody passes every check yet.` : "Showing caregivers who pass every check (as with enforcement on)."}</span>
+                {notEligibleCount > 0 && (
+                  <Button type="button" size="sm" variant="ghost" className="h-7 px-2" onClick={() => setShowAll(!showAll)} data-testid="assign-show-all">
+                    {showAll ? "Only eligible" : `Show all (${notEligibleCount} not eligible)`}
+                  </Button>
+                )}
+              </div>
             )}
           </div>
 

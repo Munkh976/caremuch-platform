@@ -94,18 +94,29 @@ async function step(name, page, fn, { full = true } = {}) {
 }
 const has = async (loc, re) => re.test(await loc.innerText().catch(() => ""));
 
-async function openAssignMia(page, base) {
+async function openAssignMia(page, base, withList = false) {
   await nav(page, base, "Schedule", "/schedule");
   await page.getByRole("tab", { name: "Unassigned" }).click(); await settle(page);
   await page.getByRole("button", { name: "Next" }).click(); await settle(page, 2500);
   const row = page.locator("tr", { hasText: /Zoe Nguyen/ }).first(); await row.waitFor({ timeout: 20000 });
   await row.getByRole("button", { name: /^Assign$/ }).click();
   const dlg = page.locator('[role="dialog"]').last(); await dlg.waitFor(); await page.waitForTimeout(2500);
+  let list = null;   // 4g: the default list = the Auto-assign gate; "Show all (N not eligible)" adds the others
+  if (withList) {
+    const names = async () => { await dlg.locator('button[role="combobox"]').first().click(); await page.waitForTimeout(500);
+      const o = await page.getByRole("option").allInnerTexts(); await page.keyboard.press("Escape"); await page.waitForTimeout(300); return o; };
+    const def = await names();
+    const btn = dlg.locator('[data-testid="assign-show-all"]'), label = await btn.innerText().catch(() => "");
+    await btn.click(); await page.waitForTimeout(300);
+    const all = await names();
+    await btn.click(); await page.waitForTimeout(300);   // back to "only eligible"; the search below shows Mia either way
+    list = { def, label, all };
+  }
   await dlg.getByPlaceholder("Search caregivers...").fill("Mia"); await page.waitForTimeout(300);
   await dlg.locator('button[role="combobox"]').first().click();
   await page.getByRole("option", { name: /Mia Lopez/ }).first().click(); await page.waitForTimeout(2000);
   const panel = dlg.locator('[data-testid="elig-compliance"]'); await panel.waitFor({ timeout: 20000 }); await panel.scrollIntoViewIfNeeded();
-  return { dlg, panel };
+  return { dlg, panel, list };
 }
 async function switchEnforcement(sam, base, I, on) {
   await nav(sam, base, "Virtual Offices", "/virtual-offices");
@@ -199,10 +210,13 @@ let AS_OF;
         await closeAll(pat);
       }
       // ---------------- Part 3: who can be scheduled ----------------
-      await step("pat-assign-mia-advisory", pat, async () => { const { dlg, panel } = await openAssignMia(pat, base);
+      await step("pat-assign-mia-advisory", pat, async () => { const { dlg, panel, list } = await openAssignMia(pat, base, true);
         const lines = await panel.locator('[data-testid^="elig-line-"]').evaluateAll((els) => els.map((e) => `${e.getAttribute("data-testid").replace("elig-line-", "")}=${e.getAttribute("data-blocked") === "true" ? "Blocked" : "Advisory"}`));
         // the care-plan line is Advisory; Mia's ★ expired credential is Blocked whatever the switch (existing scheduling rule)
-        return [lines.includes("training_missing=Advisory") && lines.some((l) => /cert.*=Blocked/.test(l)), lines.join(", ")]; }, { full: false });
+        const n = Number((list.label.match(/Show all \((\d+) not eligible\)/) || [])[1] || 0);
+        const listOk = !list.def.some((o) => /Mia Lopez/.test(o)) && n > 0 && list.all.length === list.def.length + n && list.all.some((o) => /Mia Lopez.*Not eligible/.test(o));
+        return [listOk && lines.includes("training_missing=Advisory") && lines.some((l) => /cert.*=Blocked/.test(l)),
+          `default ${list.def.length} (Mia not listed); "${list.label}"; all ${list.all.length}; ${lines.join(", ")}`]; }, { full: false });
       await closeAll(pat);
       await step("sam-enforcement-on-confirm", sam, async () => { const dlg = await switchEnforcement(sam, base, I, true);
         return [await has(dlg, /Turn on compliance enforcement/), (await dlg.innerText()).replace(/\s+/g, " ").slice(0, 200)]; }, { full: false });

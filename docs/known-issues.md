@@ -1458,7 +1458,7 @@ office's rows were agency-visible in the shared agency, so 5 comparisons differe
 ## S4b attachments: follow-ups (Oct 21)
 
 - **Owner action:** schedule the abandoned-upload cleanup (`cp-attachments` function, action `cleanup`, service-role token)
-  daily; until then it runs on demand.
+  daily; until then it runs on demand. See "Daily jobs not scheduled" below.
 - **Before production:** Supabase BAA (HIPAA add-on) before any real client file is stored; Storage in backups / PITR; a
   retention policy confirmed by compliance; malware scanning (design §9). DEV holds fictitious files only.
 - **HEIC conversion** is tested for the failure path (clear error) only; a real iPhone HEIC photo hasn't been converted in a
@@ -1476,6 +1476,22 @@ office's rows were agency-visible in the shared agency, so 5 comparisons differe
   the whole request with the message (clients can't create visits under RLS today anyway).
 - `get_shift_creation_limits` / the wizard: a client with no authorization of a service type keeps today's behaviour
   (owner to confirm).
-- **SECURITY (found in the auto-assign investigation, not yet fixed):** `match-caregiver` has no caller check; an
-  unauthenticated call with a shift id returns that office's caregivers with e-mail, phone and hourly rate. See
-  `docs/design/auto-assign-and-smart-scheduling.md` §C; fix pending the owner's decision.
+- **SECURITY — RESOLVED (hotfix `20261030110000`, Oct 21):** `match-caregiver` had no caller check (an unauthenticated
+  call returned an office's caregivers with contact details and rate). It now checks the caller's role and office; see
+  `docs/security-sweep-2026-10-21.md`.
+
+## OPEN (Oct 22): daily jobs not scheduled; two Edge Functions undeployed from DEV
+
+- **Daily jobs not scheduled (owner, Oct 22: cancelled for now).** The scheduling migration
+  `docs/design/pending-migrations/20261031120000_schedule_daily_jobs.sql` (pg_cron + pg_net, Vault secrets
+  `cp_jobs_project_url` / `cp_jobs_service_key`) is NOT pushed and stays out of `supabase/migrations/`. DEV has no
+  pg_cron / pg_net and no Vault secrets. Until production setup, both jobs run on demand:
+  - abandoned-upload cleanup: `cp-attachments` function, action `cleanup`, service-role token;
+  - delayed IPOS activation: `SELECT public.cp_activate_due_plans();`. A pending IPOS version whose start date has passed
+    stays pending until someone runs it.
+- **`reset-database` undeployed from DEV (Oct 22).** Nothing in seed-demo / verify-demo / rehearse / teardown-demo calls
+  it. The Admin Utilities page (system admin) still has the button, which now fails (function not found).
+- **`import-data` undeployed from DEV (Oct 22); its code stays in `supabase/functions/import-data/`.** Redeploy it for
+  the Ripple go-live data load (`supabase functions deploy import-data`). The Admin Utilities import button fails until
+  then. `tests/ripple/dev/hotfix.cjs` X1 calls both functions and expects a 401 / 403, so it now gets a 404 until they
+  are redeployed.
