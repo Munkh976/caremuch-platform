@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.17"
   }
   graphql_public: {
     Tables: {
@@ -542,7 +542,36 @@ export type Database = {
           summary?: string | null
           virtual_office_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "care_plan_revisions_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agency"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "care_plan_revisions_care_plan_id_fkey"
+            columns: ["care_plan_id"]
+            isOneToOne: false
+            referencedRelation: "care_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "care_plan_revisions_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "care_plan_revisions_virtual_office_id_fkey"
+            columns: ["virtual_office_id"]
+            isOneToOne: false
+            referencedRelation: "virtual_office"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       care_plan_treatment_needs: {
         Row: {
@@ -600,8 +629,8 @@ export type Database = {
           next_review_date: string | null
           plan_type: Database["public"]["Enums"]["care_plan_type"]
           recorder_name: string | null
-          revision: number
           review_frequency: string | null
+          revision: number
           signed_by: string | null
           signed_date: string | null
           status: Database["public"]["Enums"]["care_plan_status"]
@@ -628,8 +657,8 @@ export type Database = {
           next_review_date?: string | null
           plan_type?: Database["public"]["Enums"]["care_plan_type"]
           recorder_name?: string | null
-          revision?: number
           review_frequency?: string | null
+          revision?: number
           signed_by?: string | null
           signed_date?: string | null
           status?: Database["public"]["Enums"]["care_plan_status"]
@@ -656,8 +685,8 @@ export type Database = {
           next_review_date?: string | null
           plan_type?: Database["public"]["Enums"]["care_plan_type"]
           recorder_name?: string | null
-          revision?: number
           review_frequency?: string | null
+          revision?: number
           signed_by?: string | null
           signed_date?: string | null
           status?: Database["public"]["Enums"]["care_plan_status"]
@@ -2309,6 +2338,108 @@ export type Database = {
           },
         ]
       }
+      cp_attachments: {
+        Row: {
+          agency_id: string
+          caregiver_id: string | null
+          checked_at: string | null
+          client_id: string | null
+          completed_at: string | null
+          description: string | null
+          display_name: string
+          id: string
+          mime_type: string
+          object_path: string
+          parent_id: string
+          parent_kind: string
+          removed_at: string | null
+          removed_by: string | null
+          removed_reason: string | null
+          size_bytes: number
+          uploaded_at: string
+          uploaded_by: string
+          virtual_office_id: string | null
+        }
+        Insert: {
+          agency_id: string
+          caregiver_id?: string | null
+          checked_at?: string | null
+          client_id?: string | null
+          completed_at?: string | null
+          description?: string | null
+          display_name: string
+          id?: string
+          mime_type: string
+          object_path: string
+          parent_id: string
+          parent_kind: string
+          removed_at?: string | null
+          removed_by?: string | null
+          removed_reason?: string | null
+          size_bytes: number
+          uploaded_at?: string
+          uploaded_by?: string
+          virtual_office_id?: string | null
+        }
+        Update: {
+          agency_id?: string
+          caregiver_id?: string | null
+          checked_at?: string | null
+          client_id?: string | null
+          completed_at?: string | null
+          description?: string | null
+          display_name?: string
+          id?: string
+          mime_type?: string
+          object_path?: string
+          parent_id?: string
+          parent_kind?: string
+          removed_at?: string | null
+          removed_by?: string | null
+          removed_reason?: string | null
+          size_bytes?: number
+          uploaded_at?: string
+          uploaded_by?: string
+          virtual_office_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cp_attachments_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agency"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cp_attachments_caregiver_id_fkey"
+            columns: ["caregiver_id"]
+            isOneToOne: false
+            referencedRelation: "caregiver_performance"
+            referencedColumns: ["caregiver_id"]
+          },
+          {
+            foreignKeyName: "cp_attachments_caregiver_id_fkey"
+            columns: ["caregiver_id"]
+            isOneToOne: false
+            referencedRelation: "caregivers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cp_attachments_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cp_attachments_virtual_office_id_fkey"
+            columns: ["virtual_office_id"]
+            isOneToOne: false
+            referencedRelation: "virtual_office"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cp_default_credential_types: {
         Row: {
           category: Database["public"]["Enums"]["credential_category"]
@@ -3659,6 +3790,7 @@ export type Database = {
           id: string
           overridden_at: string | null
           overridden_by: string | null
+          plan_revision: number | null
           primary_clinician_name: string | null
           signed_date: string | null
           trainer_name: string | null
@@ -3679,6 +3811,7 @@ export type Database = {
           id?: string
           overridden_at?: string | null
           overridden_by?: string | null
+          plan_revision?: number | null
           primary_clinician_name?: string | null
           signed_date?: string | null
           trainer_name?: string | null
@@ -3701,6 +3834,7 @@ export type Database = {
           id?: string
           overridden_at?: string | null
           overridden_by?: string | null
+          plan_revision?: number | null
           primary_clinician_name?: string | null
           signed_date?: string | null
           trainer_name?: string | null
@@ -5033,6 +5167,8 @@ export type Database = {
           late_trade_hours: number | null
           max_weekly_hours: number | null
           name: string
+          note_location_default: string | null
+          note_location_mode: string
           operating_hours: Json
           public_content: Json
           service_area: Json
@@ -5067,6 +5203,8 @@ export type Database = {
           late_trade_hours?: number | null
           max_weekly_hours?: number | null
           name: string
+          note_location_default?: string | null
+          note_location_mode?: string
           operating_hours?: Json
           public_content?: Json
           service_area?: Json
@@ -5101,6 +5239,8 @@ export type Database = {
           late_trade_hours?: number | null
           max_weekly_hours?: number | null
           name?: string
+          note_location_default?: string | null
+          note_location_mode?: string
           operating_hours?: Json
           public_content?: Json
           service_area?: Json
@@ -5180,7 +5320,7 @@ export type Database = {
       }
       begin_attachment_upload: {
         Args: {
-          _description: string | null
+          _description: string
           _display_name: string
           _mime_type: string
           _parent_id: string
@@ -5218,13 +5358,15 @@ export type Database = {
         }[]
       }
       commit_auto_assignments: {
-        Args: { _assignments: Json; _from: string; _office_id: string; _to: string }
+        Args: {
+          _assignments: Json
+          _from: string
+          _office_id: string
+          _to: string
+        }
         Returns: Json
       }
-      complete_attachment_upload: {
-        Args: { _id: string }
-        Returns: string
-      }
+      complete_attachment_upload: { Args: { _id: string }; Returns: string }
       compute_earnings_batch: {
         Args: {
           _agency_id: string
@@ -5259,9 +5401,35 @@ export type Database = {
         Args: { _changes: Json; _id: string; _reason: string }
         Returns: Json
       }
+      cp_activate_due_plans: { Args: never; Returns: number }
       cp_approve_batch: {
         Args: { _batch_id: string; _clean_only: boolean; _note_ids: string[] }
         Returns: Json
+      }
+      cp_attachment_allowed: {
+        Args: {
+          _agency: string
+          _caregiver: string
+          _kind: string
+          _office: string
+        }
+        Returns: boolean
+      }
+      cp_attachment_discard: { Args: { _id: string }; Returns: string }
+      cp_attachment_mark_checked: {
+        Args: { _id: string; _size: number }
+        Returns: boolean
+      }
+      cp_attachment_parent: {
+        Args: { _id: string; _kind: string }
+        Returns: Record<string, unknown>
+      }
+      cp_attachment_stale_pending: {
+        Args: { _hours?: number }
+        Returns: {
+          id: string
+          object_path: string
+        }[]
       }
       cp_audit: {
         Args: {
@@ -5295,7 +5463,16 @@ export type Database = {
         Args: { _current_version_id: string; _fields: Json; _note_layout: Json }
         Returns: undefined
       }
+      cp_client_gate: {
+        Args: { _client_id: string; _office_id: string }
+        Returns: string
+      }
       cp_client_onboarding: { Args: { _client_id: string }; Returns: Json }
+      cp_default_match_weights: { Args: never; Returns: Json }
+      cp_eligibility_caller_ok: {
+        Args: { _caregiver_ids: string[]; _shift_id: string }
+        Returns: boolean
+      }
       cp_eligibility_core: {
         Args: { _caregiver_id: string; _ctx: Json; _shift_id: string }
         Returns: Json
@@ -5308,6 +5485,7 @@ export type Database = {
         Args: { _version_id: string }
         Returns: boolean
       }
+      cp_gate_issues: { Args: { _result: Json }; Returns: Json }
       cp_goal_tree: { Args: { _care_plan_id: string }; Returns: Json }
       cp_is_assigned_caregiver: {
         Args: { _caregiver_id: string }
@@ -5317,7 +5495,17 @@ export type Database = {
         Args: { _client_id: string }
         Returns: undefined
       }
+      cp_match_factors: {
+        Args: {
+          _caregiver_id: string
+          _shift_id: string
+          _today: string
+          _weights: Json
+        }
+        Returns: Json
+      }
       cp_objective_measures: { Args: { _objective_id: string }; Returns: Json }
+      cp_office_match_weights: { Args: { _office_id: string }; Returns: Json }
       cp_office_note_queue: {
         Args: { _office_id: string }
         Returns: {
@@ -5364,6 +5552,7 @@ export type Database = {
         Returns: unknown
       }
       cp_plan_row_spec: { Args: { _entity: string }; Returns: Json }
+      cp_plan_snapshot: { Args: { _care_plan_id: string }; Returns: Json }
       cp_progress_note_in_scope: {
         Args: { _note_id: string }
         Returns: boolean
@@ -5378,6 +5567,7 @@ export type Database = {
         }
         Returns: Json
       }
+      cp_record_revision: { Args: { _care_plan_id: string }; Returns: number }
       cp_require_agency_measure_type: {
         Args: { _id: string }
         Returns: {
@@ -5422,8 +5612,25 @@ export type Database = {
         }
         Returns: string
       }
+      cp_revision_baseline: {
+        Args: { _care_plan_id: string }
+        Returns: undefined
+      }
       cp_safe_issue_list: { Args: { _issues: Json }; Returns: Json }
+      cp_shift_candidates: {
+        Args: { _shift_id: string; _today: string; _weights: Json }
+        Returns: {
+          caregiver_id: string
+          issues: Json
+          m: Json
+          ok: boolean
+        }[]
+      }
       cp_shift_client_context: { Args: { _shift_id: string }; Returns: Json }
+      cp_shift_creation_limits: {
+        Args: { _client_id: string; _office_id: string }
+        Returns: Json
+      }
       cp_shift_units: {
         Args: { _date: string; _end: string; _start: string; _tz: string }
         Returns: number
@@ -5445,6 +5652,15 @@ export type Database = {
         Returns: boolean
       }
       cp_template_snapshot: { Args: { _version_id: string }; Returns: Json }
+      cp_try_activate_plan: {
+        Args: { _care_plan_id: string }
+        Returns: boolean
+      }
+      cp_unassigned_shifts: {
+        Args: { _from: string; _office_id: string; _to: string; _today: string }
+        Returns: string[]
+      }
+      cp_valid_match_weights: { Args: { _w: Json }; Returns: boolean }
       cp_validate_answer: {
         Args: { _a: Json; _final: boolean; _m: Json }
         Returns: undefined
@@ -5719,10 +5935,7 @@ export type Database = {
       }
       get_progress_note_for_staff: { Args: { _note_id: string }; Returns: Json }
       get_public_office: { Args: { p_slug: string }; Returns: Json }
-      get_shift_creation_limits: {
-        Args: { _client_id: string }
-        Returns: Json
-      }
+      get_shift_creation_limits: { Args: { _client_id: string }; Returns: Json }
       get_user_role: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
@@ -5775,12 +5988,12 @@ export type Database = {
         Args: { _office_id: string; _within_days?: number }
         Returns: Json
       }
-      list_my_notes_due: { Args: never; Returns: Json }
-      list_notes_for_review: { Args: { _office_id: string }; Returns: Json }
       list_ipos_expiry: {
-        Args: { _client_id?: string | null; _office_id: string }
+        Args: { _client_id?: string; _office_id: string }
         Returns: Json
       }
+      list_my_notes_due: { Args: never; Returns: Json }
+      list_notes_for_review: { Args: { _office_id: string }; Returns: Json }
       list_overdue_notes: {
         Args: { _as_of?: string; _office_id: string }
         Returns: Json
@@ -5819,15 +6032,13 @@ export type Database = {
           similarity: number
         }[]
       }
+      match_caregiver_scope: { Args: { _shift_id: string }; Returns: Json }
       my_agency_id: { Args: never; Returns: string }
       my_caregiver_ids: { Args: never; Returns: string[] }
       my_client_ids: { Args: never; Returns: string[] }
+      open_attachment: { Args: { _id: string }; Returns: Json }
       order_agency_id: { Args: { _order_id: string }; Returns: string }
       order_client_id: { Args: { _order_id: string }; Returns: string }
-      open_attachment: {
-        Args: { _id: string }
-        Returns: Json
-      }
       override_training_record: {
         Args: {
           _primary_clinician_name: string
@@ -5839,11 +6050,11 @@ export type Database = {
         }
         Returns: undefined
       }
-      publish_flow_draft: { Args: { p_draft_id: string }; Returns: string }
       propose_auto_assignments: {
         Args: { _from: string; _office_id: string; _to: string }
         Returns: Json
       }
+      publish_flow_draft: { Args: { p_draft_id: string }; Returns: string }
       publish_template_version: {
         Args: { _template_id: string }
         Returns: string
@@ -5905,7 +6116,7 @@ export type Database = {
         Args: {
           _client_id: string
           _display_name: string
-          _doc_type: string | null
+          _doc_type: string
           _effective_date?: string
           _expiration_date?: string
           _not_applicable_reason?: string
@@ -5975,7 +6186,11 @@ export type Database = {
         Returns: number
       }
       set_office_match_weights: {
-        Args: { _office_id: string; _weights: Json | null }
+        Args: { _office_id: string; _weights: Json }
+        Returns: Json
+      }
+      set_office_note_location: {
+        Args: { _default: string; _mode: string; _office_id: string }
         Returns: Json
       }
       set_shift_group_session: {
@@ -6021,11 +6236,8 @@ export type Database = {
         Args: { _note_id: string; _typed_signature: string }
         Returns: Json
       }
+      suggest_caregivers: { Args: { _shift_id: string }; Returns: Json }
       undo_progress_note_review: { Args: { _note_id: string }; Returns: Json }
-      suggest_caregivers: {
-        Args: { _shift_id: string }
-        Returns: Json
-      }
       update_care_plan_fields: {
         Args: { _care_plan_id: string; _field_values?: Json; _header?: Json }
         Returns: undefined

@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
-import { useStaffNote } from "@/components/compliance/notes/useStaffNotes";
+import { useOfficeLocationMode, useStaffNote } from "@/components/compliance/notes/useStaffNotes";
 import { Button } from "@/components/ui/button";
 import { clientShort, fmtDay, fmtTime, SERVICE_LABEL } from "@/lib/caregiverNotes";
 import { answerText, byGoal, type StaffNote } from "@/lib/staffNotes";
@@ -21,6 +21,7 @@ const PRINT_CSS = `@page { size: letter; margin: 0.5in; }
 function NoteSheet({ d }: { d: StaffNote }) {
   const n = d.note, tz = d.office.timezone;
   const kind = n.note_kind === "respite" ? "Respite" : "CLS";
+  const hideLocation = useOfficeLocationMode(d.office.id).data === "hidden" && !n.location;   // office hides it and the note has none
   return (
     <article className="space-y-4 text-black" data-print="note" data-note-kind={n.note_kind}>
       <header className="text-center">
@@ -33,7 +34,7 @@ function NoteSheet({ d }: { d: StaffNote }) {
         <Cell label="Scheduled">{fmtTime(n.scheduled_start, tz)} – {fmtTime(n.scheduled_end, tz)}</Cell>
         <Cell label="Client arrival">{n.client_arrived_at ? fmtTime(n.client_arrived_at, tz) : ""}{n.arrived_late ? " (late)" : ""}</Cell>
         <Cell label="End time">{n.actual_end ? fmtTime(n.actual_end, tz) : ""}</Cell>
-        <Cell label="Location">{n.location ?? ""}</Cell>
+        {!hideLocation && <Cell label="Location">{n.location ?? ""}</Cell>}
         <Cell label="Staff : client ratio">{n.staff_client_ratio ?? d.group_session?.staff_client_ratio ?? ""}{d.group_session ? " (group session)" : ""}</Cell>
         <Cell label="Staff">{d.caregiver_name}</Cell>
         <Cell label="Note completed on">{n.staff_signed_at ? fmtTime(n.staff_signed_at, tz, true) : ""}</Cell>

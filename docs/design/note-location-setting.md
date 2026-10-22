@@ -1,6 +1,6 @@
 # Progress note "Location" as an office setting: approach (for approval)
 
-Status: **PLAN ONLY** (Oct 22). Owner item 5 (Oct 21 night): report the approach before building.
+Status: **BUILT** (Oct 22, owner-approved; setting on the Compliance tab). Migration 20261031130000.
 
 ## What exists
 - **Location** is a column of the note (`progress_notes.location`, text ≤ 200), written by the caregiver through

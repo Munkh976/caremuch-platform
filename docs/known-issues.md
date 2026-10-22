@@ -1495,3 +1495,11 @@ office's rows were agency-visible in the shared agency, so 5 comparisons differe
   go-live data load: `supabase functions deploy import-data` and set `VITE_DEPLOYED_DATA_FUNCTIONS=import-data` so the
   Admin Utilities import button is enabled again (disabled with "Not deployed on this environment" until then).
   `tests/ripple/dev/hotfix.cjs` X1 accepts "not deployed" (404) as well as "refused" for both (Oct 22: 404 / 404, PASS).
+
+## OPEN (Oct 22): note Location office setting — follow-ups
+
+- Like the enforcement switch (S10 entry above), `virtual_office.note_location_mode` / `note_location_default` can also be
+  changed by a direct table update under the existing `vo_update_staff` policy, which skips the
+  `office_note_location_changed` audit. Close together with the S10 item before production.
+- The staff note detail and print read the office's mode with a separate query (no change to
+  `get_progress_note_for_staff`); in 'hidden' they omit the Location row only when the note has none.

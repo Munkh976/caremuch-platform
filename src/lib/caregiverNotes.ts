@@ -46,6 +46,8 @@ export interface CaregiverNote {
     id: string; status: "draft" | "returned" | "submitted" | "reviewed" | "billed"; note_kind: "cls" | "respite"; service_date: string;
     scheduled_start: string; scheduled_end: string; client_arrived_at: string | null; actual_end: string | null;
     staff_client_ratio: string | null; location: string | null; narrative_text: string | null;
+    /** the office's Location setting (free / default = prefilled / hidden); absent before 20261031130000 */
+    location_mode?: "free" | "default" | "hidden";
     staff_signature_name: string | null; staff_signed_at: string | null; returned_reason: string | null;
     late_submitted: boolean; arrived_late: boolean; due_at: string; client_first_name: string | null; client_last_initial: string | null;
   };

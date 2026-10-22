@@ -28,7 +28,7 @@ const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
       const out = { asOf, W,
         agency: (await q(`SELECT (SELECT count(*)::int FROM public.virtual_office WHERE agency_id = $1) offices,
           (SELECT count(*)::int FROM public.profiles WHERE email LIKE $2 AND agency_id <> $1) + (SELECT count(*)::int FROM public.virtual_office WHERE code = 'RPLDEMO' AND agency_id <> $1) elsewhere`, [off.agency_id, `%${D.EMAIL_TAG}`]))[0],
-        office: (await q(`SELECT name, care_plan_module_enabled m, compliance_enforcement_enabled e FROM public.virtual_office WHERE id = $1`, [off.id]))[0],
+        office: (await q(`SELECT name, care_plan_module_enabled m, compliance_enforcement_enabled e, note_location_mode lm, note_location_default ld FROM public.virtual_office WHERE id = $1`, [off.id]))[0],
         clients: await q(`SELECT id, first_name || ' ' || last_name n, case_number FROM public.clients WHERE virtual_office_id = $1 ORDER BY 2`, [off.id]),
         roles: await q(`SELECT ur.role::text k, count(*)::int n FROM public.profiles p JOIN public.user_roles ur ON ur.user_id = p.id WHERE p.agency_id = $1 GROUP BY 1 ORDER BY 1`, [off.agency_id]),
         statuses: Object.fromEntries((await q(`SELECT status::text k, count(*)::int n FROM public.progress_notes WHERE virtual_office_id = $1 AND NOT voided GROUP BY 1`, [off.id])).map((x) => [x.k, x.n])),
@@ -94,8 +94,8 @@ const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   const W = r.W, name = new Map(r.clients.map((x) => [x.id, x.n]));
   const cgName = (id) => id;   // retraining rows carry ids only
   console.log(`=== verify-demo — demo day ${r.asOf}; billing week ${W.w0}; last week ${W.a}; the week before ${W.b} ===`);
-  rec("O own agency, one office 'Ripple Effects – Demo', module on, compliance enforcement OFF; nothing of the demo elsewhere",
-    r.office.name === D.OFFICE_NAME && r.office.m && !r.office.e && r.agency.offices === 1 && r.agency.elsewhere === 0, `${JSON.stringify(r.office)}; ${JSON.stringify(r.agency)}`);
+  rec("O own agency, one office 'Ripple Effects – Demo', module on, compliance enforcement OFF, note Location prefilled with the center; nothing of the demo elsewhere",
+    r.office.name === D.OFFICE_NAME && r.office.m && !r.office.e && r.office.lm === "default" && r.office.ld === "Ripple Effects Community Inclusion Center" && r.agency.offices === 1 && r.agency.elsewhere === 0, `${JSON.stringify(r.office)}; ${JSON.stringify(r.agency)}`);
   rec("U users: 1 manager (Pat), 1 agency admin (Sam), 1 HR (Jordan), 1 scheduler (Casey), 5 caregivers",
     eq(r.roles, [{ k: "agency_admin", n: 1 }, { k: "caregiver", n: 5 }, { k: "hr_staff", n: 1 }, { k: "manager", n: 1 }, { k: "scheduler", n: 1 }]), r.roles.map((x) => `${x.k} ${x.n}`).join(", "));
   // ---- part B2: notes ----

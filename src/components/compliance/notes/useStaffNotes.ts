@@ -49,3 +49,16 @@ export function useRefreshStaffNotes() {
   const qc = useQueryClient();
   return () => qc.invalidateQueries({ queryKey: ["staff-notes"] });
 }
+
+/** The office's progress note Location setting (free / default / hidden; owner, Oct 22). Staff read virtual_office under RLS. */
+export function useOfficeLocationMode(officeId: string | undefined) {
+  return useQuery({
+    queryKey: ["office-location-mode", officeId],
+    enabled: !!officeId,
+    retry: false,
+    queryFn: async (): Promise<string> => {
+      const { data } = await supabase.from("virtual_office").select("note_location_mode").eq("id", officeId as string).maybeSingle();
+      return data?.note_location_mode ?? "free";
+    },
+  });
+}

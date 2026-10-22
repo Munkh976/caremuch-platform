@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { AlertTriangle, ArrowLeft, FileCheck2 } from "lucide-react";
 import { ModuleShell } from "@/components/compliance/ModuleShell";
 import { ReviewPanel } from "@/components/compliance/notes/ReviewPanel";
-import { useRefreshStaffNotes, useStaffNote } from "@/components/compliance/notes/useStaffNotes";
+import { useOfficeLocationMode, useRefreshStaffNotes, useStaffNote } from "@/components/compliance/notes/useStaffNotes";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,6 +20,7 @@ const STATUS: Record<StaffNote["note"]["status"], string> = { draft: "Draft", su
 /** Header + units: shared by the detail page (and mirrored on the print). */
 export function NoteHeaderFields({ d }: { d: StaffNote }) {
   const n = d.note, tz = d.office.timezone;
+  const hideLocation = useOfficeLocationMode(d.office.id).data === "hidden" && !n.location;   // office hides it and the note has none
   return (
     <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4" data-testid="note-header">
       <Field label="Client">{clientShort(d.client.first_name, d.client.last_initial)}</Field>
@@ -28,7 +29,7 @@ export function NoteHeaderFields({ d }: { d: StaffNote }) {
       <Field label="Caregiver">{d.caregiver_name}</Field>
       <Field label="Arrival" testid="arrival">{n.client_arrived_at ? fmtTime(n.client_arrived_at, tz) : "—"}{n.arrived_late && <Badge variant="outline" className="ml-2">Late arrival</Badge>}</Field>
       <Field label="End time">{n.actual_end ? fmtTime(n.actual_end, tz) : "—"}</Field>
-      <Field label="Location">{n.location ?? "—"}</Field>
+      {!hideLocation && <Field label="Location" testid="location">{n.location ?? "—"}</Field>}
       <Field label="Staff : client ratio" testid="ratio">{n.staff_client_ratio ?? d.group_session?.staff_client_ratio ?? "—"}{d.group_session?.staff_client_ratio ? <span className="text-sm text-muted-foreground"> (group {d.group_session.staff_client_ratio})</span> : null}{d.group_session ? <GroupRatioAdvisory groupSessionId={d.group_session.id} shiftId={n.shift_id} /> : null}</Field>
       <Field label="Case number">{d.client.case_number ?? "—"}</Field>
     </dl>

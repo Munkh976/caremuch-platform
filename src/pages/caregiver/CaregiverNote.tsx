@@ -101,7 +101,8 @@ export default function CaregiverNote() {
     const run = (async () => {
       setSave({ kind: "saving" });
       const n = note.note;
-      const header: Record<string, string | null> = { staff_client_ratio: ratio.trim() || null, location: location.trim() };
+      const header: Record<string, string | null> = { staff_client_ratio: ratio.trim() || null };
+      if (n.location_mode !== "hidden") header.location = location.trim();   // hidden: keep whatever the note has
       if (arrival) header.client_arrived_at = shiftTimeToIso(n.service_date, arrival, tz, n.scheduled_start, 60);
       header.actual_end = end ? shiftTimeToIso(n.service_date, end, tz, n.scheduled_start, 0) : null;
       const payload = {
@@ -206,10 +207,12 @@ export default function CaregiverNote() {
               </p>
             );
           })()}
-          <div className="space-y-2">
-            <Label htmlFor="location" className="text-base">Location</Label>
-            <Input id="location" className="h-11 text-base" maxLength={200} disabled={!editable} value={location} onChange={(e) => { setLocation(e.target.value); touch(); }} />
-          </div>
+          {n.location_mode !== "hidden" && (
+            <div className="space-y-2">
+              <Label htmlFor="location" className="text-base">Location</Label>
+              <Input id="location" className="h-11 text-base" maxLength={200} disabled={!editable} value={location} onChange={(e) => { setLocation(e.target.value); touch(); }} data-testid="note-location" />
+            </div>
+          )}
           <div className="space-y-2">
             <Label htmlFor="ratio" className="text-base">Staff : client ratio</Label>
             <Input id="ratio" className="h-11 text-base" placeholder="1:1" maxLength={5} disabled={!editable} value={ratio} onChange={(e) => { setRatio(e.target.value); touch(); }} />

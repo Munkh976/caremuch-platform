@@ -250,7 +250,9 @@ let AS_OF;
         const u = await ana.locator('[data-testid="units-to-bill"]').innerText(); await ana.locator('[data-testid="units-to-bill"]').scrollIntoViewIfNeeded();
         return [/Units to bill: 2 of 4/.test(u), u]; }, { full: false });
       await step("ana-note-filled", ana, async () => {
-        await ana.fill("#arrival", "08:00"); await ana.fill("#end", "09:00"); await ana.fill("#location", "Zoe's home"); await ana.fill("#ratio", "1:1");
+        // Location: prefilled from the office setting (owner, Oct 22); Ana keeps it
+        const loc = await ana.inputValue("#location");
+        await ana.fill("#arrival", "08:00"); await ana.fill("#end", "09:00"); await ana.fill("#ratio", "1:1");
         await box("Highest prompt level used").locator("select").selectOption({ label: "Verbal" });
         for (const s of ["Get supplies", "Brush", "Rinse"]) await box("Steps completed").getByRole("checkbox", { name: new RegExp(s) }).click();
         await box("Took part in the outing?").getByRole("radio", { name: "Yes" }).click();
@@ -261,7 +263,8 @@ let AS_OF;
         await ana.getByRole("button", { name: "Save", exact: true }).click(); await ana.waitForTimeout(2500);
         const u = await ana.locator('[data-testid="units-to-bill"]').innerText(), s = await ana.locator('[data-testid="save-state"]').innerText().catch(() => "");
         await ana.locator('[data-testid="units-to-bill"]').scrollIntoViewIfNeeded();
-        return [/Units to bill: 4 of 4/.test(u) && /Saved/.test(s), `${u}; ${s}`]; });
+        const locOk = loc === "Ripple Effects Community Inclusion Center";
+        return [/Units to bill: 4 of 4/.test(u) && /Saved/.test(s) && locOk, `${u}; ${s}; location prefilled "${loc}"`]; });
       await step("ana-sign-sheet", ana, async () => { await ana.locator('[data-testid="open-submit"]').click(); await ana.locator('[data-testid="submit-sheet"]').waitFor(); await ana.waitForTimeout(500);
         await ana.fill("#sig", "Ana Brooks"); await ana.waitForTimeout(400);
         const missing = await ana.locator('[data-testid="submit-missing"]').innerText().catch(() => "");
