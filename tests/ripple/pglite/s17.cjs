@@ -48,6 +48,7 @@ let seq = 0; const sid = () => H.U(9700 + ++seq);
   await must("mgrX", "SELECT record_training_form($1,'ipos_initial',NULL,NULL,$2::jsonb,'{}'::jsonb)", [plan1, JSON.stringify([{ caregiver_id: G, training_date: await at(-49), trainer_name: "Pat", signed_date: await at(-49) }])]);
   const shift = async (k, extra = {}) => { const id = sid(); await db.query(`INSERT INTO shifts (id, agency_id, client_id, care_type_code, shift_date, start_time, end_time, virtual_office_id, status, duration_hours)
       VALUES ($1,$2,$3,$4,$5::date,'09:00','10:00',$6,'open',1)`, [id, A, extra.client || CX, extra.code || "CLS0001", await at(k), extra.office || OX]); return id; };
+  await db.query(`INSERT INTO caregivers (id, agency_id, first_name, last_name, virtual_office_id, is_active) VALUES ($1,$2,'Hal','Two',$3,true)`, [H.U(330), A, OX]);
   const S0 = await shift(3);
   const elig = async () => JSON.stringify((await call("mgrX", "SELECT check_assignment_eligibility($1,$2)", [S0, G])).v);
   const e0 = await elig();

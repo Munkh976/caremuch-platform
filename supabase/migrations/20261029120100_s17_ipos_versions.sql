@@ -921,8 +921,6 @@ BEGIN
   -- S17: the version being trained = the pending one when there is one, else the active one
   SELECT id, version, training_version, plan_type, effective_date, expiration_date, status, revision INTO p
     FROM public.care_plans WHERE client_id = c.id AND status IN ('active', 'pending') ORDER BY (status = 'pending') DESC LIMIT 1;
-  SELECT id, version, training_version, effective_date, expiration_date INTO a
-    FROM public.care_plans WHERE client_id = c.id AND status = 'active';
   v_in := cp_resolve_template(c.agency_id, c.virtual_office_id, 'inservice', NULL);
   v_tr := cp_resolve_template(c.agency_id, c.virtual_office_id, 'training', NULL);
   RETURN jsonb_build_object(
@@ -934,8 +932,9 @@ BEGIN
     'plan', CASE WHEN p.id IS NULL THEN NULL ELSE jsonb_build_object('care_plan_id', p.id, 'version', p.version, 'training_version', p.training_version,
               'plan_type', p.plan_type, 'effective_date', p.effective_date, 'expiration_date', p.expiration_date,
               'status', p.status, 'revision', p.revision) END,
-    'in_effect', CASE WHEN a.id IS NULL OR a.id = p.id THEN NULL ELSE jsonb_build_object('care_plan_id', a.id, 'version', a.version,
-              'training_version', a.training_version, 'effective_date', a.effective_date, 'expiration_date', a.expiration_date) END,
+    'in_effect', (SELECT jsonb_build_object('care_plan_id', a.id, 'version', a.version, 'training_version', a.training_version,
+              'effective_date', a.effective_date, 'expiration_date', a.expiration_date)
+              FROM public.care_plans a WHERE a.client_id = c.id AND a.status = 'active' AND a.id IS DISTINCT FROM p.id),
     'inservice_current', p.id IS NOT NULL AND EXISTS (SELECT 1 FROM public.plan_inservice_forms f WHERE f.care_plan_id = p.id
                            AND f.training_version = p.training_version AND f.signed_at IS NOT NULL),
     'inservice_forms', COALESCE((SELECT jsonb_agg(jsonb_build_object('id', f.id, 'training_version', f.training_version, 'case_manager_name', f.case_manager_name,
