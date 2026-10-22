@@ -1490,8 +1490,8 @@ office's rows were agency-visible in the shared agency, so 5 comparisons differe
   - delayed IPOS activation: `SELECT public.cp_activate_due_plans();`. A pending IPOS version whose start date has passed
     stays pending until someone runs it.
 - **`reset-database` undeployed from DEV (Oct 22).** Nothing in seed-demo / verify-demo / rehearse / teardown-demo calls
-  it. The Admin Utilities page (system admin) still has the button, which now fails (function not found).
-- **`import-data` undeployed from DEV (Oct 22); its code stays in `supabase/functions/import-data/`.** Redeploy it for
-  the Ripple go-live data load (`supabase functions deploy import-data`). The Admin Utilities import button fails until
-  then. `tests/ripple/dev/hotfix.cjs` X1 calls both functions and expects a 401 / 403, so it now gets a 404 until they
-  are redeployed.
+  it. The Admin Utilities button is disabled ("Not deployed on this environment", no call).
+- **`import-data` undeployed from DEV (Oct 22); its code stays in `supabase/functions/import-data/`.** For the Ripple
+  go-live data load: `supabase functions deploy import-data` and set `VITE_DEPLOYED_DATA_FUNCTIONS=import-data` so the
+  Admin Utilities import button is enabled again (disabled with "Not deployed on this environment" until then).
+  `tests/ripple/dev/hotfix.cjs` X1 accepts "not deployed" (404) as well as "refused" for both (Oct 22: 404 / 404, PASS).

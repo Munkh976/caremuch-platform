@@ -6,7 +6,7 @@
 //   scheduler in scope get matches with only id, name and rating; eligibility refusals (other agency, other office, a
 //   caregiver about someone else); log_event refused for anon and users while the shift trigger still writes its event;
 //   rag-eval-harness refuses the anon key; import-data refuses an agency admin (empty payload: harmless either way);
-//   reset-database refuses the anon key (never called with an admin token); NB1.
+//   reset-database refuses the anon key (never called with an admin token); either may instead be not deployed (404); NB1.
 // Usage: node tests/ripple/dev/hotfix.cjs <before|after> > some.log 2>&1
 const { A, REF, LABEL, RUN, admin, log, rec, pass, ins, rpc, pgRead, setup, setupB1, checkNoBreak, DENY, dbDay, teardownB1, teardownB2, teardown, closeDb, summary, reportSkew, createClient, URL_, ANON, opts } = require("./lib.cjs");
 const BEFORE = { check_assignment_eligibility: "34cb1b4efd4ab4796bf8be6df40ce68a", check_assignment_eligibility_bulk: "0cb743ebec33081caf0e8543c8457416" };
@@ -77,9 +77,12 @@ async function after(F) {
   const rag = await fn("rag-eval-harness", { query: "x", language: "en", agency_id: A }, ANON);
   const imp = await fn("import-data", { data: {} }, await token(F.aaA.c));
   const rst = await fn("reset-database", {}, ANON);
-  rec("X1 rag-eval-harness refuses the anon key (401); import-data refuses an agency admin (empty payload); reset-database refuses the anon key (never called with an admin token)",
-    pass(rag.status === 401 && imp.status >= 400 && /permission|Insufficient/i.test(JSON.stringify(imp.body || {})) && rst.status >= 400),
-    `rag ${rag.status}; import ${imp.status} ${JSON.stringify(imp.body).slice(0, 60)}; reset ${rst.status}`);
+  // import-data / reset-database are undeployed on DEV (owner, Oct 22): "not deployed" (404) passes as well as "refused"
+  const impOk = imp.status === 404 || (imp.status >= 400 && /permission|Insufficient/i.test(JSON.stringify(imp.body || {})));
+  const rstOk = rst.status === 404 || rst.status >= 400;
+  rec("X1 rag-eval-harness refuses the anon key (401); import-data refuses an agency admin (empty payload) or is not deployed; reset-database refuses the anon key (never called with an admin token) or is not deployed",
+    pass(rag.status === 401 && impOk && rstOk),
+    `rag ${rag.status}; import ${imp.status === 404 ? "404 not deployed" : `${imp.status} ${JSON.stringify(imp.body).slice(0, 60)}`}; reset ${rst.status === 404 ? "404 not deployed" : rst.status}`);
 }
 
 (async () => {

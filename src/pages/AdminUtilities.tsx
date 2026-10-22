@@ -18,6 +18,13 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 
+// reset-database and import-data are not deployed on DEV (owner, Oct 22); import-data is redeployed for the Ripple
+// go-live data load. List the deployed ones in VITE_DEPLOYED_DATA_FUNCTIONS (e.g. "import-data"); the others are disabled.
+const DEPLOYED_DATA_FUNCTIONS = String(import.meta.env.VITE_DEPLOYED_DATA_FUNCTIONS ?? "").split(",").map((x) => x.trim());
+const IMPORT_DEPLOYED = DEPLOYED_DATA_FUNCTIONS.includes("import-data");
+const RESET_DEPLOYED = DEPLOYED_DATA_FUNCTIONS.includes("reset-database");
+const NOT_DEPLOYED = "Not deployed on this environment";
+
 const AdminUtilities = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -87,6 +94,7 @@ const AdminUtilities = () => {
   };
 
   const handleResetDatabase = async () => {
+    if (!RESET_DEPLOYED) return;
     setLoading(true);
     setResetDialogOpen(false);
     try {
@@ -177,7 +185,7 @@ const AdminUtilities = () => {
 
   const handleImportData = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file) return;
+    if (!file || !IMPORT_DEPLOYED) return;
 
     setImportLoading(true);
     try {
@@ -295,17 +303,19 @@ const AdminUtilities = () => {
                     onChange={handleImportData}
                     className="hidden"
                     id="import-file"
-                    disabled={importLoading}
+                    disabled={importLoading || !IMPORT_DEPLOYED}
                   />
                   <Button 
                     onClick={() => fileInputRef.current?.click()}
-                    disabled={importLoading}
+                    disabled={importLoading || !IMPORT_DEPLOYED}
                     variant="outline"
+                    data-testid="import-data-button"
                   >
                     {importLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     <Upload className="mr-2 h-4 w-4" />
                     Import Data
                   </Button>
+                  {!IMPORT_DEPLOYED && <p className="mt-1 text-xs text-muted-foreground">{NOT_DEPLOYED}</p>}
                 </div>
               </div>
             </div>
@@ -342,12 +352,14 @@ const AdminUtilities = () => {
               </p>
               <Button 
                 onClick={() => setResetDialogOpen(true)}
-                disabled={loading}
+                disabled={loading || !RESET_DEPLOYED}
                 variant="destructive"
+                data-testid="reset-database-button"
               >
                 <AlertTriangle className="mr-2 h-4 w-4" />
                 Reset Entire Database
               </Button>
+              {!RESET_DEPLOYED && <p className="mt-1 text-xs text-muted-foreground">{NOT_DEPLOYED}</p>}
             </div>
           </CardContent>
         </Card>
