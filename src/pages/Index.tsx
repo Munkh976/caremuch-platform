@@ -12,7 +12,7 @@ const WALKTHROUGH = "mailto:info@wordsnumbers.ai?subject=CareMuch%20walkthrough"
 const EMAIL = "mailto:info@wordsnumbers.ai";
 const focus = "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D6FB8]";
 const eyebrow = "font-plexmono text-[13px] uppercase tracking-[0.08em] text-[#0B6E8C]";
-const h2 = "m-0 font-display font-bold leading-[1.04] tracking-[-0.03em]";
+const h2 = "m-0 font-display font-bold leading-[1.04] tracking-[-0.03em] [text-wrap:balance]";
 const body = "m-0 leading-relaxed text-[#405569]";
 const primaryBtn = cn("inline-flex min-h-[44px] items-center rounded-full bg-gradient-to-r from-[#0A7889] to-[#1D6FB8] font-semibold text-white no-underline hover:text-white", focus);
 const ghostBtn = cn("inline-flex min-h-[44px] items-center rounded-full border-[1.5px] border-[#9DB6CC] bg-white font-semibold text-[#0F2B4C] no-underline hover:text-[#0F2B4C]", focus);
@@ -104,7 +104,7 @@ export default function Index() {
         <section id="top" className="mx-auto flex max-w-[1240px] scroll-mt-4 flex-wrap items-center gap-14 px-6 pb-[88px] pt-[72px]">
           <div className="flex min-w-0 flex-[1_1_480px] flex-col gap-7">
             <div className={eyebrow}>The care operations platform for agencies</div>
-            <h1 className="m-0 font-display text-[clamp(40px,6vw,76px)] font-extrabold leading-[0.98] tracking-[-0.035em]">Every visit in the right hands, on the right plan, billed to the minute.</h1>
+            <h1 className="m-0 font-display text-[clamp(40px,6vw,76px)] font-extrabold leading-[0.98] tracking-[-0.035em] [text-wrap:balance]">Every visit in the right hands, on the right plan, billed to the minute.</h1>
             <p className={cn(body, "max-w-[560px] text-[20px] leading-[1.55]")}>CareMuch schedules, trains, documents and bills around the rules in your clients' plans and authorizations. The checks run when the shift is created, not at audit time — so your coordinators stop policing spreadsheets and your caregivers spend their hours with clients.</p>
             <div className="flex flex-wrap gap-3">
               <a href={WALKTHROUGH} className={cn(primaryBtn, "px-[26px] py-4 text-[17px]")}>Book a 30-minute walkthrough</a>
@@ -209,7 +209,7 @@ export default function Index() {
           <div className="mx-auto flex max-w-[1240px] flex-col gap-12 px-6 py-24">
             <div className="flex max-w-[760px] flex-col gap-4">
               <div className={eyebrow}>How a week runs</div>
-              <h2 id="week-h" className={cn(h2, "text-[clamp(32px,4vw,54px)]")}>From plan to paid, without re-keying.</h2>
+              <h2 id="week-h" className={cn(h2, "text-[clamp(32px,4vw,54px)]")}>From plan to paid, without re‑keying.</h2>
             </div>
             <ol className="m-0 grid list-none grid-cols-[repeat(auto-fit,minmax(210px,1fr))] border-t-[3px] border-[#1D6FB8] p-0">
               {WEEK.map(([d, t, x], i) => (
@@ -305,7 +305,7 @@ export default function Index() {
         <section id="demo" aria-labelledby="demo-h" className="mx-auto max-w-[1240px] scroll-mt-4 px-6 pb-24">
           <div className="flex flex-wrap items-center justify-between gap-8 rounded-[32px] bg-[linear-gradient(110deg,#0A7889_0%,#1D6FB8_100%)] p-[clamp(28px,6vw,72px)] text-white">
             <div className="flex min-w-0 flex-[1_1_520px] flex-col gap-3.5">
-              <h2 id="demo-h" className="m-0 font-display text-[clamp(32px,4.4vw,58px)] font-extrabold leading-none tracking-[-0.035em]">Bring us your hardest week.</h2>
+              <h2 id="demo-h" className="m-0 font-display text-[clamp(32px,4.4vw,58px)] font-extrabold leading-none tracking-[-0.035em] [text-wrap:balance]">Bring us your hardest week.</h2>
               <p className="m-0 max-w-[560px] text-lg leading-[1.55] text-white">In 30 minutes we'll walk through your plans, training and billing rules in a working demo office — and show you what CareMuch would have caught.</p>
             </div>
             <div className="flex flex-wrap gap-3">
