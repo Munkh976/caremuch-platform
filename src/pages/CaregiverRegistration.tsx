@@ -1,3 +1,4 @@
+import { CareMuchMark } from "@/components/brand/CareMuchMark";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -9,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { Activity, ArrowLeft, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, CheckCircle2 } from "lucide-react";
 import { caregiverRegistrationSchema, firstError } from "@/lib/validation";
 import { US_STATES } from "@/constants/usStates";
 import { ChatWidget } from "@/components/chat/ChatWidget";
@@ -104,10 +105,8 @@ const CaregiverRegistration = () => {
         </Button>
 
         <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-2 mb-4">
-            <div className="p-3 rounded-xl bg-gradient-to-br from-primary to-accent">
-              <Activity className="h-8 w-8 text-primary-foreground" />
-            </div>
+          <div className="mb-4 flex justify-center">
+            <CareMuchMark size={56} title="CareMuch" />
           </div>
           <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent mb-2">
             Caregiver Registration

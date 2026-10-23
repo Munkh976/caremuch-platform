@@ -1,3 +1,4 @@
+import { CareMuchLogo } from "@/components/brand/CareMuchLogo";
 import { useState, useEffect } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -7,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Activity, Sparkles, ArrowLeft, MessageCircle } from "lucide-react";
+import { ArrowLeft, MessageCircle } from "lucide-react";
 import { signInSchema, signUpSchema, firstError } from "@/lib/validation";
 import { roleHome, safeNextPath } from "@/lib/roleHome";
 
@@ -135,15 +136,10 @@ const Auth = () => {
           </Button>
         </div>
         <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-2 mb-4">
-            <div className="p-3 rounded-xl bg-gradient-to-br from-primary to-accent">
-              <Activity className="h-8 w-8 text-primary-foreground" />
-            </div>
-          </div>
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent mb-2">
-            CareMuch
+          <h1 className="mb-2 flex justify-center">
+            <CareMuchLogo size={48} textClassName="text-4xl" />
           </h1>
-          <p className="text-muted-foreground">Intelligent Healthcare Workforce Scheduling</p>
+          <p className="font-plex text-muted-foreground">The care operations platform for agencies</p>
         </div>
 
         <Card>
@@ -193,11 +189,7 @@ const Auth = () => {
             </Tabs>
           </CardContent>
           <CardFooter className="flex flex-col gap-3 text-center text-sm text-muted-foreground">
-            <div className="flex items-center justify-center gap-2">
-              <Sparkles className="h-4 w-4 text-accent" />
-              <span>Powered by AI-driven scheduling optimization</span>
-            </div>
-            <div className="pt-2 border-t space-y-2">
+            <div className="space-y-2">
               <p className="mb-2 text-muted-foreground">New to CareMuch?</p>
               <Button
                 variant="outline"

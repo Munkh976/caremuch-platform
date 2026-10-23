@@ -1,9 +1,9 @@
+import { CareMuchMark } from "@/components/brand/CareMuchMark";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Activity } from "lucide-react";
 
 type OAuthApi = {
   getAuthorizationDetails: (id: string) => Promise<{ data: any; error: any }>;
@@ -74,8 +74,8 @@ const OAuthConsent = () => {
     <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-accent/5 p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-3 p-3 rounded-xl bg-gradient-to-br from-primary to-accent w-fit">
-            <Activity className="h-6 w-6 text-primary-foreground" />
+          <div className="mx-auto mb-3 w-fit">
+            <CareMuchMark size={44} title="CareMuch" />
           </div>
           <CardTitle>
             {error ? "Authorization problem" : details ? `Connect ${details.client?.name ?? "an app"} to CareMuch` : "Loading…"}

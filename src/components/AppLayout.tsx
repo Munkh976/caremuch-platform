@@ -1,3 +1,4 @@
+import { CareMuchLogo } from "@/components/brand/CareMuchLogo";
 import { ReactNode, useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -270,7 +271,7 @@ export const AppLayout = ({ children }: AppLayoutProps) => {
             <Button variant="ghost" size="icon" className="absolute right-2 top-2 md:hidden" onClick={() => setIsSidebarOpen(false)} aria-label="Close menu">
               <X />
             </Button>
-            <h1 className="text-2xl font-bold text-primary">CareMuch</h1>
+            <h1 className="m-0"><CareMuchLogo size={30} textClassName="text-2xl" /></h1>
             <p className="text-xs font-medium text-foreground/80 mt-1">
               {isSystemAdmin ? "System Administration" : "Agency Portal"}
             </p>
@@ -337,7 +338,7 @@ export const AppLayout = ({ children }: AppLayoutProps) => {
           <Button variant="ghost" size="icon" onClick={() => setIsSidebarOpen(true)} aria-label="Open menu" aria-expanded={isSidebarOpen}>
             <Menu />
           </Button>
-          <span className="text-lg font-bold text-primary">CareMuch</span>
+          <CareMuchLogo size={26} textClassName="text-lg" />
         </header>
         <div className="container mx-auto p-6 md:p-8">{children}</div>
       </main>

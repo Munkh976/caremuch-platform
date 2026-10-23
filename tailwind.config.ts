@@ -13,6 +13,12 @@ export default {
       },
     },
     extend: {
+      // public pages only (home, auth, logo); the in-app font is unchanged
+      fontFamily: {
+        display: ['"Schibsted Grotesk"', "system-ui", "sans-serif"],
+        plex: ['"IBM Plex Sans"', "system-ui", "sans-serif"],
+        plexmono: ['"IBM Plex Mono"', "ui-monospace", "monospace"],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
