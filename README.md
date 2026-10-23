@@ -1,5 +1,21 @@
 # Welcome to your Lovable project
 
+## Deploying to Fly.io (CareMuch dev app)
+
+The frontend of `phase-3` is deployed to the Fly.io app `caremuch-platform` with one script, from the repo root in
+Windows PowerShell 5.1 or later:
+
+```powershell
+fly auth login          # once
+.\scripts\deploy.ps1
+```
+
+`scripts/deploy.ps1` refuses to run unless the current branch is `phase-3`, no build input (`src`, `public`,
+`index.html`, `package*.json`, `Dockerfile`, `vite.config.ts`, `tailwind.config.ts`) has uncommitted changes, and `HEAD`
+equals `origin/phase-3` after a `git fetch`. It reads `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` and
+`VITE_SUPABASE_PROJECT_ID` from `.env.local` (it prints only their lengths), passes them to `fly deploy` as build
+arguments, and appends the commit, time and Fly release to `docs/deploys.md` — commit that file afterwards.
+
 ## Project info
 
 **URL**: https://lovable.dev/projects/9e995158-e948-43db-8557-3fad64ff5c5c
