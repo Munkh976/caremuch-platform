@@ -5,7 +5,7 @@
 # effect on the already-baked static files).
 
 # ---- build stage ----
-FROM node:20-alpine AS build
+FROM node:22-alpine AS build
 WORKDIR /app
 
 # Only the three VITE_ vars actually read anywhere in src/ (confirmed via
