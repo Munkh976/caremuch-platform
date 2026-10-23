@@ -1,0 +1,6 @@
+{
+ "clean": "OK assignment_id,eligibility",
+ "soft": "OK assignment_id,eligibility",
+ "hard": "ERR Pick-up refused: Overlaps a shift 09:00-10:00 on this day.",
+ "rows": "assigned/picked_up,assigned/picked_up,open/-"
+}
