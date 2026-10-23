@@ -1,0 +1,100 @@
+name: CI
+# Build, unit tests, the local PGlite database suites, the Docker image and a secret scan on every push and PR to main.
+# No secrets: the build gets placeholder VITE_ values (they only need to exist); DEV-dependent suites stay local.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  VITE_SUPABASE_URL: https://example.supabase.co
+  VITE_SUPABASE_PUBLISHABLE_KEY: ci-placeholder
+  VITE_SUPABASE_PROJECT_ID: ci-placeholder
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npx vitest run
+      - name: Lint (report only until the existing errors are cleaned up)
+        run: npm run lint
+        continue-on-error: true
+
+  pglite:
+    name: pglite (${{ matrix.shard }}/4)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tests/ripple/pglite/package-lock.json
+      - run: npm ci --prefix tests/ripple/pglite
+      - name: PGlite suites (local database, no network, no DEV credentials)
+        shell: bash
+        run: |
+          fail=0; i=0
+          for f in $(ls tests/ripple/pglite/*.cjs | sort); do
+            [ "$(basename "$f")" = "harness.cjs" ] && continue
+            if [ $((i % 4)) -ne ${{ matrix.shard }} ]; then i=$((i+1)); continue; fi
+            i=$((i+1))
+            echo "::group::$f"
+            set +e; out=$(node "$f" 2>&1); code=$?; set -e
+            echo "$out" | tail -n 60
+            echo "::endgroup::"
+            sum=$(echo "$out" | grep -E '^summary:' | tail -n 1)
+            if [ $code -ne 0 ] || [ -z "$sum" ] || echo "$sum" | grep -q '=FAIL'; then
+              echo "::error file=$f::suite failed (exit $code): ${sum:-no summary}"; fail=1
+            else
+              echo "PASS $f — $sum"
+            fi
+          done
+          exit $fail
+
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: docker build (no push)
+        run: >
+          docker build .
+          --build-arg VITE_SUPABASE_URL=$VITE_SUPABASE_URL
+          --build-arg VITE_SUPABASE_PUBLISHABLE_KEY=$VITE_SUPABASE_PUBLISHABLE_KEY
+          --build-arg VITE_SUPABASE_PROJECT_ID=$VITE_SUPABASE_PROJECT_ID
+
+  secrets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # 8.25+ for the AND-condition allowlist in .gitleaks.toml
+          GITLEAKS_VERSION: 8.28.0
+          GITLEAKS_CONFIG: .gitleaks.toml

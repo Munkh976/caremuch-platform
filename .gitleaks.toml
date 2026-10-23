@@ -1,0 +1,15 @@
+# gitleaks configuration (CI secret scan, .github/workflows/ci.yml).
+[extend]
+useDefault = true
+
+# The project's early history committed a .env holding only the three PUBLIC build values (Supabase URL, the publishable
+# anon key, the project id) — the same values every deployed browser bundle contains. It was untracked in a2971656.
+# Allowed: that one file, in those two commits only (both conditions must hold). Anything else is still reported.
+[[allowlists]]
+description = "Public VITE_ build values in the historical .env (dce9faa5 added, a2971656 removed)"
+condition = "AND"
+commits = [
+  "dce9faa5c4703f155a47f099a1d026bd1daf89bc",
+  "a2971656c1c2eee408438f33ddaa09a88d3fd50d",
+]
+paths = ['''^\.env$''']
