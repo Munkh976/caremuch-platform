@@ -10,6 +10,12 @@ const DEV = { cp_derive_progress_note_units: "1d2a70f032ecf8d2a59f5cfc0aa92fad",
 (async () => {
   const { rec, done } = H.recorder();
   const { db } = await H.bootSchema(MIG);
+  // DEV's list_notes_for_review has CRLF line ends (pushed from a CRLF working copy). In an LF checkout (CI) the harness
+  // creates it with LF, so first install DEV's exact body — the rollback's own block for it — and "before" = DEV anywhere.
+  const rbText = require("fs").readFileSync(require("path").resolve(__dirname, "../../../docs/rollback/s18_billing_units_rollback.sql"), "utf8").replace(/\r\n/g, "\n");
+  const devBlock = rbText.match(/DO \$rb\$ BEGIN EXECUTE replace\(\$q\$CREATE OR REPLACE FUNCTION public\.list_notes_for_review[\s\S]*?END \$rb\$;/);
+  if (!devBlock) throw new Error("DEV block for list_notes_for_review not found in the rollback");
+  await db.exec(devBlock[0]);
   const defs = async () => Object.fromEntries((await db.query(`SELECT proname n, md5(pg_get_functiondef(oid)) h FROM pg_proc WHERE proname = ANY($1)`, [Object.keys(DEV)])).rows.map((r) => [r.n, r.h]));
   const diff = (a, b) => [...a.filter((x) => !b.includes(x)).map((x) => "-" + x), ...b.filter((x) => !a.includes(x)).map((x) => "+" + x)];
   const s0 = await H.snap(db), d0 = await defs();

@@ -1,7 +1,9 @@
 -- Rollback of 20261019120200_ui_s8_note_detail_fix.sql: restores get_progress_note_for_staff exactly as
 -- 20261019120000_ui_s8_note_review.sql created it (same signature, grants kept).
 BEGIN;
-CREATE OR REPLACE FUNCTION public.get_progress_note_for_staff(_note_id uuid)
+-- DEV stores this body with CRLF line ends (20261019120000 was pushed from a CRLF working copy); the repo keeps this
+-- file LF, so the carriage returns are rebuilt to restore it byte-identically (md5 99fe3923, rollback-round3).
+DO $rb$ BEGIN EXECUTE replace($q$CREATE OR REPLACE FUNCTION public.get_progress_note_for_staff(_note_id uuid)
 RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
 DECLARE n record; c record; g record; vo record; a record; s record; v_preview boolean := false; v_tpl text;
 BEGIN
@@ -59,5 +61,5 @@ BEGIN
       FROM public.events ev LEFT JOIN public.profiles pr ON pr.id = ev.actor_id
       WHERE ev.subject_type = 'progress_note' AND ev.subject_id = n.id
         AND ev.event_type IN ('progress_note_created', 'progress_note_submitted', 'progress_note_returned', 'progress_note_reviewed')), '[]'::jsonb));
-END $$;
+END $$$q$, chr(10), chr(13) || chr(10)); END $rb$;
 COMMIT;

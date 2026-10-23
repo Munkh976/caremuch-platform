@@ -26,13 +26,15 @@ const G = U(310), CX = U(401);
 const snapSql = `
   SELECT 'rel:'||c.relname||':'||c.relkind::text x FROM pg_class c WHERE c.relnamespace='public'::regnamespace
   UNION ALL SELECT 'col:'||table_name||'.'||column_name||':'||data_type||':'||coalesce(column_default,'')||':'||is_nullable FROM information_schema.columns WHERE table_schema='public'
-  UNION ALL SELECT 'fn:'||p.oid::regprocedure::text||':'||md5(p.prosrc)||':'||p.prosecdef::text||':'||coalesce(p.proacl::text,'') FROM pg_proc p WHERE pronamespace='public'::regnamespace
+  UNION ALL SELECT 'fn:'||p.oid::regprocedure::text||':'||md5(replace(p.prosrc, chr(13), ''))||':'||p.prosecdef::text||':'||coalesce(p.proacl::text,'') FROM pg_proc p WHERE pronamespace='public'::regnamespace
   UNION ALL SELECT 'type:'||typname FROM pg_type WHERE typnamespace='public'::regnamespace
   UNION ALL SELECT 'trg:'||pg_get_triggerdef(oid) FROM pg_trigger WHERE NOT tgisinternal
   UNION ALL SELECT 'pol:'||tablename||'.'||policyname||':'||cmd||':'||coalesce(qual,'')||':'||coalesce(with_check,'') FROM pg_policies WHERE schemaname='public'
   UNION ALL SELECT 'con:'||conrelid::regclass::text||'.'||conname||':'||pg_get_constraintdef(oid) FROM pg_constraint WHERE connamespace='public'::regnamespace
   UNION ALL SELECT 'grant:'||table_name||':'||grantee||':'||privilege_type FROM information_schema.role_table_grants WHERE table_schema='public' AND grantee IN ('anon','authenticated')
   ORDER BY 1`;
+// Function bodies are hashed without carriage returns: a checkout's line endings (CRLF on Windows, LF in CI) must not
+// make two catalogs differ. Suites that need DEV's exact bytes compare md5(prosrc / pg_get_functiondef) separately.
 const snap = async (db) => (await db.query(snapSql)).rows.map((r) => r.x);
 
 /** Fresh database with every care-plan migration whose file name sorts before `cut` (all when null). */
