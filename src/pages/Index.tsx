@@ -10,12 +10,12 @@ import { cn } from "@/lib/utils";
  */
 const WALKTHROUGH = "mailto:info@wordsnumbers.ai?subject=CareMuch%20walkthrough";
 const EMAIL = "mailto:info@wordsnumbers.ai";
-const focus = "rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D6FB8]";
+const focus = "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1D6FB8]";
 const eyebrow = "font-plexmono text-[13px] uppercase tracking-[0.08em] text-[#0B6E8C]";
 const h2 = "m-0 font-display font-bold leading-[1.04] tracking-[-0.03em]";
 const body = "m-0 leading-relaxed text-[#405569]";
-const primaryBtn = cn("inline-flex min-h-[44px] items-center rounded-full bg-gradient-to-r from-[#0A7889] to-[#1D6FB8] font-semibold text-white no-underline hover:text-white", focus, "focus-visible:rounded-full");
-const ghostBtn = cn("inline-flex min-h-[44px] items-center rounded-full border-[1.5px] border-[#9DB6CC] bg-white font-semibold text-[#0F2B4C] no-underline hover:text-[#0F2B4C]", focus, "focus-visible:rounded-full");
+const primaryBtn = cn("inline-flex min-h-[44px] items-center rounded-full bg-gradient-to-r from-[#0A7889] to-[#1D6FB8] font-semibold text-white no-underline hover:text-white", focus);
+const ghostBtn = cn("inline-flex min-h-[44px] items-center rounded-full border-[1.5px] border-[#9DB6CC] bg-white font-semibold text-[#0F2B4C] no-underline hover:text-[#0F2B4C]", focus);
 
 const Check = ({ className = "h-3.5 w-3.5", stroke = "#0B6E8C", width = 2.5 }: { className?: string; stroke?: string; width?: number }) => (
   <svg className={cn("flex-none", className)} viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke={stroke} strokeWidth={width} strokeLinecap="round" strokeLinejoin="round"><path d="M5 12l5 5 9-10" /></svg>
@@ -76,14 +76,14 @@ export default function Index() {
     if (!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) html.style.scrollBehavior = "smooth";
     return () => { html.style.scrollBehavior = before; };
   }, []);
-  const navLink = cn("inline-flex min-h-[44px] items-center text-[#0F2B4C] no-underline hover:text-[#0B6E8C]", focus);
+  const navLink = cn("inline-flex min-h-[44px] items-center rounded-md text-[#0F2B4C] no-underline hover:text-[#0B6E8C]", focus);
 
   return (
     <div className="min-h-screen w-full overflow-x-hidden bg-[#F6F9FC] font-plex text-[#0F2B4C]">
       {/* NAV */}
       <header className="border-b border-[#DCE6EE] bg-white">
         <nav aria-label="Main" className="mx-auto flex max-w-[1240px] flex-wrap items-center gap-x-8 gap-y-2 px-6 py-3">
-          <a href="#top" className={cn("inline-flex min-h-[44px] items-center no-underline", focus)} aria-label="CareMuch home">
+          <a href="#top" className={cn("inline-flex min-h-[44px] items-center rounded-md no-underline", focus)} aria-label="CareMuch home">
             <CareMuchLogo size={36} textClassName="text-[23px]" />
           </a>
           <div className="flex flex-auto flex-wrap gap-x-6 gap-y-0 text-[15px] font-medium">
@@ -187,7 +187,7 @@ export default function Index() {
               <h2 id="audit-h" className={cn(h2, "text-[clamp(30px,3.4vw,44px)] leading-[1.06] tracking-[-0.025em]")}>See what will expire before it costs you.</h2>
               <p className={cn(body, "text-[17px]")}>A compliance dashboard colors every credential, training and authorization by days left. Training sessions, sign-in sheets and files live with the plan they belong to, in private storage, and every change carries who and when.</p>
             </div>
-            <div className="min-w-0 flex-[1_1_440px] overflow-x-auto rounded-[18px] border border-[#D3E2ED] bg-white" role="img"
+            <div className="min-w-0 flex-[1_1_440px] overflow-x-auto rounded-[18px] border border-[#D3E2ED] bg-white" role="img" tabIndex={0}
               aria-label="Example compliance list: items expiring in the next 60 days with days left — CPR for Ben K. in 6 days, a CLS authorization for Lily P. in 19, Max T.'s plan of service in 24, recipient-rights training for Mia S. in 52.">
               <table className="w-full min-w-[420px] border-collapse text-[14.5px]">
                 <caption className="px-5 pb-1.5 pt-4 text-left font-display text-base font-bold">Expiring in the next 60 days</caption>
@@ -309,8 +309,8 @@ export default function Index() {
               <p className="m-0 max-w-[560px] text-lg leading-[1.55] text-white">In 30 minutes we'll walk through your plans, training and billing rules in a working demo office — and show you what CareMuch would have caught.</p>
             </div>
             <div className="flex flex-wrap gap-3">
-              <a href={WALKTHROUGH} className={cn("inline-flex min-h-[44px] items-center rounded-full bg-white px-[26px] py-4 text-[17px] font-bold text-[#0F2B4C] no-underline hover:text-[#0F2B4C]", focus, "focus-visible:rounded-full focus-visible:outline-white")}>Book a walkthrough</a>
-              <a href={EMAIL} className={cn("inline-flex min-h-[44px] items-center rounded-full border-[1.5px] border-white px-6 py-[15px] text-[17px] font-semibold text-white no-underline hover:text-white", focus, "focus-visible:rounded-full focus-visible:outline-white")}>Email the team</a>
+              <a href={WALKTHROUGH} className={cn("inline-flex min-h-[44px] items-center rounded-full bg-white px-[26px] py-4 text-[17px] font-bold text-[#0F2B4C] no-underline hover:text-[#0F2B4C]", focus, "focus-visible:outline-white")}>Book a walkthrough</a>
+              <a href={EMAIL} className={cn("inline-flex min-h-[44px] items-center rounded-full border-[1.5px] border-white px-6 py-[15px] text-[17px] font-semibold text-white no-underline hover:text-white", focus, "focus-visible:outline-white")}>Email the team</a>
             </div>
           </div>
         </section>
@@ -333,14 +333,14 @@ export default function Index() {
         </div>
         <div className="mx-auto flex max-w-[1240px] flex-wrap justify-between gap-x-6 gap-y-2 border-t border-[#E7EEF4] px-6 pb-8 pt-5 text-[13px] text-[#4B5D70]">
           <span>© 2026 Words &amp; Numbers, LLC. All rights reserved.</span>
-          <span>CareMuch is built by <a href="https://wordsnumbers.ai" target="_blank" rel="noopener" className={cn("text-[#0B6E8C] underline-offset-2 hover:text-[#0F2B4C] hover:underline", focus)}>Words &amp; Numbers</a></span>
+          <span className="inline-flex items-center gap-1">CareMuch is built by <a href="https://wordsnumbers.ai" target="_blank" rel="noopener" className={cn("inline-flex min-h-[44px] items-center text-[#0B6E8C] underline underline-offset-2 hover:text-[#0F2B4C]", focus)}>Words &amp; Numbers</a></span>
         </div>
       </footer>
     </div>
   );
 }
 
-const footLink = cn("inline-flex min-h-[44px] items-center text-[#0F2B4C] no-underline hover:text-[#0B6E8C]", focus);
+const footLink = cn("inline-flex min-h-[44px] items-center rounded-md text-[#0F2B4C] no-underline hover:text-[#0B6E8C]", focus);
 const FooterCol = ({ title, children }: { title: string; children: ReactNode }) => (
   <div className="flex flex-col"><strong className="pb-1 text-[13px] uppercase tracking-[0.06em] text-[#4B5D70]">{title}</strong>{children}</div>
 );
