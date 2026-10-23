@@ -2,7 +2,7 @@
 // logins (mirrors pglite/ui-s7.cjs): case-number CHECK, client self-update guard, training reads,
 // get_caregiver_clock, list_my_notes_due, late-arrival units, returned reason, refusals, ACLs, NB1.
 // Usage: node tests/ripple/dev/ui-s7.cjs <before|after>
-const { A, REF, LABEL, RUN, admin, log, rec, pass, ins, rpc, pgRead, setup, setupB1, checkNoBreak, DENY, dbDay, dbNow, teardownB1, teardown, closeDb, summary, reportSkew, createClient, URL_, ANON, opts } = require("./lib.cjs");
+const { A, REF, LABEL, RUN, admin, log, rec, pass, ins, rpc, pgRead, setup, setupB1, checkNoBreak, DENY, dbDay, dbNow, teardownB1, teardown, closeDb, summary, reportSkew, createClient, URL_, ANON, opts, Client, pgConfig } = require("./lib.cjs");
 const NEW_FNS = ["get_caregiver_clock", "list_my_notes_due"];
 const DEV_BEFORE = { get_client_training_context: "787ab4c8d0b9f3541e3ede7a052bd667", list_client_training_status: "311cd150fa77ed11c12e363e75c7dbf5" };
 const ITEM_KEYS = "client_first_name,client_last_initial,due_at,end_time,note_status,overdue,returned_reason,scheduled_end,scheduled_start,service_type,shift_date,shift_id,start_time";
@@ -43,7 +43,14 @@ async function after(F) {
     F.s7shifts = (F.s7shifts || []).concat(id);
     const a = await rpc(F.mgrAll.c, "assign_caregiver_to_shift", { _shift_id: id, _caregiver_id: cg, _method: "manual", _notes: "S7 fixture", _override_reason: "S7 fixture (disposable)" });
     if (a.err) throw new Error(`assign fixture ${d} ${start}: ${a.err}`);
-    if (status === "cancelled") await admin.from("shifts").update({ status: "cancelled" }).eq("id", id);
+    // 3b (20261031190000): a direct cancel is refused; this past fixture visit (2 days ago: neither action allows it) is
+    // cancelled the one explicitly allowed way — a direct DB transaction marked as the actions mark theirs, with the
+    // outcome and reason recorded, exactly one row
+    if (status === "cancelled") { const c = new Client(pgConfig()); await c.connect();
+      try { await c.query("BEGIN"); await c.query("SELECT set_config('caremuch.assignment_ctx', '1', true)");
+        const r = await c.query(`UPDATE public.shifts SET status = 'cancelled', visit_outcome = 'cancelled', cancel_reason_code = 'other', cancel_reason_text = 'S7 fixture', cancel_requested_by = 'agency', cancelled_at = now() WHERE id = $1`, [id]);
+        if (r.rowCount !== 1) throw new Error(`cancel fixture: ${r.rowCount} rows`); await c.query("COMMIT"); }
+      catch (e) { await c.query("ROLLBACK"); throw e; } finally { await c.end(); } }
     return id; };
   const S = { a: await sh(-1, "09:00", "10:00", "CLS0001", F.G), b: await sh(-3, "09:00", "10:00", "CLS0001", F.G), future: await sh(2, "09:00", "10:00", "CLS0001", F.G),
     preGoLive: await sh(-20, "09:00", "10:00", "CLS0001", F.G), cancelled: await sh(-2, "09:00", "10:00", "CLS0001", F.G, "cancelled"),

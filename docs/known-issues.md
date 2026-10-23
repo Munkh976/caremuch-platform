@@ -1522,9 +1522,10 @@ office's rows were agency-visible in the shared agency, so 5 comparisons differe
 - **Pickup gate (care-plan offices) — RESOLVED (20261031180000, Oct 22 evening):** Available Shifts filters open visits and
   the Trade Board with `caregiver_pickable_shifts` (caregiver-safe: shift id + pickable only), which includes the client
   being onboarded. The database visibility policy is unchanged (owner, Oct 22).
-- **Direct table writes:** staff can still set `shifts.status = 'cancelled'` directly under the existing "Agency staff manage
-  shifts" policy; that path logs the trigger's `shift_cancelled` without a reason or outcome. The UI uses `cancel_visit` only.
-  Close together with the other direct-update items before production.
+- **Direct table writes — RESOLVED (3b, 20261031190000, Oct 23):** a direct INSERT / UPDATE that cancels a visit, reopens
+  a cancelled one or writes the cancellation record is refused (API role and service role alike); only Cancel visit and
+  Client no-show (reason required, audited) can. Deleting a visit is unchanged. Test fixtures that need a past cancelled
+  visit use an explicit marked DB transaction (tests/ripple/dev/ui-s7.cjs).
 - `release_shift_assignments` (time-off approval) is unchanged: agency-wide, no event, no Outbox row.
 - Outbox rows (`visit_unassigned`, `visit_cancelled`) are written only; delivery is S19. No row for a no-show.
 - "This and following" without an order line matches the same client, service, weekday and times (seeded / single visits).
