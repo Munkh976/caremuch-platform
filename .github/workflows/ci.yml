@@ -64,12 +64,17 @@ jobs:
             set +e; out=$(node "$f" 2>&1); code=$?; set -e
             echo "$out" | tail -n 60
             echo "::endgroup::"
-            sum=$(echo "$out" | grep -E '^summary:' | tail -n 1)
-            if [ $code -ne 0 ] || [ -z "$sum" ] || echo "$sum" | grep -q '=FAIL'; then
-              echo "::error file=$f::suite failed (exit $code): ${sum:-no summary}"; fail=1
+            # newer suites print a "summary:" line (…=PASS / …=FAIL); the older rollback suites print "…: true" / "…: false"
+            # and "FAILED <message>" (they always exit 0)
+            sum=$(echo "$out" | grep -E '^summary:' | tail -n 1 || true)
+            bad=""
+            if [ $code -ne 0 ]; then bad="exit $code"
+            elif [ -n "$sum" ]; then echo "$sum" | grep -q '=FAIL' && bad="$sum"
             else
-              echo "PASS $f — $sum"
+              if echo "$out" | grep -qE '^FAILED|:[[:space:]]*false([[:space:]]|$)'; then bad="$(echo "$out" | grep -E '^FAILED|:[[:space:]]*false' | head -n 3 | paste -sd' ' -)"
+              elif ! echo "$out" | grep -qE ':[[:space:]]*true([[:space:]]|$)'; then bad="no summary and no checks printed"; fi
             fi
+            if [ -n "$bad" ]; then echo "::error file=$f::suite failed: $bad"; fail=1; else echo "PASS $f — ${sum:-legacy checks all true}"; fi
           done
           exit $fail
 
