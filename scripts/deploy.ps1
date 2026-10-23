@@ -1,11 +1,11 @@
-# Deploy the CareMuch frontend (phase-3) to the Fly.io dev app caremuch-platform.
+# Deploy the CareMuch frontend (main) to the Fly.io dev app caremuch-platform.
 # Windows PowerShell 5.1 compatible. Run from the repo root:  .\scripts\deploy.ps1
 #
 # Refuses to run unless:
-#   - the current branch is phase-3;
+#   - the current branch is main;
 #   - no build input has uncommitted changes (src, public, index.html, package*.json, Dockerfile, vite.config.ts,
 #     tailwind.config.ts);
-#   - HEAD equals origin/phase-3 after `git fetch`.
+#   - HEAD equals origin/main after `git fetch`.
 # Then it reads VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY and VITE_SUPABASE_PROJECT_ID from .env.local, prints only
 # their lengths (never the values), runs `fly deploy --app caremuch-platform` with them as --build-arg, and appends the
 # commit, the time and the Fly release version to docs/deploys.md (commit that file afterwards).
@@ -23,17 +23,17 @@ function Fail([string]$msg) { Write-Host "REFUSED: $msg" -ForegroundColor Red; e
 # --- git checks ---
 $branch = (git rev-parse --abbrev-ref HEAD).Trim()
 if ($LASTEXITCODE -ne 0) { Fail 'not a git repository' }
-if ($branch -ne 'phase-3') { Fail "current branch is '$branch'; deploys come from phase-3 only" }
+if ($branch -ne 'main') { Fail "current branch is '$branch'; deploys come from main only" }
 
 $inputs = @('src', 'public', 'index.html', 'package.json', 'package-lock.json', 'Dockerfile', 'vite.config.ts', 'tailwind.config.ts')
 $dirty = git status --porcelain -- $inputs
 if ($dirty) { Write-Host $dirty; Fail 'build inputs have uncommitted changes (listed above)' }
 
-git fetch origin phase-3 --quiet
+git fetch origin main --quiet
 if ($LASTEXITCODE -ne 0) { Fail 'git fetch failed' }
 $head = (git rev-parse HEAD).Trim()
-$remote = (git rev-parse origin/phase-3).Trim()
-if ($head -ne $remote) { Fail "HEAD $($head.Substring(0,7)) is not origin/phase-3 $($remote.Substring(0,7)); push or pull first" }
+$remote = (git rev-parse origin/main).Trim()
+if ($head -ne $remote) { Fail "HEAD $($head.Substring(0,7)) is not origin/main $($remote.Substring(0,7)); push or pull first" }
 
 # --- build args from .env.local (values never printed) ---
 $envFile = Join-Path $Root '.env.local'
