@@ -2,9 +2,13 @@
 // trigger is absent; NB1 baseline. `after` (RIPPLE_NB1_HASHES=1): NB1 identical; aclexplode (no API role); a direct cancel
 // is refused through the API as the manager AND with the service-role key; Cancel visit / Client no-show refuse without a
 // reason and work with one; a cancelled visit can't be reopened directly; editing a visit's times still works.
-// Usage: node tests/ripple/dev/shift-cancel-guard.cjs <before|after> > some.log 2>&1
+// `prefix` (before the rule-16 fix 20261031190100, RIPPLE_WRITE_NOBREAK_BASELINE=1): the trigger is the body pushed in
+// 20261031190000 (md5). `after` then also checks the body is the fixed one.
+// Usage: node tests/ripple/dev/shift-cancel-guard.cjs <before|prefix|after> > some.log 2>&1
 const { A, REF, LABEL, RUN, admin, log, rec, pass, ins, rpc, pgRead, setup, setupB1, checkNoBreak, dbDay, teardownB1, teardownB2, teardown, closeDb, summary, reportSkew } = require("./lib.cjs");
+const PUSHED = "dc032c76cfd3bc6ab73349daa34413e7";   // md5(pg_get_functiondef) as pushed in 20261031190000
 const cat = () => pgRead(async (c) => ({
+  h: ((await c.query(`SELECT md5(pg_get_functiondef(p.oid)) h FROM pg_proc p WHERE p.pronamespace = 'public'::regnamespace AND p.proname = 'cp_guard_shift_cancel'`)).rows[0] || {}).h,
   fn: (await c.query(`SELECT p.prosecdef d, (SELECT string_agg(x.grantee::regrole::text || ':' || x.privilege_type, ',' ORDER BY x.grantee::regrole::text) FROM aclexplode(p.proacl) x) acl
     FROM pg_proc p WHERE p.pronamespace = 'public'::regnamespace AND p.proname = 'cp_guard_shift_cancel'`)).rows,
   trg: (await c.query(`SELECT count(*)::int n FROM pg_trigger WHERE tgname = 'trg_cp_guard_shift_cancel' AND tgrelid = 'public.shifts'::regclass`)).rows[0].n,
@@ -12,7 +16,8 @@ const cat = () => pgRead(async (c) => ({
 
 async function after(F) {
   const k = await cat();
-  rec("ACL (aclexplode): trigger function present, no API role; trigger on shifts", pass(k.fn.length === 1 && !/(^|,)(-|anon|authenticated):/.test(k.fn[0].acl || "") && k.trg === 1), `${k.fn[0] && k.fn[0].acl}; trigger ${k.trg}`);
+  rec("ACL (aclexplode): trigger function present, no API role; trigger on shifts; the fixed body (mark honoured only outside API roles)",
+    pass(k.fn.length === 1 && !/(^|,)(-|anon|authenticated):/.test(k.fn[0].acl || "") && k.trg === 1 && k.h && k.h !== PUSHED), `${k.fn[0] && k.fn[0].acl}; trigger ${k.trg}; md5 ${String(k.h).slice(0, 8)}`);
   const mk = async (d, start) => { const id = await ins("shifts", { agency_id: A, virtual_office_id: F.OX, client_id: F.CX, order_title: `ZZ ${RUN}`, care_type_code: "CLS0001",
       shift_date: await dbDay(d), start_time: start, end_time: `${String(Number(start.slice(0, 2)) + 1).padStart(2, "0")}:00`, duration_hours: 1, status: "open", is_demo: true });
     F.b2shifts = (F.b2shifts || []).concat(id);
@@ -46,9 +51,10 @@ async function after(F) {
   let F;
   try {
     if (LABEL === "before") { const k = await cat(); rec("B0 before: no trigger, no function", pass(k.fn.length === 0 && k.trg === 0), `${k.fn.length} / ${k.trg}`); }
+    if (LABEL === "prefix") { const k = await cat(); rec("B1 before the fix: the trigger is the body pushed in 20261031190000 (md5)", pass(k.trg === 1 && k.h === PUSHED), `${String(k.h).slice(0, 8)}`); }
     F = await setup(); await setupB1(F);
     await checkNoBreak(F);
-    if (LABEL !== "before") await after(F);
+    if (LABEL === "after") await after(F);
   } catch (e) { log("ERROR:", String(e.message).slice(0, 300)); rec("ERROR", "FAIL"); }
   finally {
     if (F) { for (const s of F.b2shifts || []) { await admin.from("pending_notifications").delete().contains("payload", { shift_id: s }); await admin.from("events").delete().eq("subject_id", s); } await teardownB2(F); }

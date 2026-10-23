@@ -5,6 +5,9 @@
 // Usage: node tests/ripple/pglite/shift-cancel-guard.cjs   (local, no network)
 const H = require("./harness.cjs");
 const MIG = "20261031190000_shift_cancel_guard.sql", RB = "shift_cancel_guard_rollback.sql";
+// rule-16 fix (owner check 2a): the mark is honoured only outside the API roles
+const FIX = "20261031190100_shift_cancel_guard_marker.sql", RB_FIX = "shift_cancel_guard_marker_rollback.sql";
+const DEV_PUSHED = "dc032c76cfd3bc6ab73349daa34413e7";   // md5(pg_get_functiondef) of cp_guard_shift_cancel on DEV as pushed in 20261031190000
 let seq = 0;
 
 (async () => {
@@ -25,10 +28,10 @@ let seq = 0;
   const row = async (s) => (await q(`SELECT status::text st, visit_outcome o, caregiver_id FROM shifts WHERE id = $1`, [s]))[0];
 
   const before = await H.snap(db);
-  await H.applyFiles(db, [MIG]);
+  await H.applyFiles(db, [MIG, FIX]);
   const after = await H.snap(db);
   const removed = before.filter((x) => !after.includes(x)), added = after.filter((x) => !before.includes(x)).map((x) => x.slice(0, 60));
-  rec("F0 catalog additive: one trigger function + one trigger on shifts, nothing removed",
+  rec("F0 catalog additive (with the fix): one trigger function + one trigger on shifts, nothing removed",
     removed.length === 0 && added.length === 2 && added.some((x) => x.startsWith("fn:cp_guard_shift_cancel()")) && added.some((x) => /trg_cp_guard_shift_cancel/.test(x)), `+${added.join(" | ")}`);
   const acl = await H.aclCheck(q, ["cp_guard_shift_cancel"]);
   rec("ACL trigger function: no API role (aclexplode)", acl.ok, acl.detail);
@@ -64,6 +67,19 @@ let seq = 0;
     /reopened/.test(reopen || "") && /written by Cancel visit/.test(edit || "") && /written by Cancel visit/.test(editApi.err || "") && (await row(s1)).st === "cancelled",
     `${(reopen || "ALLOWED").slice(0, 30)} | ${(edit || "ALLOWED").slice(0, 30)} | ${(editApi.err || "ALLOWED").slice(0, 30)}`);
 
+  // M1 the bypass mark can't be set by an API role itself (owner check 2a): set_config then a direct cancel, as the
+  // authenticated role (the manager) and as service_role — both refused; the visit is unchanged
+  const m1 = await sh(9); await assign(m1);
+  const asRole = async (role) => { await db.exec("BEGIN"); let r = null;
+    try { await db.exec(`SET LOCAL ROLE ${role}`); await db.query("SELECT set_config('request.jwt.claim.sub', $1, true)", [H.users.mgrX]);
+      await db.query("SELECT set_config('caremuch.assignment_ctx', '1', true)");
+      await db.query(`UPDATE shifts SET status = 'cancelled', visit_outcome = 'cancelled', cancel_reason_code = 'other', cancel_reason_text = 'x' WHERE id = $1`, [m1]);
+    } catch (e) { r = e.message; } await db.exec("ROLLBACK"); return r; };
+  const mAuth = await asRole("authenticated"), mSvc = await asRole("service_role");
+  rec("M1 an API role that sets the mark itself (set_config) and cancels directly is refused — authenticated and service_role; the visit is unchanged",
+    /Cancel visit or Client no-show/.test(mAuth || "") && /Cancel visit or Client no-show/.test(mSvc || "") && (await row(m1)).st === "assigned",
+    `authenticated ${(mAuth || "ALLOWED").slice(0, 40)} | service_role ${(mSvc || "ALLOWED").slice(0, 40)}`);
+
   // T4 ordinary paths unchanged
   const s3 = await sh(7); await assign(s3);
   const times = await tryDb(`UPDATE shifts SET start_time = '09:30', end_time = '10:30' WHERE id = $1`, [s3]);
@@ -80,5 +96,10 @@ let seq = 0;
   await H.applyRollback(d2, RB); const sR = await H.snap(d2); await H.applyFiles(d2, [MIG]); const sB = await H.snap(d2);
   const same = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
   rec("RB rollback: catalog = before (every existing function body unchanged); re-apply = first apply", same(s0, sR) && same(sA, sB), `${same(s0, sR)} / ${same(sA, sB)}`);
+  // RB2 the fix's rollback restores the body pushed in 20261031190000 byte-identically (md5 = DEV before the fix)
+  const md5 = async () => (await d2.query(`SELECT md5(pg_get_functiondef('public.cp_guard_shift_cancel()'::regprocedure)) h`)).rows[0].h;
+  const pushed = await md5(); await H.applyFiles(d2, [FIX]); const fixed = await md5(); await H.applyRollback(d2, RB_FIX); const back = await md5();
+  rec("RB2 the fix's rollback restores the pushed body byte-identically (md5 = before the fix = DEV)", pushed === DEV_PUSHED && fixed !== pushed && back === pushed,
+    `pushed ${pushed.slice(0, 8)} (DEV ${DEV_PUSHED.slice(0, 8)}) -> fixed ${fixed.slice(0, 8)} -> back ${back.slice(0, 8)}`);
   done();
 })().catch((e) => { console.log("ERROR", e.message); process.exitCode = 1; });
